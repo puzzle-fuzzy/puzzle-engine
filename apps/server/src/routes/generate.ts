@@ -8,6 +8,7 @@ import {
   markGenerationProcessing,
   markGenerationSucceeded,
   getUploadedFilesByIds,
+  notifyGenerationStatus,
 } from '@excuse/db'
 import { DashScopeClient, getModelById, AssetStorage } from '@excuse/provider'
 import { calculateCost } from '@excuse/billing'
@@ -73,6 +74,17 @@ export function createGenerateRoutes(config: ServerConfig) {
         // API 调用失败，更新记录
         await markGenerationFailed(record.id, result.error!)
 
+        // 通知 SSE 客户端
+        await notifyGenerationStatus({
+          accountId: userId,
+          recordId: record.id,
+          status: 'failed',
+          category: modelConfig.category,
+          model,
+          taskId,
+          errorMessage: result.error,
+        })
+
         return {
           success: false,
           id: record.id,
@@ -89,6 +101,16 @@ export function createGenerateRoutes(config: ServerConfig) {
         await markGenerationProcessing(record.id, {
           taskId: result.providerTaskId,
           outputResult: result.output as Record<string, unknown>,
+        })
+
+        // 通知 SSE 客户端状态变为 processing
+        await notifyGenerationStatus({
+          accountId: userId,
+          recordId: record.id,
+          status: 'processing',
+          category: modelConfig.category,
+          model,
+          taskId: result.providerTaskId,
         })
 
         return {
@@ -114,6 +136,18 @@ export function createGenerateRoutes(config: ServerConfig) {
       const actualCost = calculateCost(modelConfig, parameters, result.usage)
 
       await markGenerationSucceeded(record.id, outputResult, actualCost)
+
+      // 通知 SSE 客户端同步任务完成
+      await notifyGenerationStatus({
+        accountId: userId,
+        recordId: record.id,
+        status: 'succeeded',
+        category: modelConfig.category,
+        model,
+        taskId,
+        outputResult,
+        cost: actualCost,
+      })
 
       return {
         success: true,

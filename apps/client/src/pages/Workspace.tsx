@@ -96,19 +96,18 @@ export default function Workspace() {
     catch {}
   }, [])
 
-  // 初始加载生成记录（挂载时拉一次）
+  // 初始加载生成记录（仅挂载时拉一次）
   useEffect(() => {
     loadRecords()
   }, [loadRecords])
 
-  // SSE 实时更新 + 安全兜底轮询
+  // SSE 实时更新 — 订阅后端推送的生成状态变更
   useEffect(() => {
-    // 订阅 SSE 生成状态事件，实时更新记录列表
     const unsubscribe = sseClient.on('generation_status', (event: SSEGenerationStatusEvent) => {
       setRecords((prev) => {
         const existingIndex = prev.findIndex(r => r.id === event.id)
         if (existingIndex >= 0) {
-          // 更新已有记录
+          // 更新已有记录的状态
           const next = [...prev]
           next[existingIndex] = {
             ...next[existingIndex],
@@ -119,20 +118,13 @@ export default function Workspace() {
           }
           return next
         }
-        // 新记录不在列表中，触发全量刷新
-        loadRecords()
-        return prev
+        // 新记录不在列表中，插入到顶部
+        return [event as unknown as GenerationRecord, ...prev]
       })
     })
 
-    // 安全兜底：每 60 秒全量刷新一次（防止 SSE 丢失事件）
-    const interval = setInterval(loadRecords, 60_000)
-
-    return () => {
-      unsubscribe()
-      clearInterval(interval)
-    }
-  }, [loadRecords])
+    return unsubscribe
+  }, [])
 
   // 自动滚动到底部
   useEffect(() => {
@@ -162,7 +154,7 @@ export default function Workspace() {
     : []
   const canGenerate = selectedModel && missingRequired.length === 0
 
-  // 处理生成
+  // 处理生成 — 提交后直接用响应数据更新列表，后续状态变更由 SSE 推送
   async function handleGenerate() {
     if (!selectedModel || !canGenerate) return
     setLoading(true)
@@ -173,8 +165,24 @@ export default function Workspace() {
         parameters,
         referenceFileIds: referenceFileIds.length > 0 ? referenceFileIds : undefined,
       })
-      if (result.success) {
-        await loadRecords()
+      if (result.success && result.id) {
+        // 将新记录插入到列表顶部，SSE 后续会推送状态变更
+        setRecords((prev) => [
+          {
+            id: result.id!,
+            taskId: result.taskId!,
+            model: selectedModel.id,
+            category: result.category as GenerationRecord['category'],
+            status: result.status as GenerationRecord['status'],
+            inputParams: { ...parameters, referenceFileIds },
+            cost: result.cost as Record<string, unknown> ?? null,
+            outputResult: (result as any).outputResult ?? null,
+            errorMessage: null,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          } as GenerationRecord,
+          ...prev,
+        ])
       }
     }
     catch (error) {
@@ -185,15 +193,32 @@ export default function Workspace() {
     }
   }
 
-  // 重新生成
+  // 重新生成 — 提交后直接插入新记录，SSE 推送最终状态
   async function handleRegenerate(record: GenerationRecord) {
     setLoading(true)
     try {
-      await generate({
+      const result: GenerateResponse = await generate({
         model: record.model,
         parameters: record.inputParams as Record<string, unknown>,
       })
-      await loadRecords()
+      if (result.success && result.id) {
+        setRecords((prev) => [
+          {
+            id: result.id!,
+            taskId: result.taskId!,
+            model: record.model,
+            category: result.category as GenerationRecord['category'],
+            status: result.status as GenerationRecord['status'],
+            inputParams: record.inputParams,
+            cost: result.cost as Record<string, unknown> ?? null,
+            outputResult: (result as any).outputResult ?? null,
+            errorMessage: null,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          } as GenerationRecord,
+          ...prev,
+        ])
+      }
     }
     catch {}
     finally {
@@ -201,13 +226,13 @@ export default function Workspace() {
     }
   }
 
-  // 删除记录
+  // 删除记录 — 直接从 state 移除
   async function handleDelete(id: string) {
     if (!confirm('确定要删除这条记录吗？'))
       return
     try {
       await deleteRecord(id)
-      await loadRecords()
+      setRecords((prev) => prev.filter(r => r.id !== id))
     }
     catch {}
   }
