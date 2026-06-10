@@ -5,6 +5,7 @@ export default antfu({
   typescript: true,
   rules: {
     'no-console': 'off',
+    'node/prefer-global/process': 'off',
   },
   ignores: [
     'dist',
