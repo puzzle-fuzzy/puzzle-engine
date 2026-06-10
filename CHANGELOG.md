@@ -9,7 +9,7 @@ All notable changes to this project will be documented in this file.
 - 前端单元测试：vitest + @testing-library/react + @testing-library/jest-dom
 - 后端测试使用 @elysia/eden treaty 模式，测试文件统一到 `test/` 目录
 - 后端添加 @elysia/cors 和 @elysia/openapi 插件
-- @puzzle-engine/shared 包添加 `exports` 字段，修复 TypeScript 模块解析
+- @excuse/shared 包添加 `exports` 字段，修复 TypeScript 模块解析
 - ESLint 配置切换为 @antfu/eslint-config（含 React 支持）
 
 ### Changed

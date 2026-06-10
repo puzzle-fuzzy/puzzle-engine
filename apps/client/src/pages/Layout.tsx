@@ -4,7 +4,7 @@ function Layout() {
   return (
     <div className="layout">
       <nav className="navbar">
-        <Link to="/" className="navbar-brand">拼图引擎</Link>
+        <Link to="/" className="navbar-brand">Excuse</Link>
         <div className="navbar-links">
           <Link to="/">首页</Link>
         </div>

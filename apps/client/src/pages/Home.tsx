@@ -1,8 +1,8 @@
 function Home() {
   return (
     <div className="home">
-      <h1>拼图引擎</h1>
-      <p>基于 Bun + Elysia + React 的拼图游戏平台</p>
+      <h1>Excuse</h1>
+      <p>让想象力拥有生产力。</p>
     </div>
   )
 }

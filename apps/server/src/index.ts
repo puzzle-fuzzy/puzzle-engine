@@ -1,6 +1,6 @@
 import { cors } from '@elysia/cors'
 import { openapi } from '@elysia/openapi'
-import { greet } from '@puzzle-engine/shared'
+import { greet } from '@excuse/shared'
 import { Elysia } from 'elysia'
 
 const app = new Elysia()
@@ -8,7 +8,7 @@ const app = new Elysia()
   .use(openapi({
     documentation: {
       info: {
-        title: 'Puzzle Engine API',
+        title: 'Excuse API',
         version: '0.0.1',
       },
     },

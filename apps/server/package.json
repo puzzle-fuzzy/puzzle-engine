@@ -9,7 +9,7 @@
   "dependencies": {
     "@elysia/cors": "^1.4.2",
     "@elysia/openapi": "^1.4.15",
-    "@puzzle-engine/shared": "workspace:*",
+    "@excuse/shared": "workspace:*",
     "elysia": "latest"
   },
   "devDependencies": {
