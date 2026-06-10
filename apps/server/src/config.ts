@@ -14,7 +14,6 @@ export interface ServerConfig {
 }
 
 export function loadConfig(): ServerConfig {
-  console.log('Loading server configuration...', process.env.DASHSCOPE_API_KEY)
   return {
     port: Number(process.env.PORT) || 5007,
     databaseUrl: process.env.DATABASE_URL || 'postgres://excuse:excuse_dev@localhost:5433/excuse',

@@ -19,7 +19,6 @@ export interface WorkerConfig {
  * 从环境变量读取并构建 Worker 配置
  */
 export function loadConfig(): WorkerConfig {
-  console.log('work Loading server configuration...', process.env.DASHSCOPE_API_KEY)
   return {
     dashscopeApiKey: process.env.DASHSCOPE_API_KEY || '',
     dashscopeBaseUrl: process.env.DASHSCOPE_BASE_URL || 'https://dashscope.aliyuncs.com/api/v1',

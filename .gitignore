@@ -30,6 +30,9 @@ report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 # IDE
 .idea
 
+# 上传目录
+uploads
+
 # 系统文件
 .DS_Store
 
