@@ -1,6 +1,6 @@
 import { migrate } from 'drizzle-orm/postgres-js/migrator'
-import { db } from './db'
+import { getDb } from './db'
 
-await migrate(db, { migrationsFolder: './drizzle' })
+await migrate(getDb(), { migrationsFolder: './drizzle' })
 
 console.log('迁移完成')

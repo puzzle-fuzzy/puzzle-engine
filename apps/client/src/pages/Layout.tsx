@@ -1,15 +1,11 @@
-import { Link, Outlet } from 'react-router'
+import { Outlet } from 'react-router'
+import Navbar from '@/components/Navbar'
 
 function Layout() {
   return (
-    <div className="layout">
-      <nav className="navbar">
-        <Link to="/" className="navbar-brand">Excuse</Link>
-        <div className="navbar-links">
-          <Link to="/">首页</Link>
-        </div>
-      </nav>
-      <main className="content">
+    <div className="min-h-screen bg-background">
+      <Navbar />
+      <main>
         <Outlet />
       </main>
     </div>

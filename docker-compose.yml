@@ -1,0 +1,16 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: excuse-postgres
+    restart: unless-stopped
+    ports:
+      - '5433:5432'
+    environment:
+      POSTGRES_USER: excuse
+      POSTGRES_PASSWORD: excuse_dev
+      POSTGRES_DB: excuse
+    volumes:
+      - excuse-pgdata:/var/lib/postgresql/data
+
+volumes:
+  excuse-pgdata:

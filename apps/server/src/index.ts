@@ -1,25 +1,42 @@
 import { cors } from '@elysia/cors'
-import { openapi } from '@elysia/openapi'
-import { greet } from '@excuse/shared'
 import { Elysia } from 'elysia'
+import { staticPlugin } from '@elysia/static'
+import { join } from 'node:path'
+import { mkdirSync } from 'node:fs'
+import { loadConfig } from './config'
+import { healthRoutes } from './routes/health'
+import { modelsRoutes } from './routes/models'
+import { createGenerateRoutes } from './routes/generate'
+import { createUploadRoutes } from './routes/upload'
+import { billingRoutes } from './routes/billing'
+
+const config = loadConfig()
+
+// 确保 uploads 目录存在
+const uploadsDir = join(import.meta.dir, '..', config.storageRoot)
+mkdirSync(uploadsDir, { recursive: true })
 
 const app = new Elysia()
-  .use(cors())
-  .use(openapi({
-    documentation: {
-      info: {
-        title: 'Excuse API',
-        version: '0.0.1',
-      },
-    },
+  .use(cors({
+    origin: [config.frontendUrl, 'http://localhost:8007'],
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
   }))
-  .get('/', () => greet('Elysia'))
+  .use(staticPlugin({
+    assets: uploadsDir,
+    prefix: '/api/uploads',
+  }))
+  .use(healthRoutes)
+  .use(modelsRoutes)
+  .use(createGenerateRoutes(config))
+  .use(createUploadRoutes(config))
+  .use(billingRoutes)
 
 export type App = typeof app
 export default app
 
-app.listen(5007)
+app.listen(config.port)
 
 console.log(
-  `🦊 Elysia is running at ${app.server?.hostname}:${app.server?.port}`,
+  `🦊 Excuse API is running at ${app.server?.hostname}:${app.server?.port}`,
 )

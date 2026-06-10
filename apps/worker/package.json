@@ -1,0 +1,20 @@
+{
+  "name": "worker",
+  "version": "0.0.1",
+  "type": "module",
+  "private": true,
+  "module": "src/index.ts",
+  "scripts": {
+    "dev": "bun run src/index.ts"
+  },
+  "dependencies": {
+    "@excuse/billing": "workspace:*",
+    "@excuse/db": "workspace:*",
+    "@excuse/provider": "workspace:*",
+    "@excuse/shared": "workspace:*",
+    "drizzle-orm": "^0.44.2"
+  },
+  "devDependencies": {
+    "@types/bun": "latest"
+  }
+}
