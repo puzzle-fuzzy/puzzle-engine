@@ -25,16 +25,18 @@ export interface TaskStatus {
   errorMessage?: string
 }
 
+export interface OSSConfig {
+  accessKeyId: string
+  accessKeySecret: string
+  bucket: string
+  region: string
+  endpoint?: string
+  uploadPrefix?: string
+  generatedPrefix?: string
+}
+
 export interface StorageConfig {
   storageRoot: string
   publicBasePath?: string
-  oss?: {
-    accessKeyId: string
-    accessKeySecret: string
-    bucket: string
-    region: string
-    endpoint: string
-    uploadPrefix: string
-    generatedPrefix: string
-  }
+  oss?: OSSConfig
 }

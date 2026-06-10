@@ -10,9 +10,9 @@
   "scripts": {
     "test": "bun test",
     "db:generate": "drizzle-kit generate",
-    "db:migrate": "bun run src/migrate.ts",
-    "db:push": "drizzle-kit push",
-    "db:studio": "drizzle-kit studio",
+    "db:migrate": "bun --env-file ../../.env run src/migrate.ts",
+    "db:push": "bun --env-file ../../.env run drizzle-kit push",
+    "db:studio": "bun --env-file ../../.env run drizzle-kit studio",
     "db:test:create": "docker exec excuse-postgres psql -U excuse -d excuse -c 'CREATE DATABASE excuse_test OWNER excuse;'",
     "db:test:reset": "docker exec excuse-postgres psql -U excuse -d excuse -c 'DROP DATABASE IF EXISTS excuse_test;' && docker exec excuse-postgres psql -U excuse -d excuse -c 'CREATE DATABASE excuse_test OWNER excuse;'"
   },

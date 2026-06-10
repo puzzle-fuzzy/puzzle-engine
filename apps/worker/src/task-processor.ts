@@ -42,7 +42,10 @@ export function createTaskProcessor(config: WorkerConfig, deps?: Partial<TaskPro
     apiKey: config.dashscopeApiKey,
     baseUrl: config.dashscopeBaseUrl,
   })
-  const storage = new AssetStorage({ storageRoot: config.storageRoot })
+  const storage = new AssetStorage({
+    storageRoot: config.storageRoot,
+    oss: config.oss,
+  })
 
   const queryTask = deps?.queryTask ?? ((id: string) => client.queryTask(id))
   const downloadAndMap = deps?.downloadAndMap ?? ((urls, subDir, prefix) => storage.downloadAndMap(urls, subDir, prefix))
@@ -129,5 +132,13 @@ export function createTaskProcessor(config: WorkerConfig, deps?: Partial<TaskPro
 
 export function extractVideoUrl(output: Record<string, unknown> | undefined): string | undefined {
   if (!output) return undefined
-  return (output as any).video_url || (output as any).results?.[0]?.url
+  // HappyHorse / 万相 2.7：output.video_url
+  const videoUrl = (output as any).video_url
+  if (videoUrl) return videoUrl
+  // 图片异步任务：output.results[0].url
+  const results = (output as any).results
+  if (Array.isArray(results) && results.length > 0) {
+    return results[0].url || results[0].b64_image
+  }
+  return undefined
 }

@@ -99,6 +99,7 @@ const testConfig: ServerConfig = {
   workerPollIntervalMs: 0,
   jwtSecret: 'test-guard-secret',
   jwtExpiresIn: '1h',
+  oss: undefined,
 }
 
 // ─── 辅助：通过注册获取有效 token ─────────────────

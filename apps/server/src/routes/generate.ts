@@ -18,7 +18,10 @@ export function createGenerateRoutes(config: ServerConfig) {
     apiKey: config.dashscopeApiKey,
     baseUrl: config.dashscopeBaseUrl,
   })
-  const storage = new AssetStorage({ storageRoot: config.storageRoot })
+  const storage = new AssetStorage({
+    storageRoot: config.storageRoot,
+    oss: config.oss,
+  })
 
   return new Elysia({ prefix: '/api' })
     .use(createAuthPlugin(config))

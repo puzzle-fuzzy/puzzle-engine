@@ -25,6 +25,7 @@ const testConfig: ServerConfig = {
   workerPollIntervalMs: 0,
   jwtSecret: 'test-plugin-secret-key',
   jwtExpiresIn: '1h',
+  oss: undefined,
 }
 
 /**

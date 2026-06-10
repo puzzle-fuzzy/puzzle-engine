@@ -23,6 +23,7 @@ function createTestProcessor(deps: Partial<TaskProcessorDeps> = {}) {
       storageRoot: '/tmp/test-uploads',
       pollIntervalMs: 5000,
       staleTimeoutMs: 1000, // 1 秒超时，方便测试
+      oss: undefined,
     },
     deps,
   )

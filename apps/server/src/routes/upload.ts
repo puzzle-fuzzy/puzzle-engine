@@ -5,7 +5,10 @@ import type { ServerConfig } from '../config'
 import { createAuthPlugin } from '../plugins/auth'
 
 export function createUploadRoutes(config: ServerConfig) {
-  const storage = new AssetStorage({ storageRoot: config.storageRoot })
+  const storage = new AssetStorage({
+    storageRoot: config.storageRoot,
+    oss: config.oss,
+  })
 
   return new Elysia({ prefix: '/api' })
     .use(createAuthPlugin(config))

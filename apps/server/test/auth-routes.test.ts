@@ -43,6 +43,7 @@ const testConfig: ServerConfig = {
   workerPollIntervalMs: 0,
   jwtSecret: 'test-auth-routes-secret',
   jwtExpiresIn: '1h',
+  oss: undefined,
 }
 
 // ─── 辅助函数 ──────────────────────────────────────
