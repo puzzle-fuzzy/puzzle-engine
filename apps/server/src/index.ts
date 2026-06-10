@@ -1,6 +1,6 @@
-import { greet } from '@puzzle-engine/shared'
 import { cors } from '@elysia/cors'
 import { openapi } from '@elysia/openapi'
+import { greet } from '@puzzle-engine/shared'
 import { Elysia } from 'elysia'
 
 const app = new Elysia()
@@ -18,7 +18,7 @@ const app = new Elysia()
 export type App = typeof app
 export default app
 
-app.listen(3000)
+app.listen(5007)
 
 console.log(
   `🦊 Elysia is running at ${app.server?.hostname}:${app.server?.port}`,

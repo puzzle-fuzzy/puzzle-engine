@@ -9,7 +9,7 @@ export default defineConfig({
     babel({ presets: [reactCompilerPreset()] }),
   ],
   server: {
-    port: 8081,
+    port: 8007,
     strictPort: true,
   },
 })

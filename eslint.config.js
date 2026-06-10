@@ -6,4 +6,11 @@ export default antfu({
   rules: {
     'no-console': 'off',
   },
+  ignores: [
+    'dist',
+    'build',
+    'node_modules',
+    'docs',
+    '**/dist',
+  ],
 })
