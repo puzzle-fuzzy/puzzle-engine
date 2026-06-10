@@ -1,7 +1,62 @@
-import type { ModelConfig } from '@excuse/shared'
+import type { InputMapping, ModelConfig } from '@excuse/shared'
+
+// ── 通用映射片段，减少重复 ──────────────────────────────
+//
+// 设计原则：inputMapping 按「参数名 → 请求体位置」声明式映射。
+// buildRequestBody() 遍历用户提供的 params，查 inputMapping 放入正确位置。
+// 未在 parameters[] 中声明的 mapping 条目不会被触发，所以共享 mapping 是安全的。
+
+// 统一使用 Record<string, InputMapping> 类型，确保 spread 后类型兼容
+const TEXT_MAPPING: Record<string, InputMapping> = {
+  prompt: { target: 'prompt' },
+  max_tokens: { target: 'parameter' },
+  temperature: { target: 'parameter' },
+  top_p: { target: 'parameter' },
+  seed: { target: 'parameter' },
+}
+
+const IMAGE_MAPPING: Record<string, InputMapping> = {
+  prompt: { target: 'prompt' },
+  negative_prompt: { target: 'parameter' },
+  size: { target: 'parameter' },
+  n: { target: 'parameter' },
+  watermark: { target: 'parameter' },
+  prompt_extend: { target: 'parameter' },
+  seed: { target: 'parameter' },
+}
+
+// 视频模型的 negative_prompt 在 input 层（非 parameters），用 mediaField 映射
+const VIDEO_T2V_MAPPING: Record<string, InputMapping> = {
+  prompt: { target: 'prompt' },
+  negative_prompt: { target: 'mediaField', field: 'negative_prompt' },
+  resolution: { target: 'parameter' },
+  ratio: { target: 'parameter' },
+  duration: { target: 'parameter' },
+  prompt_extend: { target: 'parameter' },
+  watermark: { target: 'parameter' },
+  seed: { target: 'parameter' },
+  // wan2.7-t2v 的 audio_url 在 input 层，HappyHorse-t2v 无此参数不会被触发
+  audio_url: { target: 'mediaField', field: 'audio_url' },
+}
+
+// video-media 的通用参数映射（不含 media 类参数，由具体模型单独声明）
+const VIDEO_MEDIA_MAPPING: Record<string, InputMapping> = {
+  prompt: { target: 'prompt' },
+  negative_prompt: { target: 'mediaField', field: 'negative_prompt' },
+  resolution: { target: 'parameter' },
+  ratio: { target: 'parameter' },
+  duration: { target: 'parameter' },
+  prompt_extend: { target: 'parameter' },
+  watermark: { target: 'parameter' },
+  seed: { target: 'parameter' },
+  audio_setting: { target: 'parameter' },
+}
+
+// ── 模型配置 ────────────────────────────────────────────
 
 export const MODELS: Record<string, ModelConfig> = {
   // ===== 文本生成模型 =====
+
   'qwen-max': {
     id: 'qwen-max',
     name: '千问 Max',
@@ -11,13 +66,17 @@ export const MODELS: Record<string, ModelConfig> = {
     endpoint: 'https://dashscope.aliyuncs.com/api/v1/services/aigc/text-generation/generation',
     async: false,
     pricing: { inputPrice: 2.4, outputPrice: 9.6, unit: 'token' },
+    requestType: 'chat',
+    inputMapping: TEXT_MAPPING,
     parameters: [
       { name: 'prompt', type: 'text', required: true, description: '输入文本' },
       { name: 'max_tokens', type: 'number', defaultValue: 1500, min: 1, max: 8000, description: '最大输出 Token 数' },
       { name: 'temperature', type: 'number', defaultValue: 0.7, min: 0, max: 2, description: '随机性控制' },
       { name: 'top_p', type: 'number', defaultValue: 0.9, min: 0, max: 1, description: '核采样参数' },
+      { name: 'seed', type: 'number', min: 0, max: 2147483647, description: '随机数种子，固定可提升稳定性' },
     ],
   },
+
   'qwen-plus': {
     id: 'qwen-plus',
     name: '千问 Plus',
@@ -27,12 +86,16 @@ export const MODELS: Record<string, ModelConfig> = {
     endpoint: 'https://dashscope.aliyuncs.com/api/v1/services/aigc/text-generation/generation',
     async: false,
     pricing: { inputPrice: 0.8, outputPrice: 2, unit: 'token' },
+    requestType: 'chat',
+    inputMapping: TEXT_MAPPING,
     parameters: [
       { name: 'prompt', type: 'text', required: true, description: '输入文本' },
       { name: 'max_tokens', type: 'number', defaultValue: 1500, min: 1, max: 8000, description: '最大输出 Token 数' },
       { name: 'temperature', type: 'number', defaultValue: 0.7, min: 0, max: 2, description: '随机性控制' },
+      { name: 'seed', type: 'number', min: 0, max: 2147483647, description: '随机数种子' },
     ],
   },
+
   'qwen-turbo': {
     id: 'qwen-turbo',
     name: '千问 Turbo',
@@ -42,11 +105,15 @@ export const MODELS: Record<string, ModelConfig> = {
     endpoint: 'https://dashscope.aliyuncs.com/api/v1/services/aigc/text-generation/generation',
     async: false,
     pricing: { inputPrice: 0.3, outputPrice: 0.6, unit: 'token' },
+    requestType: 'chat',
+    inputMapping: TEXT_MAPPING,
     parameters: [
       { name: 'prompt', type: 'text', required: true, description: '输入文本' },
       { name: 'max_tokens', type: 'number', defaultValue: 1500, min: 1, max: 8000, description: '最大输出 Token 数' },
+      { name: 'seed', type: 'number', min: 0, max: 2147483647, description: '随机数种子' },
     ],
   },
+
   'qwen-long': {
     id: 'qwen-long',
     name: '千问 Long',
@@ -56,13 +123,17 @@ export const MODELS: Record<string, ModelConfig> = {
     endpoint: 'https://dashscope.aliyuncs.com/api/v1/services/aigc/text-generation/generation',
     async: false,
     pricing: { inputPrice: 0.5, outputPrice: 2, unit: 'token' },
+    requestType: 'chat',
+    inputMapping: TEXT_MAPPING,
     parameters: [
       { name: 'prompt', type: 'text', required: true, description: '输入文本' },
       { name: 'max_tokens', type: 'number', defaultValue: 1500, min: 1, max: 8000, description: '最大输出 Token 数' },
+      { name: 'seed', type: 'number', min: 0, max: 2147483647, description: '随机数种子' },
     ],
   },
 
   // ===== 文生图模型 =====
+
   'qwen-image-2.0-pro': {
     id: 'qwen-image-2.0-pro',
     name: '千问图像 2.0 Pro',
@@ -72,6 +143,8 @@ export const MODELS: Record<string, ModelConfig> = {
     endpoint: 'https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation',
     async: false,
     pricing: { inputPrice: 0.25, unit: 'image', note: '0.25元/张' },
+    requestType: 'image',
+    inputMapping: IMAGE_MAPPING,
     parameters: [
       { name: 'prompt', type: 'text', required: true, description: '正向提示词' },
       { name: 'negative_prompt', type: 'text', description: '反向提示词' },
@@ -85,8 +158,10 @@ export const MODELS: Record<string, ModelConfig> = {
       { name: 'n', type: 'number', defaultValue: 1, min: 1, max: 6, description: '生成数量' },
       { name: 'watermark', type: 'boolean', defaultValue: false, description: '添加水印' },
       { name: 'prompt_extend', type: 'boolean', defaultValue: true, description: '智能改写提示词' },
+      { name: 'seed', type: 'number', min: 0, max: 2147483647, description: '随机数种子' },
     ],
   },
+
   'qwen-image-max': {
     id: 'qwen-image-max',
     name: '千问图像 Max',
@@ -96,6 +171,16 @@ export const MODELS: Record<string, ModelConfig> = {
     endpoint: 'https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation',
     async: false,
     pricing: { inputPrice: 0.25, unit: 'image', note: '0.25元/张' },
+    requestType: 'image',
+    // qwen-image-max 的 n 固定为 1，不暴露给用户；无 n 映射 → 不发送
+    inputMapping: {
+      prompt: { target: 'prompt' },
+      negative_prompt: { target: 'parameter' },
+      size: { target: 'parameter' },
+      watermark: { target: 'parameter' },
+      prompt_extend: { target: 'parameter' },
+      seed: { target: 'parameter' },
+    },
     parameters: [
       { name: 'prompt', type: 'text', required: true, description: '正向提示词' },
       { name: 'negative_prompt', type: 'text', description: '反向提示词' },
@@ -108,10 +193,12 @@ export const MODELS: Record<string, ModelConfig> = {
       ] },
       { name: 'watermark', type: 'boolean', defaultValue: false, description: '添加水印' },
       { name: 'prompt_extend', type: 'boolean', defaultValue: true, description: '智能改写提示词' },
+      { name: 'seed', type: 'number', min: 0, max: 2147483647, description: '随机数种子' },
     ],
   },
 
-  // ===== 文生视频模型 =====
+  // ===== HappyHorse 视频模型 =====
+
   'happyhorse-1.0-t2v': {
     id: 'happyhorse-1.0-t2v',
     name: 'HappyHorse 文生视频',
@@ -121,9 +208,11 @@ export const MODELS: Record<string, ModelConfig> = {
     endpoint: 'https://dashscope.aliyuncs.com/api/v1/services/aigc/video-generation/video-synthesis',
     async: true,
     pricing: { inputPrice: 0.9, inputPrice1080: 1.6, unit: 'video', note: '720P: 0.9元/秒, 1080P: 1.6元/秒' },
+    requestType: 'video-t2v',
+    inputMapping: VIDEO_T2V_MAPPING,
     parameters: [
       { name: 'prompt', type: 'text', required: true, description: '文本提示词' },
-      { name: 'resolution', type: 'select', defaultValue: '720P', description: '视频分辨率', options: [
+      { name: 'resolution', type: 'select', defaultValue: '1080P', description: '视频分辨率', options: [
         { label: '720P (0.9元/秒)', value: '720P' },
         { label: '1080P (1.6元/秒)', value: '1080P' },
       ] },
@@ -133,11 +222,17 @@ export const MODELS: Record<string, ModelConfig> = {
         { label: '1:1', value: '1:1' },
         { label: '4:3', value: '4:3' },
         { label: '3:4', value: '3:4' },
+        { label: '4:5', value: '4:5' },
+        { label: '5:4', value: '5:4' },
+        { label: '9:21', value: '9:21' },
+        { label: '21:9', value: '21:9' },
       ] },
       { name: 'duration', type: 'number', defaultValue: 5, min: 3, max: 15, description: '视频时长（秒）' },
       { name: 'watermark', type: 'boolean', defaultValue: true, description: '添加水印' },
+      { name: 'seed', type: 'number', min: 0, max: 2147483647, description: '随机数种子' },
     ],
   },
+
   'happyhorse-1.0-i2v': {
     id: 'happyhorse-1.0-i2v',
     name: 'HappyHorse 图生视频',
@@ -147,55 +242,95 @@ export const MODELS: Record<string, ModelConfig> = {
     endpoint: 'https://dashscope.aliyuncs.com/api/v1/services/aigc/video-generation/video-synthesis',
     async: true,
     pricing: { inputPrice: 0.9, inputPrice1080: 1.6, unit: 'video', note: '720P: 0.9元/秒, 1080P: 1.6元/秒' },
+    requestType: 'video-media',
+    inputMapping: {
+      ...VIDEO_MEDIA_MAPPING,
+      // 文档：media type = "first_frame"
+      first_frame_url: { target: 'media', mediaType: 'first_frame' } as const,
+    },
     parameters: [
       { name: 'prompt', type: 'text', description: '文本提示词' },
-      { name: 'first_frame_url', type: 'text', description: '首帧图像URL' },
-      { name: 'resolution', type: 'select', defaultValue: '720P', description: '视频分辨率', options: [
+      { name: 'first_frame_url', type: 'text', required: true, description: '首帧图像 URL' },
+      { name: 'resolution', type: 'select', defaultValue: '1080P', description: '视频分辨率', options: [
         { label: '720P (0.9元/秒)', value: '720P' },
         { label: '1080P (1.6元/秒)', value: '1080P' },
       ] },
       { name: 'duration', type: 'number', defaultValue: 5, min: 3, max: 15, description: '视频时长（秒）' },
       { name: 'watermark', type: 'boolean', defaultValue: true, description: '添加水印' },
+      { name: 'seed', type: 'number', min: 0, max: 2147483647, description: '随机数种子' },
     ],
   },
+
   'happyhorse-1.0-r2v': {
     id: 'happyhorse-1.0-r2v',
     name: 'HappyHorse 参考生视频',
     category: 'video',
     type: 'generation',
-    description: '参考图像/视频生成多角色视频',
+    description: '参考图像生成多角色视频',
     endpoint: 'https://dashscope.aliyuncs.com/api/v1/services/aigc/video-generation/video-synthesis',
     async: true,
     pricing: { inputPrice: 0.9, inputPrice1080: 1.6, unit: 'video', note: '720P: 0.9元/秒, 1080P: 1.6元/秒' },
+    requestType: 'video-media',
+    inputMapping: VIDEO_MEDIA_MAPPING,
+    // referenceUrls → input.media[{ type: "reference_image", url }]
+    referenceMediaType: 'reference_image',
     parameters: [
       { name: 'prompt', type: 'text', required: true, description: '文本提示词' },
-      { name: 'resolution', type: 'select', defaultValue: '720P', description: '视频分辨率', options: [
+      { name: 'resolution', type: 'select', defaultValue: '1080P', description: '视频分辨率', options: [
         { label: '720P (0.9元/秒)', value: '720P' },
         { label: '1080P (1.6元/秒)', value: '1080P' },
       ] },
+      { name: 'ratio', type: 'select', defaultValue: '16:9', description: '宽高比', options: [
+        { label: '16:9', value: '16:9' },
+        { label: '9:16', value: '9:16' },
+        { label: '1:1', value: '1:1' },
+        { label: '4:3', value: '4:3' },
+        { label: '3:4', value: '3:4' },
+        { label: '4:5', value: '4:5' },
+        { label: '5:4', value: '5:4' },
+        { label: '9:21', value: '9:21' },
+        { label: '21:9', value: '21:9' },
+      ] },
       { name: 'duration', type: 'number', defaultValue: 5, min: 3, max: 15, description: '视频时长（秒）' },
       { name: 'watermark', type: 'boolean', defaultValue: true, description: '添加水印' },
+      { name: 'seed', type: 'number', min: 0, max: 2147483647, description: '随机数种子' },
     ],
   },
+
   'happyhorse-1.0-video-edit': {
     id: 'happyhorse-1.0-video-edit',
     name: 'HappyHorse 视频编辑',
     category: 'video',
     type: 'editing',
-    description: '视频编辑模型',
+    description: '视频编辑模型，支持风格变换和局部替换',
     endpoint: 'https://dashscope.aliyuncs.com/api/v1/services/aigc/video-generation/video-synthesis',
     async: true,
     pricing: { inputPrice: 0.9, inputPrice1080: 1.6, unit: 'video', note: '720P: 0.9元/秒, 1080P: 1.6元/秒' },
+    requestType: 'video-media',
+    inputMapping: {
+      ...VIDEO_MEDIA_MAPPING,
+      video_url: { target: 'media', mediaType: 'video' } as const,
+      reference_image_url: { target: 'media', mediaType: 'reference_image' } as const,
+    },
     parameters: [
       { name: 'prompt', type: 'text', required: true, description: '编辑指令' },
-      { name: 'video_url', type: 'text', required: true, description: '原视频URL' },
-      { name: 'resolution', type: 'select', defaultValue: '720P', description: '视频分辨率', options: [
+      { name: 'video_url', type: 'text', required: true, description: '原视频 URL' },
+      { name: 'reference_image_url', type: 'text', description: '参考图 URL（最多5张）' },
+      { name: 'resolution', type: 'select', defaultValue: '1080P', description: '视频分辨率', options: [
         { label: '720P (0.9元/秒)', value: '720P' },
         { label: '1080P (1.6元/秒)', value: '1080P' },
       ] },
+      { name: 'audio_setting', type: 'select', defaultValue: 'auto', description: '音频设置', options: [
+        { label: '自动', value: 'auto' },
+        { label: '保留原声', value: 'origin' },
+      ] },
       { name: 'watermark', type: 'boolean', defaultValue: true, description: '添加水印' },
+      { name: 'seed', type: 'number', min: 0, max: 2147483647, description: '随机数种子' },
     ],
   },
+
+  // ===== 万相 2.7 视频模型 =====
+
   'wan2.7-t2v': {
     id: 'wan2.7-t2v',
     name: '万相 2.7 文生视频',
@@ -205,10 +340,13 @@ export const MODELS: Record<string, ModelConfig> = {
     endpoint: 'https://dashscope.aliyuncs.com/api/v1/services/aigc/video-generation/video-synthesis',
     async: true,
     pricing: { inputPrice: 0.6, inputPrice1080: 1, unit: 'video', note: '720P: 0.6元/秒, 1080P: 1元/秒' },
+    requestType: 'video-t2v',
+    inputMapping: VIDEO_T2V_MAPPING,
     parameters: [
       { name: 'prompt', type: 'text', required: true, description: '文本提示词' },
       { name: 'negative_prompt', type: 'text', description: '反向提示词' },
-      { name: 'resolution', type: 'select', defaultValue: '720P', description: '视频分辨率', options: [
+      { name: 'audio_url', type: 'text', description: '自定义音频 URL（wav/mp3, 2-30秒）' },
+      { name: 'resolution', type: 'select', defaultValue: '1080P', description: '视频分辨率', options: [
         { label: '720P (0.6元/秒)', value: '720P' },
         { label: '1080P (1元/秒)', value: '1080P' },
       ] },
@@ -222,8 +360,10 @@ export const MODELS: Record<string, ModelConfig> = {
       { name: 'duration', type: 'number', defaultValue: 5, min: 2, max: 15, description: '视频时长（秒）' },
       { name: 'prompt_extend', type: 'boolean', defaultValue: true, description: '智能改写提示词' },
       { name: 'watermark', type: 'boolean', defaultValue: false, description: '添加水印' },
+      { name: 'seed', type: 'number', min: 0, max: 2147483647, description: '随机数种子' },
     ],
   },
+
   'wan2.7-i2v': {
     id: 'wan2.7-i2v',
     name: '万相 2.7 图生视频',
@@ -233,27 +373,34 @@ export const MODELS: Record<string, ModelConfig> = {
     endpoint: 'https://dashscope.aliyuncs.com/api/v1/services/aigc/video-generation/video-synthesis',
     async: true,
     pricing: { inputPrice: 0.6, inputPrice1080: 1, unit: 'video', note: '720P: 0.6元/秒, 1080P: 1元/秒' },
+    requestType: 'video-media',
+    inputMapping: {
+      ...VIDEO_MEDIA_MAPPING,
+      // 文档 media type：first_frame / last_frame / first_clip / driving_audio
+      first_frame_url: { target: 'media', mediaType: 'first_frame' } as const,
+      last_frame_url: { target: 'media', mediaType: 'last_frame' } as const,
+      video_url: { target: 'media', mediaType: 'first_clip' } as const,
+      audio_url: { target: 'media', mediaType: 'driving_audio' } as const,
+    },
     parameters: [
       { name: 'prompt', type: 'text', description: '文本提示词' },
       { name: 'negative_prompt', type: 'text', description: '反向提示词' },
-      { name: 'media_type', type: 'select', defaultValue: 'first_frame', description: '媒体类型', options: [
-        { label: '首帧生视频', value: 'first_frame' },
-        { label: '首尾帧生视频', value: 'first_last_frame' },
-        { label: '视频续写', value: 'first_clip' },
-      ] },
-      { name: 'first_frame_url', type: 'text', description: '首帧图像URL' },
-      { name: 'last_frame_url', type: 'text', description: '尾帧图像URL' },
-      { name: 'video_url', type: 'text', description: '视频片段URL' },
-      { name: 'audio_url', type: 'text', description: '驱动音频URL' },
-      { name: 'resolution', type: 'select', defaultValue: '720P', description: '视频分辨率', options: [
+      { name: 'first_frame_url', type: 'text', description: '首帧图像 URL' },
+      { name: 'last_frame_url', type: 'text', description: '尾帧图像 URL' },
+      { name: 'video_url', type: 'text', description: '视频片段 URL（续写）' },
+      { name: 'audio_url', type: 'text', description: '驱动音频 URL（wav/mp3）' },
+      { name: 'resolution', type: 'select', defaultValue: '1080P', description: '视频分辨率', options: [
         { label: '720P (0.6元/秒)', value: '720P' },
         { label: '1080P (1元/秒)', value: '1080P' },
       ] },
+      // 文档：i2v 无 ratio 参数，输出宽高比跟随输入媒体
       { name: 'duration', type: 'number', defaultValue: 5, min: 2, max: 15, description: '视频时长（秒）' },
       { name: 'prompt_extend', type: 'boolean', defaultValue: true, description: '智能改写提示词' },
       { name: 'watermark', type: 'boolean', defaultValue: false, description: '添加水印' },
+      { name: 'seed', type: 'number', min: 0, max: 2147483647, description: '随机数种子' },
     ],
   },
+
   'wan2.7-r2v': {
     id: 'wan2.7-r2v',
     name: '万相 2.7 参考生视频',
@@ -263,10 +410,14 @@ export const MODELS: Record<string, ModelConfig> = {
     endpoint: 'https://dashscope.aliyuncs.com/api/v1/services/aigc/video-generation/video-synthesis',
     async: true,
     pricing: { inputPrice: 0.6, inputPrice1080: 1, unit: 'video', note: '720P: 0.6元/秒, 1080P: 1元/秒' },
+    requestType: 'video-media',
+    inputMapping: VIDEO_MEDIA_MAPPING,
+    // referenceUrls → input.media[{ type: "reference_image", url }]
+    referenceMediaType: 'reference_image',
     parameters: [
       { name: 'prompt', type: 'text', required: true, description: '文本提示词' },
       { name: 'negative_prompt', type: 'text', description: '反向提示词' },
-      { name: 'resolution', type: 'select', defaultValue: '720P', description: '视频分辨率', options: [
+      { name: 'resolution', type: 'select', defaultValue: '1080P', description: '视频分辨率', options: [
         { label: '720P (0.6元/秒)', value: '720P' },
         { label: '1080P (1元/秒)', value: '1080P' },
       ] },
@@ -280,25 +431,50 @@ export const MODELS: Record<string, ModelConfig> = {
       { name: 'duration', type: 'number', defaultValue: 5, min: 2, max: 15, description: '视频时长（秒）' },
       { name: 'prompt_extend', type: 'boolean', defaultValue: true, description: '智能改写提示词' },
       { name: 'watermark', type: 'boolean', defaultValue: false, description: '添加水印' },
+      { name: 'seed', type: 'number', min: 0, max: 2147483647, description: '随机数种子' },
     ],
   },
+
   'wan2.7-videoedit': {
     id: 'wan2.7-videoedit',
     name: '万相 2.7 视频编辑',
     category: 'video',
     type: 'editing',
-    description: '视频编辑模型',
+    description: '视频编辑模型，支持风格变换和局部替换',
     endpoint: 'https://dashscope.aliyuncs.com/api/v1/services/aigc/video-generation/video-synthesis',
     async: true,
     pricing: { inputPrice: 0.6, inputPrice1080: 1, unit: 'video', note: '720P: 0.6元/秒, 1080P: 1元/秒' },
+    requestType: 'video-media',
+    inputMapping: {
+      ...VIDEO_MEDIA_MAPPING,
+      video_url: { target: 'media', mediaType: 'video' } as const,
+      reference_image_url: { target: 'media', mediaType: 'reference_image' } as const,
+    },
     parameters: [
-      { name: 'prompt', type: 'text', required: true, description: '编辑指令' },
-      { name: 'video_url', type: 'text', required: true, description: '原视频URL' },
-      { name: 'resolution', type: 'select', defaultValue: '720P', description: '视频分辨率', options: [
+      { name: 'prompt', type: 'text', description: '编辑指令（可选）' },
+      { name: 'negative_prompt', type: 'text', description: '反向提示词' },
+      { name: 'video_url', type: 'text', required: true, description: '原视频 URL（2-10秒）' },
+      { name: 'reference_image_url', type: 'text', description: '参考图 URL（最多4张）' },
+      { name: 'resolution', type: 'select', defaultValue: '1080P', description: '视频分辨率', options: [
         { label: '720P (0.6元/秒)', value: '720P' },
         { label: '1080P (1元/秒)', value: '1080P' },
       ] },
+      { name: 'ratio', type: 'select', description: '宽高比', options: [
+        { label: '16:9', value: '16:9' },
+        { label: '9:16', value: '9:16' },
+        { label: '1:1', value: '1:1' },
+        { label: '4:3', value: '4:3' },
+        { label: '3:4', value: '3:4' },
+      ] },
+      // 文档：duration 默认 0 = 使用原视频时长，仅用于截断
+      { name: 'duration', type: 'number', defaultValue: 0, min: 2, max: 10, description: '视频时长（秒，0=跟随原视频）' },
+      { name: 'audio_setting', type: 'select', defaultValue: 'auto', description: '音频设置', options: [
+        { label: '自动', value: 'auto' },
+        { label: '保留原声', value: 'origin' },
+      ] },
+      { name: 'prompt_extend', type: 'boolean', defaultValue: true, description: '智能改写提示词' },
       { name: 'watermark', type: 'boolean', defaultValue: false, description: '添加水印' },
+      { name: 'seed', type: 'number', min: 0, max: 2147483647, description: '随机数种子' },
     ],
   },
 }

@@ -21,7 +21,10 @@ import postgres from 'postgres'
 import * as schema from '../../src/schema'
 import { setDb } from '../../src/db'
 
+import { resolve } from 'node:path'
+
 const TEST_DATABASE_URL = 'postgres://excuse:excuse_dev@localhost:5433/excuse_test'
+const MIGRATIONS_FOLDER = resolve(import.meta.dir, '../../drizzle')
 
 /** 单连接 drizzle 实例（max: 1 保证 BEGIN/ROLLBACK 作用域正确） */
 let db: PostgresJsDatabase<typeof schema>
@@ -33,7 +36,7 @@ export async function initTestDb() {
   // max: 1 = 只有一个连接，BEGIN/ROLLBACK 一定在同一连接上
   const client = postgres(TEST_DATABASE_URL, { max: 1 })
   db = drizzle(client, { schema })
-  await migrate(db, { migrationsFolder: './drizzle' })
+  await migrate(db, { migrationsFolder: MIGRATIONS_FOLDER })
 }
 
 /**

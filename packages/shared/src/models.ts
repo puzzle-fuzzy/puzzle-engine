@@ -19,6 +19,26 @@ export interface ModelPricing {
   note?: string
 }
 
+/**
+ * 参数到请求体的映射规则
+ * 让客户端无需 model-name 分支即可构建正确的 API 请求
+ */
+export type InputMapping =
+  | { target: 'prompt' }                     // → input.prompt（或 chat/image 模型的 messages content）
+  | { target: 'media'; mediaType: string }   // → input.media[].{type, url}
+  | { target: 'mediaField'; field: string }  // → input.<field>（如 audio_url、media_type）
+  | { target: 'parameter' }                  // → parameters.<paramName>
+  | { target: 'ignored' }                    // 仅 UI 展示，不发 API
+
+/**
+ * 请求体形状
+ * - chat: 文本模型 — input.messages[]
+ * - image: 图像生成 — input.messages[].content[].text
+ * - video-t2v: 文生视频 — input.prompt（纯文本）
+ * - video-media: 图生/参考生/编辑视频 — input.media[]
+ */
+export type RequestType = 'chat' | 'image' | 'video-t2v' | 'video-media'
+
 export interface ModelConfig {
   id: string
   name: string
@@ -29,6 +49,12 @@ export interface ModelConfig {
   async: boolean
   pricing: ModelPricing
   parameters: ModelParameter[]
+  /** 请求体形状，决定客户端如何组装 request body */
+  requestType?: RequestType
+  /** 每个参数到请求体的映射。Key = 参数名，Value = 映射规则 */
+  inputMapping?: Record<string, InputMapping>
+  /** referenceUrls 数组映射到 input.media[] 时使用的 type（仅 r2v 等模型需要） */
+  referenceMediaType?: string
 }
 
 export const MODEL_CATEGORIES = [

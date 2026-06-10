@@ -1,4 +1,5 @@
 import type { DashScopeConfig, ProviderResult, TaskStatus } from './types'
+import type { InputMapping, ModelConfig } from '@excuse/shared'
 import { getModelById } from './model-configs'
 import { parseDashScopeError } from './dashscope-errors'
 
@@ -20,9 +21,140 @@ export class DashScopeClient {
     }
   }
 
+  // ── 声明式请求体构建 ──────────────────────────────────
+  //
+  // 根据 model-configs 中的 requestType + inputMapping 自动组装请求体，
+  // 无需任何 model-name 分支判断。新增模型只需编辑 model-configs.ts。
+
+  /**
+   * 根据 inputMapping 遍历 params，把每个参数放入正确的请求体位置。
+   * 返回 { input, parameters, media } 三个中间收集器。
+   */
+  private applyMappings(
+    params: Record<string, unknown>,
+    inputMapping: Record<string, InputMapping>,
+  ): {
+    input: Record<string, unknown>
+    parameters: Record<string, unknown>
+    media: Array<{ type: string, url: string }>
+  } {
+    const input: Record<string, unknown> = {}
+    const parameters: Record<string, unknown> = {}
+    const media: Array<{ type: string, url: string }> = []
+
+    for (const [paramName, mapping] of Object.entries(inputMapping)) {
+      const value = params[paramName]
+      // 跳过未提供、null 的参数
+      if (value === undefined || value === null) continue
+      // 跳过空字符串
+      if (typeof value === 'string' && value.trim() === '') continue
+      // 保留 false / 0 等有意义的 falsy 值
+
+      switch (mapping.target) {
+        case 'prompt':
+          input.prompt = value
+          break
+        case 'parameter':
+          parameters[paramName] = value
+          break
+        case 'mediaField':
+          input[mapping.field] = value
+          break
+        case 'media':
+          media.push({ type: mapping.mediaType, url: value as string })
+          break
+        case 'ignored':
+          break
+      }
+    }
+
+    return { input, parameters, media }
+  }
+
+  /**
+   * 根据 requestType 组装最终请求体
+   */
+  private buildRequestBody(
+    modelConfig: ModelConfig,
+    params: Record<string, unknown>,
+    referenceUrls?: string[],
+  ): Record<string, unknown> {
+    const { requestType, inputMapping } = modelConfig
+    if (!inputMapping || !requestType) {
+      throw new Error(`模型 ${modelConfig.id} 缺少 requestType 或 inputMapping 配置`)
+    }
+
+    const { input, parameters, media } = this.applyMappings(params, inputMapping)
+
+    // referenceUrls → input.media[]（仅 r2v 等声明了 referenceMediaType 的模型）
+    if (referenceUrls?.length && modelConfig.referenceMediaType) {
+      for (const url of referenceUrls) {
+        media.push({ type: modelConfig.referenceMediaType, url })
+      }
+    }
+
+    switch (requestType) {
+      case 'chat': {
+        // 文本模型：input.messages[{ role: "user", content: prompt }]
+        return {
+          model: modelConfig.id,
+          input: {
+            messages: [{ role: 'user', content: input.prompt || '' }],
+          },
+          parameters: {
+            ...parameters,
+            result_format: 'message',
+          },
+        }
+      }
+
+      case 'image': {
+        // 图像模型：input.messages[{ role: "user", content: [{ text: prompt }] }]
+        return {
+          model: modelConfig.id,
+          input: {
+            messages: [{
+              role: 'user',
+              content: [{ text: input.prompt || '' }],
+            }],
+          },
+          parameters,
+        }
+      }
+
+      case 'video-t2v': {
+        // 文生视频：input.prompt + input.audio_url/negative_prompt + parameters
+        if (media.length > 0) {
+          input.media = media
+        }
+        return {
+          model: modelConfig.id,
+          input,
+          parameters,
+        }
+      }
+
+      case 'video-media': {
+        // 图生/参考生/编辑视频：input.prompt + input.media[] + input.negative_prompt + parameters
+        if (media.length > 0) {
+          input.media = media
+        }
+        return {
+          model: modelConfig.id,
+          input,
+          parameters,
+        }
+      }
+
+      default:
+        throw new Error(`未知的 requestType: ${requestType}`)
+    }
+  }
+
+  // ── 公开 API 方法 ──────────────────────────────────────
+
   /**
    * 文本生成 — 调用千问系列模型
-   * 使用 DashScope 原生 text-generation 端点
    */
   async chatCompletion(model: string, params: Record<string, unknown>): Promise<ProviderResult> {
     const modelConfig = getModelById(model)
@@ -30,25 +162,7 @@ export class DashScopeClient {
       return { success: false, error: `未知模型: ${model}` }
     }
 
-    const prompt = params.prompt as string || ''
-    const maxTokens = params.max_tokens as number || 1500
-    const temperature = params.temperature as number || 0.7
-    const topP = params.top_p as number || 0.9
-
-    const body = {
-      model,
-      input: {
-        messages: [
-          { role: 'user', content: prompt },
-        ],
-      },
-      parameters: {
-        max_tokens: maxTokens,
-        temperature,
-        top_p: topP,
-        result_format: 'message',
-      },
-    }
+    const body = this.buildRequestBody(modelConfig, params)
 
     try {
       const response = await fetch(modelConfig.endpoint, {
@@ -87,8 +201,7 @@ export class DashScopeClient {
   }
 
   /**
-   * 图片生成 — 调用千问图像系列模型
-   * 使用 multimodal-generation 端点（同步）
+   * 图片生成 — 调用千问图像系列模型（同步）
    */
   async generateImage(model: string, params: Record<string, unknown>): Promise<ProviderResult> {
     const modelConfig = getModelById(model)
@@ -96,31 +209,7 @@ export class DashScopeClient {
       return { success: false, error: `未知模型: ${model}` }
     }
 
-    const prompt = params.prompt as string || ''
-    const size = params.size as string || '2048*2048'
-    const n = params.n as number || 1
-    const negativePrompt = params.negative_prompt as string || undefined
-    const watermark = params.watermark as boolean ?? false
-    const promptExtend = params.prompt_extend as boolean ?? true
-
-    const body: Record<string, unknown> = {
-      model,
-      input: {
-        messages: [
-          {
-            role: 'user',
-            content: [{ text: prompt }],
-          },
-        ],
-      },
-      parameters: {
-        size,
-        n,
-        watermark,
-        prompt_extend: promptExtend,
-        ...(negativePrompt ? { negative_prompt: negativePrompt } : {}),
-      },
-    }
+    const body = this.buildRequestBody(modelConfig, params)
 
     try {
       const response = await fetch(modelConfig.endpoint, {
@@ -151,7 +240,7 @@ export class DashScopeClient {
           raw: data,
         },
         usage: {
-          imageCount: usage.image_count || urls.length || n,
+          imageCount: usage.image_count || urls.length,
         },
       }
     }
@@ -161,7 +250,7 @@ export class DashScopeClient {
   }
 
   /**
-   * 视频生成 — 异步提交
+   * 视频生成 — 异步提交任务
    * 返回 DashScope task_id，需要后续轮询
    */
   async submitVideoTask(model: string, params: Record<string, unknown>, referenceUrls?: string[]): Promise<ProviderResult> {
@@ -170,86 +259,8 @@ export class DashScopeClient {
       return { success: false, error: `未知模型: ${model}` }
     }
 
-    const prompt = params.prompt as string || ''
-    const resolution = params.resolution as string || '720P'
-    const duration = params.duration as number || 5
-    const ratio = params.ratio as string || '16:9'
-    const watermark = params.watermark as boolean ?? true
-    const promptExtend = params.prompt_extend as boolean ?? true
-    const negativePrompt = params.negative_prompt as string || undefined
-
-    const body: Record<string, unknown> = {
-      model,
-      input: {},
-      parameters: {
-        resolution,
-        duration,
-        ...(ratio ? { ratio } : {}),
-        watermark,
-        ...(promptExtend ? { prompt_extend: promptExtend } : {}),
-        ...(negativePrompt ? { negative_prompt: negativePrompt } : {}),
-      },
-    }
-
-    // 构建 input 内容
-    const inputContent: Record<string, unknown> = {}
-
-    // 根据模型类型设置不同的 input
-    if (model.includes('t2v') || model.includes('videoedit')) {
-      // 文生视频 / 视频编辑
-      inputContent.prompt = prompt
-    }
-
-    if (model.includes('i2v')) {
-      // 图生视频 — 首帧
-      const firstFrameUrl = params.first_frame_url as string
-      if (firstFrameUrl) {
-        inputContent.img_url = firstFrameUrl
-      }
-      if (prompt) {
-        inputContent.prompt = prompt
-      }
-    }
-
-    if (model.includes('r2v')) {
-      // 参考生视频 — 多参考图
-      if (referenceUrls && referenceUrls.length > 0) {
-        inputContent.ref_img_urls = referenceUrls
-      }
-      inputContent.prompt = prompt
-    }
-
-    if (model.includes('videoedit')) {
-      // 视频编辑
-      const videoUrl = params.video_url as string
-      if (videoUrl) {
-        inputContent.video_url = videoUrl
-      }
-    }
-
-    // wan2.7-i2v 特殊处理：media_type
-    if (model === 'wan2.7-i2v') {
-      const mediaType = params.media_type as string || 'first_frame'
-      inputContent.media_type = mediaType
-
-      const firstFrameUrl = params.first_frame_url as string
-      const lastFrameUrl = params.last_frame_url as string
-      const videoUrl = params.video_url as string
-      const audioUrl = params.audio_url as string
-
-      if (firstFrameUrl)
-        inputContent.img_url = firstFrameUrl
-      if (lastFrameUrl)
-        inputContent.tail_img_url = lastFrameUrl
-      if (videoUrl)
-        inputContent.video_url = videoUrl
-      if (audioUrl)
-        inputContent.audio_url = audioUrl
-      if (prompt)
-        inputContent.prompt = prompt
-    }
-
-    body.input = inputContent
+    const body = this.buildRequestBody(modelConfig, params, referenceUrls)
+    const duration = (params.duration as number) || 0
 
     try {
       const response = await fetch(modelConfig.endpoint, {
