@@ -1,42 +1,61 @@
-import { describe, it, expect, beforeEach } from 'bun:test'
-import { setDb } from '../src/db'
-import { createMockDb } from './helpers/mock-db'
+import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from 'bun:test'
+import {
+  initTestDb,
+  teardownTestDb,
+  beginTestTransaction,
+  rollbackTestTransaction,
+} from './helpers/test-db'
 import {
   createUploadedFile,
   getUploadedFileById,
 } from '../src/repositories/uploaded-files.repo'
 
 describe('uploaded-files repository', () => {
-  let mock: ReturnType<typeof createMockDb>
+  let accountId: string
 
-  beforeEach(() => {
-    mock = createMockDb()
-    setDb(mock.db as any)
+  beforeAll(async () => {
+    await initTestDb()
   })
+
+  afterAll(async () => {
+    await teardownTestDb()
+  })
+
+  beforeEach(async () => {
+    const ctx = await beginTestTransaction()
+    accountId = ctx.accountId
+  })
+
+  afterEach(async () => {
+    await rollbackTestTransaction()
+  })
+
+  function validFileInsert(overrides: Record<string, unknown> = {}) {
+    return {
+      accountId,
+      fileName: 'photo.png',
+      fileSize: 1024,
+      mimeType: 'image/png',
+      storagePath: '/data/uploads/photo.png',
+      publicUrl: '/uploads/photo.png',
+      purpose: 'reference',
+      ...overrides,
+    }
+  }
 
   // ─── createUploadedFile ────────────────────────────────
 
   describe('createUploadedFile', () => {
     it('should insert and return the file record', async () => {
-      const fakeRecord = {
-        id: 'file-1',
-        fileName: 'photo.png',
-        publicUrl: '/uploads/photo.png',
-        mimeType: 'image/png',
-      }
-      mock.setInsertResult([fakeRecord])
+      const result = await createUploadedFile(validFileInsert())
 
-      const result = await createUploadedFile({
-        accountId: '00000000-0000-0000-0000-000000000000',
-        fileName: 'photo.png',
-        fileSize: 1024,
-        mimeType: 'image/png',
-        storagePath: '/data/uploads/ref_123/photo.png',
-        publicUrl: '/uploads/photo.png',
-        purpose: 'reference',
-      })
-
-      expect(result).toEqual(fakeRecord)
+      expect(result.id).toBeDefined()
+      expect(result.accountId).toBe(accountId)
+      expect(result.fileName).toBe('photo.png')
+      expect(result.fileSize).toBe(1024)
+      expect(result.mimeType).toBe('image/png')
+      expect(result.purpose).toBe('reference')
+      expect(result.createdAt).toBeInstanceOf(Date)
     })
   })
 
@@ -44,20 +63,27 @@ describe('uploaded-files repository', () => {
 
   describe('getUploadedFileById', () => {
     it('should return the file record when found', async () => {
-      const fakeRecord = { id: 'file-1', fileName: 'photo.png' }
-      mock.setSelectResult([fakeRecord])
+      const created = await createUploadedFile(validFileInsert())
+      const found = await getUploadedFileById(created.id)
 
-      const result = await getUploadedFileById('file-1')
-
-      expect(result).toEqual(fakeRecord)
+      expect(found).not.toBeNull()
+      expect(found!.id).toBe(created.id)
+      expect(found!.fileName).toBe('photo.png')
     })
 
-    it('should return null when not found', async () => {
-      mock.setSelectResult([])
-
-      const result = await getUploadedFileById('nonexistent')
-
+    it('should return null for nonexistent ID', async () => {
+      const result = await getUploadedFileById('00000000-0000-0000-0000-000000000000')
       expect(result).toBeNull()
+    })
+  })
+
+  // ─── 约束验证 ─────────────────────────────────────────
+
+  describe('constraints', () => {
+    it('should reject invalid accountId (FK constraint)', async () => {
+      await expect(
+        createUploadedFile(validFileInsert({ accountId: '00000000-0000-0000-0000-000000000000' })),
+      ).rejects.toThrow()
     })
   })
 })

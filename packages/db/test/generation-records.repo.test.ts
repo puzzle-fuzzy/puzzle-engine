@@ -1,6 +1,10 @@
-import { describe, it, expect, beforeEach } from 'bun:test'
-import { setDb } from '../src/db'
-import { createMockDb } from './helpers/mock-db'
+import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from 'bun:test'
+import {
+  initTestDb,
+  teardownTestDb,
+  beginTestTransaction,
+  rollbackTestTransaction,
+} from './helpers/test-db'
 import {
   createGenerationRecord,
   getGenerationRecordById,
@@ -13,30 +17,53 @@ import {
 } from '../src/repositories/generation-records.repo'
 
 describe('generation-records repository', () => {
-  let mock: ReturnType<typeof createMockDb>
+  let accountId: string
 
-  beforeEach(() => {
-    mock = createMockDb()
-    setDb(mock.db as any)
+  beforeAll(async () => {
+    await initTestDb()
   })
+
+  afterAll(async () => {
+    await teardownTestDb()
+  })
+
+  beforeEach(async () => {
+    const ctx = await beginTestTransaction()
+    accountId = ctx.accountId
+  })
+
+  afterEach(async () => {
+    await rollbackTestTransaction()
+  })
+
+  // ─── 辅助：构造合法插入数据 ────────────────────────────
+
+  function validInsert(overrides: Record<string, unknown> = {}) {
+    return {
+      accountId,
+      model: 'qwen-vl',
+      category: 'text' as const,
+      status: 'pending' as const,
+      inputParams: { prompt: 'test prompt' },
+      ...overrides,
+    }
+  }
 
   // ─── createGenerationRecord ───────────────────────────
 
   describe('createGenerationRecord', () => {
-    it('should insert and return the record', async () => {
-      const fakeRecord = { id: 'rec-1', taskId: 'task-1', status: 'pending' }
-      mock.setInsertResult([fakeRecord])
+    it('should insert and return a record with all fields', async () => {
+      const result = await createGenerationRecord(validInsert({
+        taskId: 'task-001',
+      }))
 
-      const result = await createGenerationRecord({
-        accountId: '00000000-0000-0000-0000-000000000000',
-        taskId: 'task-1',
-        model: 'qwen-vl',
-        category: 'text',
-        status: 'pending',
-        inputParams: {},
-      })
-
-      expect(result).toEqual(fakeRecord)
+      expect(result.id).toBeDefined()
+      expect(result.accountId).toBe(accountId)
+      expect(result.model).toBe('qwen-vl')
+      expect(result.category).toBe('text')
+      expect(result.status).toBe('pending')
+      expect(result.inputParams).toEqual({ prompt: 'test prompt' })
+      expect(result.createdAt).toBeInstanceOf(Date)
     })
   })
 
@@ -44,19 +71,16 @@ describe('generation-records repository', () => {
 
   describe('getGenerationRecordById', () => {
     it('should return the record when found', async () => {
-      const fakeRecord = { id: 'rec-1', status: 'succeeded' }
-      mock.setSelectResult([fakeRecord])
+      const created = await createGenerationRecord(validInsert())
+      const found = await getGenerationRecordById(created.id)
 
-      const result = await getGenerationRecordById('rec-1')
-
-      expect(result).toEqual(fakeRecord)
+      expect(found).not.toBeNull()
+      expect(found!.id).toBe(created.id)
+      expect(found!.model).toBe('qwen-vl')
     })
 
-    it('should return null when not found', async () => {
-      mock.setSelectResult([])
-
-      const result = await getGenerationRecordById('nonexistent')
-
+    it('should return null for nonexistent ID', async () => {
+      const result = await getGenerationRecordById('00000000-0000-0000-0000-000000000000')
       expect(result).toBeNull()
     })
   })
@@ -64,142 +88,184 @@ describe('generation-records repository', () => {
   // ─── listGenerationRecords ─────────────────────────────
 
   describe('listGenerationRecords', () => {
-    it('should return records with default pagination', async () => {
-      const fakeRecords = [{ id: '1' }, { id: '2' }]
-      mock.setSelectResult(fakeRecords)
+    it('should return records ordered by createdAt desc', async () => {
+      await createGenerationRecord(validInsert({ category: 'image' }))
+      await createGenerationRecord(validInsert({ category: 'text' }))
 
-      const result = await listGenerationRecords()
-
-      expect(result).toEqual(fakeRecords)
+      const results = await listGenerationRecords()
+      expect(results.length).toBeGreaterThanOrEqual(2)
+      // 最新的排在前面
+      expect(results[0].createdAt.getTime()).toBeGreaterThanOrEqual(
+        results[1].createdAt.getTime(),
+      )
     })
 
-    it('should pass filter options through', async () => {
-      const fakeRecords = [{ id: '1', category: 'image', status: 'succeeded' }]
-      mock.setSelectResult(fakeRecords)
+    it('should filter by category', async () => {
+      await createGenerationRecord(validInsert({ category: 'image' }))
+      await createGenerationRecord(validInsert({ category: 'text' }))
 
-      const result = await listGenerationRecords({
-        category: 'image',
-        status: 'succeeded',
-        limit: 10,
-        offset: 5,
-      })
-
-      expect(result).toEqual(fakeRecords)
+      const images = await listGenerationRecords({ category: 'image' })
+      expect(images.length).toBeGreaterThanOrEqual(1)
+      expect(images.every(r => r.category === 'image')).toBe(true)
     })
 
-    it('should return empty array when no records match', async () => {
-      mock.setSelectResult([])
+    it('should filter by status', async () => {
+      await createGenerationRecord(validInsert({ status: 'pending' }))
 
-      const result = await listGenerationRecords({ category: 'audio' })
+      const pending = await listGenerationRecords({ status: 'pending' })
+      expect(pending.length).toBeGreaterThanOrEqual(1)
+      expect(pending.every(r => r.status === 'pending')).toBe(true)
+    })
 
-      expect(result).toEqual([])
+    it('should respect limit and offset', async () => {
+      // 创建 3 条记录
+      for (let i = 0; i < 3; i++) {
+        await createGenerationRecord(validInsert())
+      }
+
+      const page1 = await listGenerationRecords({ limit: 2, offset: 0 })
+      const page2 = await listGenerationRecords({ limit: 2, offset: 2 })
+
+      expect(page1).toHaveLength(2)
+      expect(page2).toHaveLength(1)
+    })
+
+    it('should return empty array when no records match filter', async () => {
+      const results = await listGenerationRecords({ category: 'audio' })
+      expect(results).toHaveLength(0)
     })
   })
 
   // ─── markGenerationFailed ──────────────────────────────
 
   describe('markGenerationFailed', () => {
-    it('should resolve without error', async () => {
-      await expect(
-        markGenerationFailed('rec-1', 'Something went wrong'),
-      ).resolves.toBeUndefined()
+    it('should update status to failed and set error message', async () => {
+      const record = await createGenerationRecord(validInsert())
+      await markGenerationFailed(record.id, 'Out of credits')
+
+      const updated = await getGenerationRecordById(record.id)
+      expect(updated!.status).toBe('failed')
+      expect(updated!.errorMessage).toBe('Out of credits')
     })
   })
 
   // ─── markGenerationProcessing ──────────────────────────
 
   describe('markGenerationProcessing', () => {
-    it('should resolve without extra fields', async () => {
-      await expect(
-        markGenerationProcessing('rec-1'),
-      ).resolves.toBeUndefined()
+    it('should update status to processing', async () => {
+      const record = await createGenerationRecord(validInsert())
+      await markGenerationProcessing(record.id)
+
+      const updated = await getGenerationRecordById(record.id)
+      expect(updated!.status).toBe('processing')
     })
 
-    it('should resolve with taskId and outputResult', async () => {
-      await expect(
-        markGenerationProcessing('rec-1', {
-          taskId: 'provider-123',
-          outputResult: { url: 'test.mp4' },
-        }),
-      ).resolves.toBeUndefined()
+    it('should set taskId and outputResult when provided', async () => {
+      const record = await createGenerationRecord(validInsert())
+      await markGenerationProcessing(record.id, {
+        taskId: 'provider-123',
+        outputResult: { url: 'test.mp4' },
+      })
+
+      const updated = await getGenerationRecordById(record.id)
+      expect(updated!.status).toBe('processing')
+      expect(updated!.taskId).toBe('provider-123')
+      expect(updated!.outputResult).toEqual({ url: 'test.mp4' })
     })
   })
 
   // ─── markGenerationSucceeded ───────────────────────────
 
   describe('markGenerationSucceeded', () => {
-    it('should resolve with output and cost', async () => {
-      await expect(
-        markGenerationSucceeded('rec-1', { url: 'result.png' }, { totalPrice: 0.01 }),
-      ).resolves.toBeUndefined()
+    it('should update status and set output and cost', async () => {
+      const record = await createGenerationRecord(validInsert())
+      await markGenerationSucceeded(record.id, { url: 'result.png' }, { totalPrice: 0.01 })
+
+      const updated = await getGenerationRecordById(record.id)
+      expect(updated!.status).toBe('succeeded')
+      expect(updated!.outputResult).toEqual({ url: 'result.png' })
+      expect((updated!.cost as any).totalPrice).toBe(0.01)
     })
 
-    it('should resolve without cost', async () => {
-      await expect(
-        markGenerationSucceeded('rec-1', { text: 'hello' }),
-      ).resolves.toBeUndefined()
+    it('should succeed without cost', async () => {
+      const record = await createGenerationRecord(validInsert())
+      await markGenerationSucceeded(record.id, { text: 'hello' })
+
+      const updated = await getGenerationRecordById(record.id)
+      expect(updated!.status).toBe('succeeded')
+      expect(updated!.cost).toBeNull()
     })
   })
 
   // ─── pollPendingVideoTasks ─────────────────────────────
 
   describe('pollPendingVideoTasks', () => {
-    it('should return pending/processing video tasks', async () => {
-      const fakeTasks = [
-        { id: '1', status: 'pending', category: 'video' },
-        { id: '2', status: 'processing', category: 'video' },
-      ]
-      mock.setSelectResult(fakeTasks)
+    it('should return pending and processing video tasks only', async () => {
+      await createGenerationRecord(validInsert({ category: 'video', status: 'pending' }))
+      await createGenerationRecord(validInsert({ category: 'video', status: 'processing' }))
+      // 非视频任务，不应返回
+      await createGenerationRecord(validInsert({ category: 'text', status: 'pending' }))
 
-      const result = await pollPendingVideoTasks()
-
-      expect(result).toEqual(fakeTasks)
+      const tasks = await pollPendingVideoTasks()
+      expect(tasks.length).toBe(2)
+      expect(tasks.every(t => t.category === 'video')).toBe(true)
+      expect(tasks.every(t => ['pending', 'processing'].includes(t.status))).toBe(true)
     })
 
-    it('should return empty array when no tasks', async () => {
-      mock.setSelectResult([])
+    it('should return empty array when no video tasks', async () => {
+      await createGenerationRecord(validInsert({ category: 'text' }))
 
-      const result = await pollPendingVideoTasks()
-
-      expect(result).toEqual([])
+      const tasks = await pollPendingVideoTasks()
+      expect(tasks).toHaveLength(0)
     })
   })
 
   // ─── getCostRecords ────────────────────────────────────
 
   describe('getCostRecords', () => {
-    it('should filter records with valid totalPrice', async () => {
-      mock.setSelectResult([
-        { model: 'qwen', category: 'text', cost: { totalPrice: 0.01 }, createdAt: new Date() },
-        { model: 'wanx', category: 'image', cost: { totalPrice: 0.05 }, createdAt: new Date() },
-        { model: 'qwen', category: 'text', cost: { estimated: true }, createdAt: new Date() },
-        { model: 'qwen', category: 'text', cost: null, createdAt: new Date() },
-      ])
+    it('should return only records with numeric totalPrice in cost', async () => {
+      const r1 = await createGenerationRecord(validInsert())
+      await markGenerationSucceeded(r1.id, { url: 'a.png' }, { totalPrice: 0.01 })
 
-      const result = await getCostRecords()
+      const r2 = await createGenerationRecord(validInsert())
+      await markGenerationSucceeded(r2.id, { url: 'b.png' }, { totalPrice: 0.05 })
 
-      expect(result).toHaveLength(2)
-      expect(result[0].cost.totalPrice).toBe(0.01)
-      expect(result[1].cost.totalPrice).toBe(0.05)
+      // 成功但无 cost
+      const r3 = await createGenerationRecord(validInsert())
+      await markGenerationSucceeded(r3.id, { url: 'c.png' })
+
+      const costs = await getCostRecords()
+      const testCosts = costs.filter(c => c.model === 'qwen-vl')
+      expect(testCosts.length).toBeGreaterThanOrEqual(2)
+      testCosts.forEach(c => {
+        expect(typeof (c.cost as any).totalPrice).toBe('number')
+      })
     })
 
-    it('should return empty array when no cost records exist', async () => {
-      mock.setSelectResult([])
+    it('should return empty when no cost records exist', async () => {
+      await createGenerationRecord(validInsert({ status: 'pending' }))
 
-      const result = await getCostRecords()
+      const costs = await getCostRecords()
+      const testCosts = costs.filter(c => c.model === 'qwen-vl')
+      expect(testCosts).toHaveLength(0)
+    })
+  })
 
-      expect(result).toEqual([])
+  // ─── 约束验证 ─────────────────────────────────────────
+
+  describe('constraints', () => {
+    it('should reject duplicate taskId (unique constraint)', async () => {
+      await createGenerationRecord(validInsert({ taskId: 'unique-task-001' }))
+
+      await expect(
+        createGenerationRecord(validInsert({ taskId: 'unique-task-001' })),
+      ).rejects.toThrow()
     })
 
-    it('should exclude records where totalPrice is not a number', async () => {
-      mock.setSelectResult([
-        { model: 'qwen', category: 'text', cost: { totalPrice: 'free' }, createdAt: new Date() },
-        { model: 'qwen', category: 'text', cost: { totalPrice: undefined }, createdAt: new Date() },
-      ])
-
-      const result = await getCostRecords()
-
-      expect(result).toHaveLength(0)
+    it('should reject invalid accountId (FK constraint)', async () => {
+      await expect(
+        createGenerationRecord(validInsert({ accountId: '00000000-0000-0000-0000-000000000000' })),
+      ).rejects.toThrow()
     })
   })
 })
