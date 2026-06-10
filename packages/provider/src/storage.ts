@@ -48,7 +48,7 @@ export class AssetStorage {
   /**
    * 从 URL 中提取文件扩展名
    */
-  static getExtensionFromUrl(url: string): string {
+  static getExtensionFromUrl(url: string): string { // always returns string (fallback 'bin')
     try {
       const pathname = new URL(url).pathname
       const ext = pathname.split('.').pop()?.toLowerCase()
@@ -67,6 +67,34 @@ export class AssetStorage {
     const timestamp = Date.now()
     const random = Math.random().toString(36).slice(2, 8)
     return `${prefix}_${timestamp}_${random}.${ext}`
+  }
+
+  /**
+   * 批量下载远程 URL 并保存到本地存储，返回公开访问 URL 列表
+   *
+   * 用于 DashScope 生成结果（图片/视频）的下载保存。
+   * 下载失败的 URL 会原样返回（保留临时 URL 作为兜底）。
+   *
+   * @param urls 远程文件 URL 数组
+   * @param subDir 子目录（如 taskId）
+   * @param prefix 文件名前缀（如 'img_0', 'video'）
+   * @returns 公开访问 URL 数组
+   */
+  async downloadAndMap(urls: string[], subDir: string, prefix: string): Promise<string[]> {
+    const result: string[] = []
+    for (let i = 0; i < urls.length; i++) {
+      const url = urls[i]!
+      try {
+        const ext = AssetStorage.getExtensionFromUrl(url)
+        const fileName = AssetStorage.generateFileName(`${prefix}_${i}`, ext)
+        const relativePath = await this.downloadAndSave(url, subDir, fileName)
+        result.push(this.getPublicUrl(relativePath))
+      }
+      catch {
+        result.push(url) // 下载失败则保留原 URL
+      }
+    }
+    return result
   }
 
   /**

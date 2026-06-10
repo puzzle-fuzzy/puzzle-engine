@@ -1,130 +1,66 @@
-import {
-  pollPendingVideoTasks,
-  markGenerationFailed,
-  markGenerationSucceeded,
-  markGenerationProcessing,
-} from '@excuse/db'
-import { DashScopeClient, getModelById, AssetStorage } from '@excuse/provider'
-import { calculateCost } from '@excuse/billing'
+import { pollPendingVideoTasks } from '@excuse/db'
+import { loadConfig } from './config'
+import { createTaskProcessor } from './task-processor'
 
-const config = {
-  dashscopeApiKey: process.env.DASHSCOPE_API_KEY || '',
-  dashscopeBaseUrl: process.env.DASHSCOPE_BASE_URL || 'https://dashscope.aliyuncs.com/api/v1',
-  storageRoot: process.env.STORAGE_ROOT || './uploads',
-  pollIntervalMs: Number(process.env.WORKER_POLL_INTERVAL_MS) || 5000,
-  staleTimeoutMs: 4 * 60 * 60 * 1000, // 4 hours
+const config = loadConfig()
+const processor = createTaskProcessor(config)
+
+let running = true
+
+// ── 优雅退出 ──────────────────────────────────────────
+for (const signal of ['SIGINT', 'SIGTERM'] as const) {
+  process.on(signal, () => {
+    console.log(`\n🛑 Received ${signal}, shutting down...`)
+    running = false
+  })
 }
 
-const client = new DashScopeClient({
-  apiKey: config.dashscopeApiKey,
-  baseUrl: config.dashscopeBaseUrl,
-})
-const storage = new AssetStorage({ storageRoot: config.storageRoot })
-
-async function pollPendingTasks(): Promise<number> {
-  // 查询所有处理中的视频任务
-  const records = await pollPendingVideoTasks()
-
-  let processed = 0
-
-  for (const record of records) {
-    const taskId = record.taskId
-    if (!taskId) continue
-
-    // 检查是否超时
-    const elapsed = Date.now() - new Date(record.createdAt).getTime()
-    if (elapsed > config.staleTimeoutMs) {
-      await markGenerationFailed(record.id, 'Task timed out (>4h)')
-
-      console.log(`⏰ Task ${taskId} timed out`)
-      processed++
-      continue
-    }
-
-    // 查询 DashScope 任务状态
-    const taskStatus = await client.queryTask(taskId)
-
-    switch (taskStatus.status) {
-      case 'SUCCEEDED': {
-        // 下载视频文件
-        const results = (taskStatus.output as any)?.results || []
-        const videoUrl = (taskStatus.output as any)?.video_url || results[0]?.url
-
-        let savedUrls: string[] = []
-        if (videoUrl) {
-          try {
-            const ext = AssetStorage.getExtensionFromUrl(videoUrl)
-            const fileName = AssetStorage.generateFileName('video', ext)
-            const relativePath = await storage.downloadAndSave(videoUrl, taskId, fileName)
-            savedUrls = [storage.getPublicUrl(relativePath)]
-          }
-          catch (err) {
-            console.error(`Failed to download video for task ${taskId}:`, err)
-            savedUrls = [videoUrl]
-          }
-        }
-
-        // 计算实际费用
-        const modelConfig = getModelById(record.model)
-        const actualCost = modelConfig
-          ? calculateCost(modelConfig, record.inputParams as Record<string, unknown>, {
-              videoDuration: (record.inputParams as any)?.duration || 5,
-            })
-          : record.cost
-
-        await markGenerationSucceeded(record.id, {
-          ...(taskStatus.output || {}),
-          savedUrls,
-          originalUrl: videoUrl,
-        }, actualCost as Record<string, unknown> | undefined)
-
-        console.log(`✅ Task ${taskId} completed`)
-        processed++
-        break
-      }
-
-      case 'FAILED': {
-        await markGenerationFailed(record.id, taskStatus.errorMessage || 'DashScope task failed')
-
-        console.log(`❌ Task ${taskId} failed: ${taskStatus.errorMessage}`)
-        processed++
-        break
-      }
-
-      case 'PENDING':
-      case 'RUNNING': {
-        // 更新状态为 processing（如果还是 pending）
-        if (record.status === 'pending') {
-          await markGenerationProcessing(record.id)
-        }
-        break
-      }
-
-      default: {
-        console.log(`⚠️ Task ${taskId} unknown status: ${taskStatus.status}`)
-      }
-    }
-  }
-
-  return processed
-}
-
+// ── 轮询循环 ──────────────────────────────────────────
 async function main() {
   console.log('🤖 Worker started, polling interval:', config.pollIntervalMs, 'ms')
 
-  while (true) {
+  while (running) {
     try {
-      const count = await pollPendingTasks()
-      if (count > 0) {
-        console.log(`📊 Processed ${count} tasks`)
+      const records = await pollPendingVideoTasks()
+
+      for (const record of records) {
+        if (!running) break // 退出信号检查
+
+        const result = await processor.processTask(record)
+        const taskId = 'taskId' in result ? result.taskId : record.taskId
+
+        switch (result.action) {
+          case 'completed':
+            console.log(`✅ Task ${taskId} completed`)
+            break
+          case 'skipped':
+            // 超时或仍在处理中，不需要每次打印
+            if (result.reason === 'no taskId') {
+              console.log(`⏭️ Record ${record.id} skipped: ${result.reason}`)
+            }
+            break
+          case 'ignored':
+            console.log(`⚠️ Task ${taskId} unknown status: ${result.status}`)
+            break
+        }
       }
     }
     catch (error) {
       console.error('Worker poll error:', error)
     }
 
-    await Bun.sleep(config.pollIntervalMs)
+    // 分段 sleep，以便更快响应退出信号
+    const sleepMs = config.pollIntervalMs
+    const checkInterval = 1000
+    let remaining = sleepMs
+    while (remaining > 0 && running) {
+      const step = Math.min(remaining, checkInterval)
+      await Bun.sleep(step)
+      remaining -= step
+    }
   }
+
+  console.log('🤖 Worker stopped.')
 }
 
 main()

@@ -11,6 +11,7 @@ import { DashScopeClient, getModelById, AssetStorage } from '@excuse/provider'
 import { calculateCost } from '@excuse/billing'
 import type { ServerConfig } from '../config'
 import type { GenerationCategory, GenerationStatus } from '@excuse/db'
+import { createAuthPlugin } from '../plugins/auth'
 
 export function createGenerateRoutes(config: ServerConfig) {
   const client = new DashScopeClient({
@@ -20,8 +21,12 @@ export function createGenerateRoutes(config: ServerConfig) {
   const storage = new AssetStorage({ storageRoot: config.storageRoot })
 
   return new Elysia({ prefix: '/api' })
+    .use(createAuthPlugin(config))
     // 发起生成
-    .post('/generate', async ({ body }) => {
+    .post('/generate', async ({ body, userId }) => {
+      if (!userId) {
+        return { success: false, error: '请先登录' }
+      }
       const { model, parameters, referenceFileIds } = body as {
         model: string
         parameters: Record<string, unknown>
@@ -39,10 +44,9 @@ export function createGenerateRoutes(config: ServerConfig) {
       // 生成唯一 taskId
       const taskId = `gen_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
 
-      // 创建数据库记录（使用一个临时 accountId，后续接入认证后替换）
-      // TODO: 接入认证后从 JWT 中获取真实 accountId
+      // 创建数据库记录
       const record = await createGenerationRecord({
-        accountId: '00000000-0000-0000-0000-000000000000', // 临时占位
+        accountId: userId,
         taskId,
         model,
         category: modelConfig.category,
@@ -94,18 +98,7 @@ export function createGenerateRoutes(config: ServerConfig) {
       let outputResult = result.output || {}
       if (modelConfig.category === 'image' && outputResult.urls) {
         const urls = outputResult.urls as string[]
-        const savedUrls: string[] = []
-        for (let i = 0; i < urls.length; i++) {
-          try {
-            const ext = AssetStorage.getExtensionFromUrl(urls[i])
-            const fileName = AssetStorage.generateFileName(`img_${i}`, ext)
-            const relativePath = await storage.downloadAndSave(urls[i], taskId, fileName)
-            savedUrls.push(storage.getPublicUrl(relativePath))
-          }
-          catch {
-            savedUrls.push(urls[i]) // 下载失败则保留原 URL
-          }
-        }
+        const savedUrls = await storage.downloadAndMap(urls, taskId, 'img')
         outputResult = { ...outputResult, savedUrls, urls }
       }
 
@@ -133,13 +126,17 @@ export function createGenerateRoutes(config: ServerConfig) {
     })
 
     // 获取生成记录列表
-    .get('/records', async ({ query }) => {
+    .get('/records', async ({ query, userId }) => {
+      if (!userId) {
+        return { success: false, error: '请先登录' }
+      }
+
       const category = (query.category || undefined) as GenerationCategory | undefined
       const status = (query.status || undefined) as GenerationStatus | undefined
       const limit = query.limit ?? 50
       const offset = query.offset ?? 0
 
-      const records = await listGenerationRecords({ category, status, limit, offset })
+      const records = await listGenerationRecords({ accountId: userId, category, status, limit, offset })
 
       return { records, total: records.length }
     }, {
