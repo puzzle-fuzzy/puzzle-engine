@@ -13,6 +13,8 @@ import { modelsRoutes } from './routes/models'
 import { createGenerateRoutes } from './routes/generate'
 import { createUploadRoutes } from './routes/upload'
 import { billingRoutes } from './routes/billing'
+import { createSSERoutes } from './routes/sse'
+import { startSSEListener } from './services/sse-manager'
 
 const config = loadConfig()
 
@@ -37,12 +39,18 @@ const app = new Elysia()
   .use(modelsRoutes)
   .use(createGenerateRoutes(config))
   .use(createUploadRoutes(config))
+  .use(createSSERoutes(config))
   .use(billingRoutes)
 
 export type App = typeof app
 export default app
 
 app.listen(config.port)
+
+// 启动 PostgreSQL LISTEN — 接收 Worker 的生成状态通知并推送到 SSE 客户端
+startSSEListener().catch((err) => {
+  logger.error({ err }, 'Failed to start SSE listener')
+})
 
 logger.info(
   { host: app.server?.hostname, port: app.server?.port },

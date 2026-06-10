@@ -6,6 +6,7 @@ import type {
   GenerateResponse,
   BillingStatistics,
 } from '@excuse/shared'
+import { sseClient } from './sse'
 
 /**
  * Eden Treaty 客户端 — 端到端类型安全
@@ -20,13 +21,15 @@ const AUTH_TOKEN_KEY = 'auth_token'
 
 let authToken: string | null = localStorage.getItem(AUTH_TOKEN_KEY)
 
-/** 设置认证 token（同步到 localStorage） */
+/** 设置认证 token（同步到 localStorage，联动 SSE 连接） */
 export function setAuthToken(token: string | null) {
   authToken = token
   if (token) {
     localStorage.setItem(AUTH_TOKEN_KEY, token)
+    sseClient.connect()      // 登录 → 建立 SSE 连接
   } else {
     localStorage.removeItem(AUTH_TOKEN_KEY)
+    sseClient.disconnect()    // 登出 → 断开 SSE 连接
   }
 }
 

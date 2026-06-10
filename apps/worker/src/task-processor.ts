@@ -2,9 +2,11 @@ import {
   markGenerationFailed,
   markGenerationSucceeded,
   markGenerationProcessing,
+  notifyGenerationStatus,
 } from '@excuse/db'
 import { DashScopeClient, getModelById, AssetStorage } from '@excuse/provider'
 import { calculateCost } from '@excuse/billing'
+import type { GenerationNotifyPayload } from '@excuse/shared'
 import type { WorkerConfig } from './config'
 
 /**
@@ -28,6 +30,7 @@ export interface TaskProcessorDeps {
   markGenerationFailed: (id: string, message: string) => Promise<void>
   markGenerationSucceeded: (id: string, output: Record<string, unknown>, cost?: Record<string, unknown>) => Promise<void>
   markGenerationProcessing: (id: string) => Promise<void>
+  notifyGenerationStatus: (payload: GenerationNotifyPayload) => Promise<void>
 }
 
 /**
@@ -52,6 +55,7 @@ export function createTaskProcessor(config: WorkerConfig, deps?: Partial<TaskPro
   const fail = deps?.markGenerationFailed ?? markGenerationFailed
   const succeed = deps?.markGenerationSucceeded ?? markGenerationSucceeded
   const processing = deps?.markGenerationProcessing ?? markGenerationProcessing
+  const notify = deps?.notifyGenerationStatus ?? notifyGenerationStatus
 
   return { processTask }
 
@@ -60,6 +64,7 @@ export function createTaskProcessor(config: WorkerConfig, deps?: Partial<TaskPro
    */
   async function processTask(record: {
     id: string
+    accountId: string
     taskId: string | null
     model: string
     status: string
@@ -77,6 +82,15 @@ export function createTaskProcessor(config: WorkerConfig, deps?: Partial<TaskPro
     const elapsed = Date.now() - new Date(record.createdAt).getTime()
     if (elapsed > config.staleTimeoutMs) {
       await fail(record.id, 'Task timed out (>4h)')
+      await notify({
+        accountId: record.accountId,
+        recordId: record.id,
+        status: 'failed',
+        category: record.category,
+        model: record.model,
+        taskId,
+        errorMessage: 'Task timed out (>4h)',
+      })
       return { action: 'completed', taskId }
     }
 
@@ -98,18 +112,41 @@ export function createTaskProcessor(config: WorkerConfig, deps?: Partial<TaskPro
             })
           : record.cost
 
-        await succeed(record.id, {
+        const output = {
           ...(taskStatus.output || {}),
           savedUrls,
           originalUrl: videoUrl,
-        }, actualCost as Record<string, unknown> | undefined)
+        }
+
+        await succeed(record.id, output, actualCost as Record<string, unknown> | undefined)
+
+        await notify({
+          accountId: record.accountId,
+          recordId: record.id,
+          status: 'succeeded',
+          category: record.category,
+          model: record.model,
+          taskId,
+          outputResult: output,
+          cost: actualCost as Record<string, unknown> | undefined,
+        })
 
         return { action: 'completed', taskId }
       }
 
       // ── 失败 ────────────────────────────────────────
       case 'FAILED': {
-        await fail(record.id, taskStatus.errorMessage || 'DashScope task failed')
+        const errMsg = taskStatus.errorMessage || 'DashScope task failed'
+        await fail(record.id, errMsg)
+        await notify({
+          accountId: record.accountId,
+          recordId: record.id,
+          status: 'failed',
+          category: record.category,
+          model: record.model,
+          taskId,
+          errorMessage: errMsg,
+        })
         return { action: 'completed', taskId }
       }
 

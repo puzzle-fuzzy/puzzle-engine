@@ -4,10 +4,11 @@ import * as schema from './schema'
 
 const connectionString = process.env.DATABASE_URL || 'postgres://excuse:excuse_dev@localhost:5433/excuse'
 
-const client = postgres(connectionString)
+// 导出原始 postgres 客户端，供 LISTEN/NOTIFY 使用
+export const pgClient = postgres(connectionString)
 
 // 内部实例 — 通过 getDb() 访问，不直接导出
-let _db = drizzle(client, { schema })
+let _db = drizzle(pgClient, { schema })
 
 /** 获取当前 db 实例 */
 export function getDb() {

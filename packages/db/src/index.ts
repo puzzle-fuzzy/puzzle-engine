@@ -6,3 +6,9 @@ export * from './repositories'
 
 // 类型
 export * from './types'
+
+// PostgreSQL NOTIFY 工具
+export * from './notify'
+
+// 原始客户端（供 LISTEN/NOTIFY 使用）
+export { pgClient } from './db'

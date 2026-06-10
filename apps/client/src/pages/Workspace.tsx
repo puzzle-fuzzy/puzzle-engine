@@ -32,6 +32,8 @@ import {
   type GenerateResponse,
   type GenerationRecord,
 } from '@/api/client'
+import { sseClient } from '@/api/sse'
+import type { SSEGenerationStatusEvent } from '@excuse/shared'
 
 const CATEGORY_CONFIG = {
   text: { label: '文本生成', color: 'bg-blue-500', icon: FileText, activeColor: 'bg-blue-500 text-white' },
@@ -94,10 +96,42 @@ export default function Workspace() {
     catch {}
   }, [])
 
+  // 初始加载生成记录（挂载时拉一次）
   useEffect(() => {
     loadRecords()
-    const interval = setInterval(loadRecords, 5000)
-    return () => clearInterval(interval)
+  }, [loadRecords])
+
+  // SSE 实时更新 + 安全兜底轮询
+  useEffect(() => {
+    // 订阅 SSE 生成状态事件，实时更新记录列表
+    const unsubscribe = sseClient.on('generation_status', (event: SSEGenerationStatusEvent) => {
+      setRecords((prev) => {
+        const existingIndex = prev.findIndex(r => r.id === event.id)
+        if (existingIndex >= 0) {
+          // 更新已有记录
+          const next = [...prev]
+          next[existingIndex] = {
+            ...next[existingIndex],
+            status: event.status,
+            ...(event.outputResult && { outputResult: event.outputResult }),
+            ...(event.errorMessage && { errorMessage: event.errorMessage }),
+            ...(event.cost && { cost: event.cost }),
+          }
+          return next
+        }
+        // 新记录不在列表中，触发全量刷新
+        loadRecords()
+        return prev
+      })
+    })
+
+    // 安全兜底：每 60 秒全量刷新一次（防止 SSE 丢失事件）
+    const interval = setInterval(loadRecords, 60_000)
+
+    return () => {
+      unsubscribe()
+      clearInterval(interval)
+    }
   }, [loadRecords])
 
   // 自动滚动到底部
