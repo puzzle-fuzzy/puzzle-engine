@@ -2,6 +2,7 @@
 import OSS from 'ali-oss'
 import { mkdir, writeFile, readFile } from 'node:fs/promises'
 import { join, dirname } from 'node:path'
+import { logger } from '@excuse/shared'
 import type { StorageConfig } from './types'
 
 /**
@@ -60,7 +61,7 @@ export class AssetStorage {
       return this.getOSSPublicUrl(key)
     }
     catch (err) {
-      console.warn('[AssetStorage] OSS upload failed, falling back to local:', err)
+      logger.warn({ err, key, prefix: 'generated' }, 'OSS upload failed, falling back to local')
       return this.getLocalPublicUrl(fileName)
     }
   }
@@ -86,7 +87,7 @@ export class AssetStorage {
       return this.getOSSPublicUrl(key)
     }
     catch (err) {
-      console.warn('[AssetStorage] OSS upload failed, falling back to local:', err)
+      logger.warn({ err, key, prefix: 'upload' }, 'OSS upload failed, falling back to local')
       return this.getLocalPublicUrl(fileName)
     }
   }

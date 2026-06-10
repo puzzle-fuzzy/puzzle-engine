@@ -3,7 +3,9 @@ import { Elysia } from 'elysia'
 import { staticPlugin } from '@elysia/static'
 import { join } from 'node:path'
 import { mkdirSync } from 'node:fs'
+import { logger } from '@excuse/shared'
 import { loadConfig } from './config'
+import { loggerPlugin } from './plugins/logger'
 import { createAuthPlugin } from './plugins/auth'
 import { createAuthRoutes } from './routes/auth'
 import { healthRoutes } from './routes/health'
@@ -19,6 +21,7 @@ const uploadsDir = join(import.meta.dir, '..', config.storageRoot)
 mkdirSync(uploadsDir, { recursive: true })
 
 const app = new Elysia()
+  .use(loggerPlugin)
   .use(cors({
     origin: [config.frontendUrl, 'http://localhost:8007'],
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
@@ -41,6 +44,7 @@ export default app
 
 app.listen(config.port)
 
-console.log(
-  `🦊 Excuse API is running at ${app.server?.hostname}:${app.server?.port}`,
+logger.info(
+  { host: app.server?.hostname, port: app.server?.port },
+  '🦊 Excuse API is running',
 )

@@ -17,7 +17,8 @@
     "@excuse/provider": "workspace:*",
     "@excuse/shared": "workspace:*",
     "drizzle-orm": "^0.44.2",
-    "elysia": "latest"
+    "elysia": "latest",
+    "pino-http": "^11.0.0"
   },
   "devDependencies": {
     "@elysia/eden": "^1.4.10",

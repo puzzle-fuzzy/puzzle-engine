@@ -1,23 +1,25 @@
 import { pollPendingVideoTasks } from '@excuse/db'
+import { createLogger } from '@excuse/shared'
 import { loadConfig } from './config'
 import { createTaskProcessor } from './task-processor'
 
 const config = loadConfig()
 const processor = createTaskProcessor(config)
+const logger = createLogger('worker')
 
 let running = true
 
 // ── 优雅退出 ──────────────────────────────────────────
 for (const signal of ['SIGINT', 'SIGTERM'] as const) {
   process.on(signal, () => {
-    console.log(`\n🛑 Received ${signal}, shutting down...`)
+    logger.info({ signal }, '🛑 Received signal, shutting down...')
     running = false
   })
 }
 
 // ── 轮询循环 ──────────────────────────────────────────
 async function main() {
-  console.log('🤖 Worker started, polling interval:', config.pollIntervalMs, 'ms')
+  logger.info({ pollIntervalMs: config.pollIntervalMs }, '🤖 Worker started')
 
   while (running) {
     try {
@@ -26,27 +28,26 @@ async function main() {
       for (const record of records) {
         if (!running) break // 退出信号检查
 
+        const taskLogger = logger.child({ taskId: record.taskId })
         const result = await processor.processTask(record)
-        const taskId = 'taskId' in result ? result.taskId : record.taskId
 
         switch (result.action) {
           case 'completed':
-            console.log(`✅ Task ${taskId} completed`)
+            taskLogger.info('✅ Task completed')
             break
           case 'skipped':
-            // 超时或仍在处理中，不需要每次打印
             if (result.reason === 'no taskId') {
-              console.log(`⏭️ Record ${record.id} skipped: ${result.reason}`)
+              taskLogger.info({ recordId: record.id, reason: result.reason }, '⏭️ Record skipped')
             }
             break
           case 'ignored':
-            console.log(`⚠️ Task ${taskId} unknown status: ${result.status}`)
+            taskLogger.warn({ status: result.status }, '⚠️ Unknown task status')
             break
         }
       }
     }
     catch (error) {
-      console.error('Worker poll error:', error)
+      logger.error({ err: error }, 'Worker poll error')
     }
 
     // 分段 sleep，以便更快响应退出信号
@@ -60,7 +61,7 @@ async function main() {
     }
   }
 
-  console.log('🤖 Worker stopped.')
+  logger.info('🤖 Worker stopped.')
 }
 
 main()
