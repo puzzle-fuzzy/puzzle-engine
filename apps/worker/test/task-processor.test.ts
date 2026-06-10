@@ -1,0 +1,251 @@
+import { describe, it, expect } from 'bun:test'
+import { createTaskProcessor, extractVideoUrl } from '../src/task-processor'
+import type { TaskProcessorDeps } from '../src/task-processor'
+
+// ─── 测试用 mock 依赖 ──────────────────────────────────
+
+function createMockDeps(overrides: Partial<TaskProcessorDeps> = {}): TaskProcessorDeps {
+  return {
+    queryTask: async () => ({ status: 'UNKNOWN' }),
+    downloadAndMap: async (urls: string[]) => urls,
+    markGenerationFailed: async () => {},
+    markGenerationSucceeded: async () => {},
+    markGenerationProcessing: async () => {},
+    ...overrides,
+  }
+}
+
+function createTestProcessor(deps: Partial<TaskProcessorDeps> = {}) {
+  return createTaskProcessor(
+    {
+      dashscopeApiKey: 'test-key',
+      dashscopeBaseUrl: 'https://test.api.com',
+      storageRoot: '/tmp/test-uploads',
+      pollIntervalMs: 5000,
+      staleTimeoutMs: 1000, // 1 秒超时，方便测试
+    },
+    deps,
+  )
+}
+
+/** 构造一条合法的待处理 record */
+function createRecord(overrides: Record<string, unknown> = {}) {
+  return {
+    id: 'rec-001',
+    taskId: 'task-001',
+    model: 'happyhorse-1.0-t2v',
+    status: 'pending',
+    category: 'video',
+    createdAt: new Date(), // 刚创建，不会超时
+    inputParams: { prompt: 'test', duration: 5 },
+    cost: null,
+    ...overrides,
+  }
+}
+
+// ─── extractVideoUrl ──────────────────────────────────
+
+describe('extractVideoUrl', () => {
+  it('should extract video_url', () => {
+    expect(extractVideoUrl({ video_url: 'https://cdn/video.mp4' }))
+      .toBe('https://cdn/video.mp4')
+  })
+
+  it('should extract first result url as fallback', () => {
+    expect(extractVideoUrl({ results: [{ url: 'https://cdn/result.mp4' }] }))
+      .toBe('https://cdn/result.mp4')
+  })
+
+  it('should prefer video_url over results', () => {
+    expect(extractVideoUrl({
+      video_url: 'https://cdn/video.mp4',
+      results: [{ url: 'https://cdn/other.mp4' }],
+    })).toBe('https://cdn/video.mp4')
+  })
+
+  it('should return undefined for empty output', () => {
+    expect(extractVideoUrl(undefined)).toBeUndefined()
+    expect(extractVideoUrl({})).toBeUndefined()
+  })
+})
+
+// ─── processTask ──────────────────────────────────────
+
+describe('processTask', () => {
+  // ── 跳过：没有 taskId ──────────────────────────────
+
+  it('should skip records without taskId', async () => {
+    const deps = createMockDeps()
+    const { processTask } = createTestProcessor(deps)
+    const result = await processTask(createRecord({ taskId: null }))
+
+    expect(result.action).toBe('skipped')
+    if (result.action === 'skipped') {
+      expect(result.reason).toBe('no taskId')
+    }
+  })
+
+  // ── 超时 ──────────────────────────────────────────
+
+  it('should mark as failed when task is stale', async () => {
+    const failed: Array<{ id: string; msg: string }> = []
+    const deps = createMockDeps({
+      markGenerationFailed: async (id, msg) => {
+        failed.push({ id, msg })
+      },
+    })
+    const { processTask } = createTestProcessor(deps)
+
+    // createdAt 设为 2 秒前，超过 staleTimeoutMs=1000
+    const result = await processTask(createRecord({
+      createdAt: new Date(Date.now() - 2000),
+    }))
+
+    expect(result.action).toBe('completed')
+    expect(failed).toHaveLength(1)
+    expect(failed[0]!.id).toBe('rec-001')
+    expect(failed[0]!.msg).toContain('timed out')
+  })
+
+  // ── SUCCEEDED ─────────────────────────────────────
+
+  it('should download, calculate cost and mark succeeded', async () => {
+    const succeeded: Array<{ id: string; output: Record<string, unknown> }> = []
+    const downloaded: string[][] = []
+    const deps = createMockDeps({
+      queryTask: async () => ({
+        status: 'SUCCEEDED',
+        output: { video_url: 'https://cdn/video.mp4' },
+      }),
+      downloadAndMap: async (urls, _subDir, _prefix) => {
+        downloaded.push(urls)
+        return ['/api/uploads/task-001/video.mp4']
+      },
+      markGenerationSucceeded: async (id, output, _cost) => {
+        succeeded.push({ id, output })
+      },
+    })
+
+    const { processTask } = createTestProcessor(deps)
+    const result = await processTask(createRecord())
+
+    expect(result.action).toBe('completed')
+    expect(downloaded).toHaveLength(1)
+    expect(downloaded[0]).toEqual(['https://cdn/video.mp4'])
+    expect(succeeded).toHaveLength(1)
+    expect(succeeded[0]!.id).toBe('rec-001')
+    // output 应包含 savedUrls 和 originalUrl
+    const output = succeeded[0]!.output
+    expect(output.savedUrls).toEqual(['/api/uploads/task-001/video.mp4'])
+    expect(output.originalUrl).toBe('https://cdn/video.mp4')
+  })
+
+  it('should handle SUCCEEDED with no video URL', async () => {
+    const succeeded: Array<{ id: string }> = []
+    const deps = createMockDeps({
+      queryTask: async () => ({
+        status: 'SUCCEEDED',
+        output: {},
+      }),
+      downloadAndMap: async (urls) => urls,
+      markGenerationSucceeded: async (id, _output, _cost) => {
+        succeeded.push({ id })
+      },
+    })
+
+    const { processTask } = createTestProcessor(deps)
+    const result = await processTask(createRecord())
+
+    expect(result.action).toBe('completed')
+    expect(succeeded).toHaveLength(1)
+  })
+
+  // ── FAILED ────────────────────────────────────────
+
+  it('should mark as failed with error message', async () => {
+    const failed: Array<{ id: string; msg: string }> = []
+    const deps = createMockDeps({
+      queryTask: async () => ({
+        status: 'FAILED',
+        errorMessage: 'Model internal error',
+      }),
+      markGenerationFailed: async (id, msg) => {
+        failed.push({ id, msg })
+      },
+    })
+
+    const { processTask } = createTestProcessor(deps)
+    const result = await processTask(createRecord())
+
+    expect(result.action).toBe('completed')
+    expect(failed).toHaveLength(1)
+    expect(failed[0]!.msg).toBe('Model internal error')
+  })
+
+  it('should use default error message when missing', async () => {
+    const failed: Array<{ id: string; msg: string }> = []
+    const deps = createMockDeps({
+      queryTask: async () => ({
+        status: 'FAILED',
+      }),
+      markGenerationFailed: async (id, msg) => {
+        failed.push({ id, msg })
+      },
+    })
+
+    const { processTask } = createTestProcessor(deps)
+    await processTask(createRecord())
+
+    expect(failed[0]!.msg).toBe('DashScope task failed')
+  })
+
+  // ── PENDING / RUNNING ─────────────────────────────
+
+  it('should mark as processing when record is pending and task is PENDING', async () => {
+    const processingCalls: string[] = []
+    const deps = createMockDeps({
+      queryTask: async () => ({ status: 'PENDING' }),
+      markGenerationProcessing: async (id) => {
+        processingCalls.push(id)
+      },
+    })
+
+    const { processTask } = createTestProcessor(deps)
+    const result = await processTask(createRecord({ status: 'pending' }))
+
+    expect(result.action).toBe('skipped')
+    expect(processingCalls).toEqual(['rec-001'])
+  })
+
+  it('should NOT call markProcessing when record is already processing', async () => {
+    const processingCalls: string[] = []
+    const deps = createMockDeps({
+      queryTask: async () => ({ status: 'RUNNING' }),
+      markGenerationProcessing: async (id) => {
+        processingCalls.push(id)
+      },
+    })
+
+    const { processTask } = createTestProcessor(deps)
+    const result = await processTask(createRecord({ status: 'processing' }))
+
+    expect(result.action).toBe('skipped')
+    expect(processingCalls).toHaveLength(0) // 不应该调用
+  })
+
+  // ── 未知状态 ──────────────────────────────────────
+
+  it('should return ignored for unknown status', async () => {
+    const deps = createMockDeps({
+      queryTask: async () => ({ status: 'CANCELLING' }),
+    })
+
+    const { processTask } = createTestProcessor(deps)
+    const result = await processTask(createRecord())
+
+    expect(result.action).toBe('ignored')
+    if (result.action === 'ignored') {
+      expect(result.status).toBe('CANCELLING')
+    }
+  })
+})

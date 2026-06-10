@@ -16,18 +16,41 @@ export type TaskResult =
   | { action: 'ignored'; taskId: string; status: string }
 
 /**
+ * 可注入的外部依赖（测试时替换）
+ */
+export interface TaskProcessorDeps {
+  queryTask: (taskId: string) => Promise<{
+    status: string
+    output?: Record<string, unknown>
+    errorMessage?: string
+  }>
+  downloadAndMap: (urls: string[], subDir: string, prefix: string) => Promise<string[]>
+  markGenerationFailed: (id: string, message: string) => Promise<void>
+  markGenerationSucceeded: (id: string, output: Record<string, unknown>, cost?: Record<string, unknown>) => Promise<void>
+  markGenerationProcessing: (id: string) => Promise<void>
+}
+
+/**
  * 创建任务处理器
  *
- * 依赖通过参数注入，方便测试时 mock
+ * @param config Worker 配置
+ * @param deps 可选的外部依赖注入（测试时使用）
  */
-export function createTaskProcessor(config: WorkerConfig) {
+export function createTaskProcessor(config: WorkerConfig, deps?: Partial<TaskProcessorDeps>) {
+  // 生产环境：用真实依赖
   const client = new DashScopeClient({
     apiKey: config.dashscopeApiKey,
     baseUrl: config.dashscopeBaseUrl,
   })
   const storage = new AssetStorage({ storageRoot: config.storageRoot })
 
-  return { client, storage, processTask }
+  const queryTask = deps?.queryTask ?? ((id: string) => client.queryTask(id))
+  const downloadAndMap = deps?.downloadAndMap ?? ((urls, subDir, prefix) => storage.downloadAndMap(urls, subDir, prefix))
+  const fail = deps?.markGenerationFailed ?? markGenerationFailed
+  const succeed = deps?.markGenerationSucceeded ?? markGenerationSucceeded
+  const processing = deps?.markGenerationProcessing ?? markGenerationProcessing
+
+  return { processTask }
 
   /**
    * 处理单条待轮询的任务
@@ -50,17 +73,20 @@ export function createTaskProcessor(config: WorkerConfig) {
     // ── 超时检测 ──────────────────────────────────────
     const elapsed = Date.now() - new Date(record.createdAt).getTime()
     if (elapsed > config.staleTimeoutMs) {
-      await markGenerationFailed(record.id, 'Task timed out (>4h)')
+      await fail(record.id, 'Task timed out (>4h)')
       return { action: 'completed', taskId }
     }
 
     // ── 查询 DashScope 任务状态 ───────────────────────
-    const taskStatus = await client.queryTask(taskId)
+    const taskStatus = await queryTask(taskId)
 
     switch (taskStatus.status) {
       // ── 成功：下载 + 计费 + 更新 ────────────────────
       case 'SUCCEEDED': {
-        const savedUrls = await downloadResultUrls(taskStatus.output, taskId)
+        const videoUrl = extractVideoUrl(taskStatus.output)
+        const savedUrls = videoUrl
+          ? await downloadAndMap([videoUrl], taskId, 'video')
+          : []
 
         const modelConfig = getModelById(record.model)
         const actualCost = modelConfig
@@ -69,9 +95,7 @@ export function createTaskProcessor(config: WorkerConfig) {
             })
           : record.cost
 
-        const videoUrl = extractVideoUrl(taskStatus.output)
-
-        await markGenerationSucceeded(record.id, {
+        await succeed(record.id, {
           ...(taskStatus.output || {}),
           savedUrls,
           originalUrl: videoUrl,
@@ -82,7 +106,7 @@ export function createTaskProcessor(config: WorkerConfig) {
 
       // ── 失败 ────────────────────────────────────────
       case 'FAILED': {
-        await markGenerationFailed(record.id, taskStatus.errorMessage || 'DashScope task failed')
+        await fail(record.id, taskStatus.errorMessage || 'DashScope task failed')
         return { action: 'completed', taskId }
       }
 
@@ -90,7 +114,7 @@ export function createTaskProcessor(config: WorkerConfig) {
       case 'PENDING':
       case 'RUNNING': {
         if (record.status === 'pending') {
-          await markGenerationProcessing(record.id)
+          await processing(record.id)
         }
         return { action: 'skipped', taskId, reason: `still ${taskStatus.status}` }
       }
@@ -99,23 +123,11 @@ export function createTaskProcessor(config: WorkerConfig) {
         return { action: 'ignored', taskId, status: taskStatus.status }
     }
   }
-
-  /**
-   * 从 DashScope 输出中提取视频 URL 并下载保存
-   */
-  async function downloadResultUrls(
-    output: Record<string, unknown> | undefined,
-    taskId: string,
-  ): Promise<string[]> {
-    const videoUrl = extractVideoUrl(output)
-    if (!videoUrl) return []
-    return storage.downloadAndMap([videoUrl], taskId, 'video')
-  }
 }
 
 // ── 工具函数 ────────────────────────────────────────────
 
-function extractVideoUrl(output: Record<string, unknown> | undefined): string | undefined {
+export function extractVideoUrl(output: Record<string, unknown> | undefined): string | undefined {
   if (!output) return undefined
   return (output as any).video_url || (output as any).results?.[0]?.url
 }
