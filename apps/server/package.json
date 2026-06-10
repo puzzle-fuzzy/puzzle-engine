@@ -1,0 +1,16 @@
+{
+  "name": "server",
+  "version": "1.0.50",
+  "module": "src/index.js",
+  "scripts": {
+    "test": "bun test",
+    "dev": "bun run src/index.ts"
+  },
+  "dependencies": {
+    "@puzzle-engine/shared": "workspace:*",
+    "elysia": "latest"
+  },
+  "devDependencies": {
+    "bun-types": "latest"
+  }
+}
