@@ -1,8 +1,16 @@
 {
   "name": "puzzle-engine",
+  "version": "0.0.1",
   "type": "module",
   "private": true,
+  "description": "拼图引擎 - 基于 Bun + Elysia + React 的 monorepo 项目",
+  "author": "18267094443@163.com",
+  "license": "MIT",
   "module": "index.ts",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/puzzle-fuzzy/puzzle-engine.git"
+  },
   "workspaces": [
     "apps/*",
     "packages/*"
