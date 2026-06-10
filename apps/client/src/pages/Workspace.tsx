@@ -17,11 +17,13 @@ import {
   RotateCcw,
   Sparkles,
   Download,
+  Trash2,
 } from 'lucide-react'
 import {
   fetchModels,
   generate,
   fetchRecords,
+  deleteRecord,
   uploadFile,
   type ModelConfig,
   type ModelParameter,
@@ -148,6 +150,17 @@ export default function Workspace() {
     finally {
       setLoading(false)
     }
+  }
+
+  // 删除记录
+  async function handleDelete(id: string) {
+    if (!confirm('确定要删除这条记录吗？'))
+      return
+    try {
+      await deleteRecord(id)
+      await loadRecords()
+    }
+    catch {}
   }
 
   // 参考图上传
@@ -427,7 +440,7 @@ export default function Workspace() {
                                   key={i}
                                   src={url}
                                   alt={`生成图片 ${i + 1}`}
-                                  className="size-20 cursor-pointer rounded-lg border object-cover hover:opacity-80 transition-opacity"
+                                  className="size-32 cursor-pointer rounded-lg border object-cover hover:opacity-80 transition-opacity"
                                   onClick={() => setPreviewUrl(url)}
                                 />
                               ))}
@@ -444,7 +457,7 @@ export default function Workspace() {
                                 <video
                                   key={i}
                                   src={url}
-                                  className="size-28 rounded-lg border object-cover"
+                                  className="w-full max-w-xs rounded-lg border aspect-video object-cover"
                                   controls
                                 />
                               ))}
@@ -458,18 +471,28 @@ export default function Workspace() {
                         <p className="mt-2 text-xs text-destructive">{record.errorMessage}</p>
                       )}
 
-                      {/* 重试按钮 */}
-                      {record.status === 'failed' && (
+                      {/* 操作按钮 */}
+                      <div className="mt-2 flex gap-2">
+                        {record.status === 'failed' && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleRegenerate(record)}
+                          >
+                            <RotateCcw className="size-3" />
+                            重新生成
+                          </Button>
+                        )}
                         <Button
-                          variant="outline"
+                          variant="ghost"
                           size="sm"
-                          className="mt-2"
-                          onClick={() => handleRegenerate(record)}
+                          className="text-muted-foreground hover:text-destructive"
+                          onClick={() => handleDelete(record.id)}
                         >
-                          <RotateCcw className="size-3" />
-                          重新生成
+                          <Trash2 className="size-3" />
+                          删除
                         </Button>
-                      )}
+                      </div>
                     </CardContent>
                   </Card>
                 )

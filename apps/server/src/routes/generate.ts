@@ -3,6 +3,7 @@ import {
   createGenerationRecord,
   listGenerationRecords,
   getGenerationRecordById,
+  deleteGenerationRecord,
   markGenerationFailed,
   markGenerationProcessing,
   markGenerationSucceeded,
@@ -160,6 +161,28 @@ export function createGenerateRoutes(config: ServerConfig) {
       }
 
       return { success: true, record }
+    }, {
+      params: t.Object({
+        id: t.String(),
+      }),
+    })
+
+    // 删除单条记录
+    .delete('/records/:id', async ({ params, userId }) => {
+      if (!userId) {
+        return { success: false, error: '请先登录' }
+      }
+
+      const record = await getGenerationRecordById(params.id)
+      if (!record) {
+        return { success: false, error: '记录不存在' }
+      }
+      if (record.accountId !== userId) {
+        return { success: false, error: '无权删除该记录' }
+      }
+
+      await deleteGenerationRecord(params.id)
+      return { success: true }
     }, {
       params: t.Object({
         id: t.String(),

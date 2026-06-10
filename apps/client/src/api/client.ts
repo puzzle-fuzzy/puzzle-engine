@@ -37,7 +37,7 @@ export function getAuthToken() {
 
 // ===== Eden Treaty 客户端 =====
 
-export const api = treaty<App>('', {
+export const api = treaty<App>('http://localhost:5007', {
   headers: () => ({
     ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
   }),
@@ -122,6 +122,13 @@ export async function fetchRecord(id: string): Promise<{ success: boolean; recor
   const { data, error } = await api.api.records({ id }).get()
   if (error) throw error
   return data as unknown as { success: boolean; record: GenerationRecord }
+}
+
+/** 删除单条记录 */
+export async function deleteRecord(id: string): Promise<{ success: boolean }> {
+  const { data, error } = await api.api.records({ id }).delete()
+  if (error) throw error
+  return data as unknown as { success: boolean }
 }
 
 /** 上传文件 */
