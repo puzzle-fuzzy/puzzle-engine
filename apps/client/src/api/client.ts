@@ -134,27 +134,17 @@ export async function deleteRecord(id: string): Promise<{ success: boolean }> {
   return data as unknown as { success: boolean }
 }
 
-/** 上传文件 — 使用原生 fetch，绕过 Eden Treaty 的 FormData 序列化问题 */
+/** 上传文件 */
 export async function uploadFile(file: File): Promise<{
   success: boolean
   file: { id: string; fileName: string; publicUrl: string; mimeType: string }
 }> {
-  const formData = new FormData()
-  formData.append('file', file)
-
-  const response = await fetch('/api/upload', {
-    method: 'POST',
-    headers: {
-      ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
-    },
-    body: formData,
-  })
-
-  if (!response.ok) {
-    throw new Error(`Upload failed: ${response.status} ${response.statusText}`)
+  const { data, error } = await api.api.upload.post({ file })
+  if (error) throw error
+  return data as unknown as {
+    success: boolean
+    file: { id: string; fileName: string; publicUrl: string; mimeType: string }
   }
-
-  return response.json()
 }
 
 /** 获取计费统计 */
