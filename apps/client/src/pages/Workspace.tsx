@@ -122,9 +122,15 @@ export default function Workspace() {
     setMediaUploadState({})
   }, [selectedModelId])
 
+  // 检查必填参数是否都已填写
+  const missingRequired = selectedModel
+    ? selectedModel.parameters.filter(p => p.required && !parameters[p.name])
+    : []
+  const canGenerate = selectedModel && missingRequired.length === 0
+
   // 处理生成
   async function handleGenerate() {
-    if (!selectedModel || !parameters.prompt) return
+    if (!selectedModel || !canGenerate) return
     setLoading(true)
     try {
       const referenceFileIds = referenceFiles.map(f => f.id)
@@ -472,7 +478,7 @@ export default function Workspace() {
           <Button
             className="w-full"
             size="lg"
-            disabled={loading || !parameters.prompt}
+            disabled={loading || !canGenerate}
             onClick={handleGenerate}
           >
             {loading ? (

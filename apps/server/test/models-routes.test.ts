@@ -43,14 +43,14 @@ describe('models routes', () => {
   })
 
   it('GET / 返回所有模型列表', async () => {
-    const { data, error } = await client.index.get()
+    const { data, error } = await client.api.models.get()
 
     expect(error).toBeNull()
     expect(data?.models).toHaveLength(3)
   })
 
   it('每个模型包含 id/name/category/type/pricing/parameters', async () => {
-    const { data } = await client.index.get()
+    const { data } = await client.api.models.get()
 
     for (const model of data!.models) {
       expect(model.id).toBeTruthy()
@@ -62,7 +62,7 @@ describe('models routes', () => {
   })
 
   it('pricing 字段过滤了敏感信息（不暴露 endpoint）', async () => {
-    const { data } = await client.index.get()
+    const { data } = await client.api.models.get()
 
     for (const model of data!.models) {
       expect((model as any).endpoint).toBeUndefined()
@@ -72,7 +72,7 @@ describe('models routes', () => {
   })
 
   it('pricing 包含 unit/inputPrice/outputPrice 信息', async () => {
-    const { data } = await client.index.get()
+    const { data } = await client.api.models.get()
 
     const textModel = data!.models.find(m => m.id === 'qwen-max')
     expect(textModel).toBeDefined()

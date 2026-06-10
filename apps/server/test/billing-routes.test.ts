@@ -46,7 +46,7 @@ describe('billing routes', () => {
         dailyTrend: [],
       })
 
-      const { data, error } = await client.statistics.get()
+      const { data, error } = await client.api.billing.statistics.get()
 
       expect(error).toBeNull()
       expect(data?.success).toBe(true)
@@ -61,7 +61,7 @@ describe('billing routes', () => {
         byCategory: [], byModel: [], dailyTrend: [],
       })
 
-      const { data } = await client.statistics.get()
+      const { data } = await client.api.billing.statistics.get()
 
       expect(data?.success).toBe(true)
       expect(data?.statistics.total).toBe(0)
@@ -75,7 +75,7 @@ describe('billing routes', () => {
         byCategory: [], byModel: [], dailyTrend: [],
       })
 
-      await client.statistics.get()
+      await client.api.billing.statistics.get()
 
       expect(mockGetCostRecords).toHaveBeenCalledTimes(1)
     })
@@ -90,7 +90,7 @@ describe('billing routes', () => {
         byCategory: [], byModel: [], dailyTrend: [],
       })
 
-      await client.statistics.get()
+      await client.api.billing.statistics.get()
 
       expect(mockAggregateStatistics).toHaveBeenCalledWith(records)
     })

@@ -18,6 +18,8 @@ export const modelsRoutes = new Elysia({ prefix: '/api/models' })
         inputPrice1080: m.pricing.inputPrice1080,
       },
       parameters: m.parameters,
+      // 前端需要 referenceMediaType 来判断是否显示参考图上传卡片（r2v 模型）
+      referenceMediaType: m.referenceMediaType,
     }))
     return { models }
   })
