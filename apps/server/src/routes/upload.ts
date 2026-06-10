@@ -1,4 +1,4 @@
-import { Elysia } from 'elysia'
+import { Elysia, t } from 'elysia'
 import { createUploadedFile } from '@excuse/db'
 import { AssetStorage } from '@excuse/provider'
 import type { ServerConfig } from '../config'
@@ -18,8 +18,7 @@ export function createUploadRoutes(config: ServerConfig) {
         return { success: false, error: '请先登录' }
       }
 
-      const formData = body as FormData
-      const file = formData.get('file') as File | null
+      const file = body.file
       if (!file) {
         return { success: false, error: 'No file provided' }
       }
@@ -47,5 +46,9 @@ export function createUploadRoutes(config: ServerConfig) {
           mimeType: record.mimeType,
         },
       }
+    }, {
+      body: t.Object({
+        file: t.File({ description: '上传的文件' }),
+      }),
     })
 }

@@ -249,14 +249,19 @@ describe('route auth guards', () => {
 
   describe('POST /api/upload — auth guard', () => {
     it('should reject request without token', async () => {
-      // 构造 FormData（Bun 运行时支持）
+      // 使用原生 Request 直接调用，绕过 Eden Treaty 的 FormData 序列化问题
+      const uploadApp = createUploadRoutes(testConfig)
       const formData = new FormData()
       formData.append('file', new File(['test content'], 'test.png', { type: 'image/png' }))
 
-      const { data } = await uploadClient.api.upload.post(formData)
+      const response = await uploadApp.handle(new Request('http://localhost/api/upload', {
+        method: 'POST',
+        body: formData,
+      }))
 
-      expect(data?.success).toBe(false)
-      expect(data?.error).toContain('登录')
+      const data = await response.json() as { success: boolean; error?: string }
+      expect(data.success).toBe(false)
+      expect(data.error).toContain('登录')
       expect(mockSaveUploadedFile).not.toHaveBeenCalled()
       expect(mockCreateUploadedFile).not.toHaveBeenCalled()
     })
