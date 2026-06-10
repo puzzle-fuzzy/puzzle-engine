@@ -9,6 +9,8 @@ export interface ModelParameter {
   options?: { label: string; value: unknown }[]
   min?: number
   max?: number
+  /** 存在则渲染为上传控件而非文本框。accept 为 MIME 类型（如 'image/*'） */
+  mediaUpload?: { accept: string; multiple?: boolean }
 }
 
 export interface ModelPricing {

@@ -1,4 +1,4 @@
-import { eq } from 'drizzle-orm'
+import { eq, inArray } from 'drizzle-orm'
 import { uploadedFiles } from '../schema'
 import { getDb } from '../db'
 import type { UploadedFileInsert } from '../types'
@@ -21,4 +21,15 @@ export async function getUploadedFileById(id: string) {
     .where(eq(uploadedFiles.id, id))
     .limit(1)
   return record ?? null
+}
+
+/**
+ * 按 ID 列表批量查询上传文件记录
+ */
+export async function getUploadedFilesByIds(ids: string[]) {
+  if (ids.length === 0) return []
+  return getDb()
+    .select()
+    .from(uploadedFiles)
+    .where(inArray(uploadedFiles.id, ids))
 }

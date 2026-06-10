@@ -7,6 +7,7 @@ import {
   markGenerationFailed,
   markGenerationProcessing,
   markGenerationSucceeded,
+  getUploadedFilesByIds,
 } from '@excuse/db'
 import { DashScopeClient, getModelById, AssetStorage } from '@excuse/provider'
 import { calculateCost } from '@excuse/billing'
@@ -59,9 +60,12 @@ export function createGenerateRoutes(config: ServerConfig) {
         cost: { ...estimatedCost, estimated: true },
       })
 
-      // 调用 DashScope API
+      // 解析参考图 URL
       let referenceUrls: string[] | undefined
-      // TODO: 根据 referenceFileIds 查询 uploadedFiles 表获取公开 URL
+      if (referenceFileIds?.length) {
+        const files = await getUploadedFilesByIds(referenceFileIds)
+        referenceUrls = files.map(f => f.publicUrl)
+      }
 
       const result = await client.generate(model, parameters, referenceUrls)
 

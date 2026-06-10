@@ -1,6 +1,6 @@
 /// <reference path="./ali-oss.d.ts" />
 import OSS from 'ali-oss'
-import { mkdir, writeFile, readFile } from 'node:fs/promises'
+import { mkdir, writeFile } from 'node:fs/promises'
 import { join, dirname } from 'node:path'
 import { logger } from '@excuse/shared'
 import type { StorageConfig } from './types'

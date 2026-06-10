@@ -250,7 +250,7 @@ export const MODELS: Record<string, ModelConfig> = {
     },
     parameters: [
       { name: 'prompt', type: 'text', description: '文本提示词' },
-      { name: 'first_frame_url', type: 'text', required: true, description: '首帧图像 URL' },
+      { name: 'first_frame_url', type: 'text', required: true, mediaUpload: { accept: 'image/*' }, description: '首帧图像' },
       { name: 'resolution', type: 'select', defaultValue: '1080P', description: '视频分辨率', options: [
         { label: '720P (0.9元/秒)', value: '720P' },
         { label: '1080P (1.6元/秒)', value: '1080P' },
@@ -314,8 +314,8 @@ export const MODELS: Record<string, ModelConfig> = {
     },
     parameters: [
       { name: 'prompt', type: 'text', required: true, description: '编辑指令' },
-      { name: 'video_url', type: 'text', required: true, description: '原视频 URL' },
-      { name: 'reference_image_url', type: 'text', description: '参考图 URL（最多5张）' },
+      { name: 'video_url', type: 'text', required: true, mediaUpload: { accept: 'video/*' }, description: '原视频' },
+      { name: 'reference_image_url', type: 'text', mediaUpload: { accept: 'image/*', multiple: true }, description: '参考图（最多5张）' },
       { name: 'resolution', type: 'select', defaultValue: '1080P', description: '视频分辨率', options: [
         { label: '720P (0.9元/秒)', value: '720P' },
         { label: '1080P (1.6元/秒)', value: '1080P' },
@@ -345,7 +345,7 @@ export const MODELS: Record<string, ModelConfig> = {
     parameters: [
       { name: 'prompt', type: 'text', required: true, description: '文本提示词' },
       { name: 'negative_prompt', type: 'text', description: '反向提示词' },
-      { name: 'audio_url', type: 'text', description: '自定义音频 URL（wav/mp3, 2-30秒）' },
+      { name: 'audio_url', type: 'text', mediaUpload: { accept: 'audio/*' }, description: '自定义音频（wav/mp3, 2-30秒）' },
       { name: 'resolution', type: 'select', defaultValue: '1080P', description: '视频分辨率', options: [
         { label: '720P (0.6元/秒)', value: '720P' },
         { label: '1080P (1元/秒)', value: '1080P' },
@@ -385,10 +385,10 @@ export const MODELS: Record<string, ModelConfig> = {
     parameters: [
       { name: 'prompt', type: 'text', description: '文本提示词' },
       { name: 'negative_prompt', type: 'text', description: '反向提示词' },
-      { name: 'first_frame_url', type: 'text', description: '首帧图像 URL' },
-      { name: 'last_frame_url', type: 'text', description: '尾帧图像 URL' },
-      { name: 'video_url', type: 'text', description: '视频片段 URL（续写）' },
-      { name: 'audio_url', type: 'text', description: '驱动音频 URL（wav/mp3）' },
+      { name: 'first_frame_url', type: 'text', required: true, mediaUpload: { accept: 'image/*' }, description: '首帧图像' },
+      { name: 'last_frame_url', type: 'text', mediaUpload: { accept: 'image/*' }, description: '尾帧图像' },
+      { name: 'video_url', type: 'text', mediaUpload: { accept: 'video/*' }, description: '视频片段（续写）' },
+      { name: 'audio_url', type: 'text', mediaUpload: { accept: 'audio/*' }, description: '驱动音频（wav/mp3）' },
       { name: 'resolution', type: 'select', defaultValue: '1080P', description: '视频分辨率', options: [
         { label: '720P (0.6元/秒)', value: '720P' },
         { label: '1080P (1元/秒)', value: '1080P' },
@@ -453,8 +453,8 @@ export const MODELS: Record<string, ModelConfig> = {
     parameters: [
       { name: 'prompt', type: 'text', description: '编辑指令（可选）' },
       { name: 'negative_prompt', type: 'text', description: '反向提示词' },
-      { name: 'video_url', type: 'text', required: true, description: '原视频 URL（2-10秒）' },
-      { name: 'reference_image_url', type: 'text', description: '参考图 URL（最多4张）' },
+      { name: 'video_url', type: 'text', required: true, mediaUpload: { accept: 'video/*' }, description: '原视频（2-10秒）' },
+      { name: 'reference_image_url', type: 'text', mediaUpload: { accept: 'image/*', multiple: true }, description: '参考图（最多4张）' },
       { name: 'resolution', type: 'select', defaultValue: '1080P', description: '视频分辨率', options: [
         { label: '720P (0.6元/秒)', value: '720P' },
         { label: '1080P (1元/秒)', value: '1080P' },

@@ -18,6 +18,8 @@ import {
   Sparkles,
   Download,
   Trash2,
+  Upload,
+  X,
 } from 'lucide-react'
 import {
   fetchModels,
@@ -56,6 +58,12 @@ export default function Workspace() {
   const [uploadingRefs, setUploadingRefs] = useState(false)
   const [referenceFiles, setReferenceFiles] = useState<{ id: string; url: string; name: string }[]>([])
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
+  // 每个媒体参数的上传状态：paramName → { uploading, uploadedUrl, uploadedName }
+  const [mediaUploadState, setMediaUploadState] = useState<Record<string, {
+    uploading: boolean
+    uploadedUrl?: string
+    uploadedName?: string
+  }>>({})
   const recordsEndRef = useRef<HTMLDivElement>(null)
 
   // 加载模型列表
@@ -111,6 +119,7 @@ export default function Workspace() {
       defaults[p.name] = getParamDefault(p)
     }
     setParameters(defaults)
+    setMediaUploadState({})
   }, [selectedModelId])
 
   // 处理生成
@@ -163,7 +172,7 @@ export default function Workspace() {
     catch {}
   }
 
-  // 参考图上传
+  // 参考图上传（r2v 模型）
   async function handleReferenceUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const files = e.target.files
     if (!files || files.length === 0) return
@@ -181,31 +190,137 @@ export default function Workspace() {
     }
   }
 
+  // 媒体参数上传（单个参数，如 first_frame_url、video_url 等）
+  async function handleMediaUpload(paramName: string, accept: string) {
+    const input = document.createElement('input')
+    input.type = 'file'
+    input.accept = accept
+    input.onchange = async (e) => {
+      const file = (e.target as HTMLInputElement).files?.[0]
+      if (!file) return
+      setMediaUploadState(prev => ({ ...prev, [paramName]: { uploading: true } }))
+      try {
+        const result = await uploadFile(file)
+        if (result.success) {
+          setParameters(p => ({ ...p, [paramName]: result.file.publicUrl }))
+          setMediaUploadState(prev => ({
+            ...prev,
+            [paramName]: { uploading: false, uploadedUrl: result.file.publicUrl, uploadedName: result.file.fileName },
+          }))
+        }
+        else {
+          setMediaUploadState(prev => ({ ...prev, [paramName]: { uploading: false } }))
+        }
+      }
+      catch {
+        setMediaUploadState(prev => ({ ...prev, [paramName]: { uploading: false } }))
+      }
+    }
+    input.click()
+  }
+
+  // 清除已上传的媒体
+  function handleClearMedia(paramName: string) {
+    setParameters(p => ({ ...p, [paramName]: '' }))
+    setMediaUploadState(prev => {
+      const next = { ...prev }
+      delete next[paramName]
+      return next
+    })
+  }
+
+  // 渲染媒体上传控件
+  function renderMediaUpload(param: ModelParameter) {
+    const state = mediaUploadState[param.name]
+    const currentUrl = String(parameters[param.name] || '')
+    const hasUrl = currentUrl.trim() !== ''
+    const isImage = param.mediaUpload?.accept.startsWith('image/')
+    const isVideo = param.mediaUpload?.accept.startsWith('video/')
+    const isAudio = param.mediaUpload?.accept.startsWith('audio/')
+
+    return (
+      <div key={param.name} className="space-y-2">
+        {/* 已上传 → 显示预览 + 清除按钮 */}
+        {hasUrl && (
+          <div className="flex items-center gap-2 rounded-lg border bg-muted/30 p-2">
+            {isImage && (
+              <img src={currentUrl} alt={param.description || ''} className="size-12 rounded border object-cover" />
+            )}
+            {isVideo && (
+              <div className="flex size-12 items-center justify-center rounded border bg-muted">
+                <Video className="size-5 text-muted-foreground" />
+              </div>
+            )}
+            {isAudio && (
+              <div className="flex size-12 items-center justify-center rounded border bg-muted">
+                <FileText className="size-5 text-muted-foreground" />
+              </div>
+            )}
+            <div className="flex-1 min-w-0">
+              <p className="truncate text-xs text-muted-foreground">
+                {state?.uploadedName || currentUrl}
+              </p>
+            </div>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="size-7 p-0 text-muted-foreground hover:text-destructive"
+              onClick={() => handleClearMedia(param.name)}
+            >
+              <X className="size-4" />
+            </Button>
+          </div>
+        )}
+
+        {/* 未上传 → 显示上传按钮 */}
+        {!hasUrl && (
+          <button
+            type="button"
+            className="flex w-full cursor-pointer items-center justify-center gap-2 rounded-lg border-2 border-dashed border-muted-foreground/25 p-3 text-sm text-muted-foreground transition-colors hover:border-muted-foreground/50 hover:bg-muted/30"
+            onClick={() => handleMediaUpload(param.name, param.mediaUpload!.accept)}
+            disabled={state?.uploading}
+          >
+            {state?.uploading ? (
+              <Loader2 className="size-4 animate-spin" />
+            ) : (
+              <Upload className="size-4" />
+            )}
+            {state?.uploading ? '上传中...' : `点击上传${isImage ? '图片' : isVideo ? '视频' : isAudio ? '音频' : '文件'}`}
+          </button>
+        )}
+      </div>
+    )
+  }
+
   // 渲染参数输入
   function renderParamInput(param: ModelParameter) {
     const value = parameters[param.name]
 
     switch (param.type) {
       case 'text':
-        return param.name === 'prompt' || param.name === 'negative_prompt'
-          ? (
-              <Textarea
-                key={param.name}
-                placeholder={param.description || param.name}
-                value={String(value || '')}
-                onChange={e => setParameters(p => ({ ...p, [param.name]: e.target.value }))}
-                rows={param.name === 'prompt' ? 4 : 2}
-                className="resize-none"
-              />
-            )
-          : (
-              <Input
-                key={param.name}
-                placeholder={param.description || param.name}
-                value={String(value || '')}
-                onChange={e => setParameters(p => ({ ...p, [param.name]: e.target.value }))}
-              />
-            )
+        // 媒体参数 → 上传控件
+        if (param.mediaUpload) return renderMediaUpload(param)
+        // prompt / negative_prompt → 文本域
+        if (param.name === 'prompt' || param.name === 'negative_prompt') {
+          return (
+            <Textarea
+              key={param.name}
+              placeholder={param.description || param.name}
+              value={String(value || '')}
+              onChange={e => setParameters(p => ({ ...p, [param.name]: e.target.value }))}
+              rows={param.name === 'prompt' ? 4 : 2}
+              className="resize-none"
+            />
+          )
+        }
+        return (
+          <Input
+            key={param.name}
+            placeholder={param.description || param.name}
+            value={String(value || '')}
+            onChange={e => setParameters(p => ({ ...p, [param.name]: e.target.value }))}
+          />
+        )
       case 'number':
         return (
           <Input
@@ -242,7 +357,8 @@ export default function Workspace() {
     }
   }
 
-  const isR2V = selectedModelId?.includes('r2v')
+  // 数据驱动：r2v 模型通过 referenceMediaType 判断
+  const showReferenceUpload = selectedModel?.referenceMediaType != null
 
   return (
     <div className="mx-auto max-w-7xl p-4">
@@ -287,30 +403,8 @@ export default function Workspace() {
             </CardContent>
           </Card>
 
-          {/* 参数设置 */}
-          {selectedModel && (
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-sm">参数设置</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                {selectedModel.parameters.map(param => (
-                  <div key={param.name}>
-                    {param.type !== 'boolean' && (
-                      <label className="mb-1 block text-xs font-medium text-muted-foreground">
-                        {param.description || param.name}
-                        {param.required && <span className="ml-1 text-destructive">*</span>}
-                      </label>
-                    )}
-                    {renderParamInput(param)}
-                  </div>
-                ))}
-              </CardContent>
-            </Card>
-          )}
-
-          {/* 参考图上传（r2v 模型） */}
-          {isR2V && (
+          {/* 参考图上传（r2v 模型） — 移到参数设置上方 */}
+          {showReferenceUpload && (
             <Card>
               <CardHeader className="pb-3">
                 <CardTitle className="text-sm">参考图片</CardTitle>
@@ -329,7 +423,7 @@ export default function Workspace() {
                     {uploadingRefs ? (
                       <Loader2 className="size-5 animate-spin text-muted-foreground" />
                     ) : (
-                      <span className="text-sm text-muted-foreground">拖拽或点击上传参考图片（最多 5 张）</span>
+                      <span className="text-sm text-muted-foreground">点击上传参考图片（最多 5 张）</span>
                     )}
                   </label>
                   {referenceFiles.length > 0 && (
@@ -348,6 +442,28 @@ export default function Workspace() {
                     </div>
                   )}
                 </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* 参数设置 */}
+          {selectedModel && (
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm">参数设置</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {selectedModel.parameters.map(param => (
+                  <div key={param.name}>
+                    {param.type !== 'boolean' && (
+                      <label className="mb-1 block text-xs font-medium text-muted-foreground">
+                        {param.description || param.name}
+                        {param.required && <span className="ml-1 text-destructive">*</span>}
+                      </label>
+                    )}
+                    {renderParamInput(param)}
+                  </div>
+                ))}
               </CardContent>
             </Card>
           )}
