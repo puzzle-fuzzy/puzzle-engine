@@ -595,6 +595,17 @@ export default function Workspace() {
 
                       {/* 操作按钮 */}
                       <div className="mt-2 flex gap-2">
+                        {record.status === 'succeeded'
+                          && record.outputResult
+                          && (record.outputResult as any).savedUrls?.length > 0
+                          && ((record.outputResult as any).savedUrls as string[]).map((url: string, i: number) => (
+                            <Button key={i} variant="outline" size="sm" asChild>
+                              <a href={url} download>
+                                <Download className="size-3" />
+                                {((record.outputResult as any).savedUrls as string[]).length > 1 ? `下载 ${i + 1}` : '下载'}
+                              </a>
+                            </Button>
+                          ))}
                         {record.status === 'failed' && (
                           <Button
                             variant="outline"
