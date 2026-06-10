@@ -1,5 +1,7 @@
 import { NavLink } from 'react-router'
-import { LayoutDashboard, FolderOpen, Receipt } from 'lucide-react'
+import { LayoutDashboard, FolderOpen, Receipt, LogOut } from 'lucide-react'
+import { useAuth } from '../auth/AuthContext'
+import { Button } from './ui/button'
 
 const NAV_ITEMS = [
   { to: '/', label: '工作台', icon: LayoutDashboard },
@@ -8,6 +10,8 @@ const NAV_ITEMS = [
 ] as const
 
 export default function Navbar() {
+  const { user, logout } = useAuth()
+
   return (
     <header className="sticky top-0 z-50 w-full border-b bg-background/80 backdrop-blur-sm">
       <div className="mx-auto flex h-14 max-w-7xl items-center px-4">
@@ -30,6 +34,16 @@ export default function Navbar() {
             </NavLink>
           ))}
         </nav>
+
+        {/* 右侧用户区域 */}
+        {user && (
+          <div className="ml-auto flex items-center gap-3">
+            <span className="text-sm text-muted-foreground">{user.username}</span>
+            <Button variant="ghost" size="icon" onClick={logout} title="退出登录">
+              <LogOut className="size-4" />
+            </Button>
+          </div>
+        )}
       </div>
     </header>
   )

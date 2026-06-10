@@ -5,7 +5,7 @@
   "private": true,
   "module": "src/index.ts",
   "scripts": {
-    "dev": "bun run src/index.ts"
+    "dev": "bun --env-file ../../.env src/index.ts"
   },
   "dependencies": {
     "@excuse/billing": "workspace:*",

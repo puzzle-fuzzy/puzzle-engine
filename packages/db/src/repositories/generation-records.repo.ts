@@ -27,9 +27,10 @@ export async function getGenerationRecordById(id: string) {
  * 分页查询生成记录，category/status 过滤推到 SQL 层
  */
 export async function listGenerationRecords(filter: ListGenerationRecordsFilter = {}) {
-  const { category, status, limit = 50, offset = 0 } = filter
+  const { accountId, category, status, limit = 50, offset = 0 } = filter
 
   const conditions = []
+  if (accountId) conditions.push(eq(generationRecords.accountId, accountId))
   if (category) conditions.push(eq(generationRecords.category, category))
   if (status) conditions.push(eq(generationRecords.status, status))
 

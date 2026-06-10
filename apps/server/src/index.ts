@@ -4,6 +4,8 @@ import { staticPlugin } from '@elysia/static'
 import { join } from 'node:path'
 import { mkdirSync } from 'node:fs'
 import { loadConfig } from './config'
+import { createAuthPlugin } from './plugins/auth'
+import { createAuthRoutes } from './routes/auth'
 import { healthRoutes } from './routes/health'
 import { modelsRoutes } from './routes/models'
 import { createGenerateRoutes } from './routes/generate'
@@ -26,6 +28,8 @@ const app = new Elysia()
     assets: uploadsDir,
     prefix: '/api/uploads',
   }))
+  .use(createAuthPlugin(config))
+  .use(createAuthRoutes(config))
   .use(healthRoutes)
   .use(modelsRoutes)
   .use(createGenerateRoutes(config))

@@ -6,10 +6,10 @@ import app from '../src/index'
 const client = treaty<App>(app)
 
 describe('API', () => {
-  it('GET / 应返回问候语', async () => {
-    const { data, error } = await client.get()
+  it('GET /api/health 应返回 ok', async () => {
+    const { data, error } = await client.api.health.get()
 
     expect(error).toBeNull()
-    expect(data).toBe('Hello, Elysia!')
+    expect(data?.status).toBe('ok')
   })
 })

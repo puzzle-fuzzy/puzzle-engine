@@ -10,6 +10,7 @@ export default defineConfig({
     react(),
     babel({ presets: [reactCompilerPreset()] }),
   ],
+  envDir: path.resolve(__dirname, '../../'),
   server: {
     port: 8007,
     strictPort: true,

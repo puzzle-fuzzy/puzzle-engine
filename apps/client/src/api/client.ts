@@ -1,6 +1,6 @@
 import { treaty } from '@elysia/eden'
 import type { App } from '../../../server/src/index'
-import type { ModelConfig } from '@excuse/shared'
+import type { ModelConfig, AuthResponse } from '@excuse/shared'
 import type {
   GenerationRecord,
   GenerateResponse,
@@ -13,7 +13,35 @@ import type {
  * 通过 Vite 代理 (/api → localhost:5007) 与后端通信
  * 类型从 Drizzle schema → @excuse/db → @excuse/shared 单向推导
  */
-export const api = treaty<App>('')
+
+// ===== Token 管理 =====
+
+const AUTH_TOKEN_KEY = 'auth_token'
+
+let authToken: string | null = localStorage.getItem(AUTH_TOKEN_KEY)
+
+/** 设置认证 token（同步到 localStorage） */
+export function setAuthToken(token: string | null) {
+  authToken = token
+  if (token) {
+    localStorage.setItem(AUTH_TOKEN_KEY, token)
+  } else {
+    localStorage.removeItem(AUTH_TOKEN_KEY)
+  }
+}
+
+/** 获取当前 token */
+export function getAuthToken() {
+  return authToken
+}
+
+// ===== Eden Treaty 客户端 =====
+
+export const api = treaty<App>('', {
+  headers: () => ({
+    ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
+  }),
+})
 
 // ===== 导出共享类型（页面直接使用） =====
 
@@ -27,7 +55,30 @@ export type { BillingStatistics } from '@excuse/shared'
  */
 export type CostDetail = GenerationRecord['cost']
 
-// ===== API 函数 =====
+// ===== 认证 API =====
+
+/** 注册 */
+export async function registerRequest(username: string, email: string, password: string): Promise<AuthResponse> {
+  const { data, error } = await api.api.auth.register.post({ username, email, password })
+  if (error) throw error
+  return data as unknown as AuthResponse
+}
+
+/** 登录 */
+export async function loginRequest(email: string, password: string): Promise<AuthResponse> {
+  const { data, error } = await api.api.auth.login.post({ email, password })
+  if (error) throw error
+  return data as unknown as AuthResponse
+}
+
+/** 获取当前用户 */
+export async function fetchCurrentUser(): Promise<AuthResponse> {
+  const { data, error } = await api.api.auth.me.get()
+  if (error) throw error
+  return data as unknown as AuthResponse
+}
+
+// ===== 业务 API =====
 
 /** 获取支持的模型列表 */
 export async function fetchModels(): Promise<{ models: ModelConfig[] }> {

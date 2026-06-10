@@ -55,6 +55,7 @@ export type UploadedFileSerialized = Serialize<UploadedFileRow>
 
 /** 生成记录列表查询过滤条件 */
 export interface ListGenerationRecordsFilter {
+  accountId?: string
   category?: GenerationCategory
   status?: GenerationStatus
   limit?: number
