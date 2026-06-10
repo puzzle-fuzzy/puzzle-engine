@@ -6,6 +6,7 @@ export default antfu({
   rules: {
     'no-console': 'off',
     'node/prefer-global/process': 'off',
+    'antfu/no-top-level-await': 'off',
   },
   ignores: [
     'dist',
