@@ -1,5 +1,4 @@
 import type { ServerConfig } from '../config'
-import type { ShotCamera, ShotEnvironment } from '@excuse/db'
 import { updateCanvasProject } from '@excuse/db'
 import { createLogger } from '@excuse/shared'
 import { Elysia, t } from 'elysia'
@@ -59,7 +58,7 @@ export function createCanvasRoutes(config: ServerConfig) {
     .post('/projects', async ({ body, userId }) => {
       if (!userId)
         return { success: false, error: '请先登录' }
-      const { title, storyText } = body as { title?: string, storyText: string }
+      const { title, storyText } = body
       const project = await svc.createProject(userId, { title, storyText })
       return { success: true, data: project }
     }, {
@@ -89,7 +88,7 @@ export function createCanvasRoutes(config: ServerConfig) {
     .patch('/projects/:projectId', async ({ params: { projectId }, body, userId }) => {
       if (!userId)
         return { success: false, error: '请先登录' }
-      const { title, storyText } = body as { title?: string, storyText?: string }
+      const { title, storyText } = body
       if (title === undefined && storyText === undefined)
         return { success: false, error: '至少提供一个字段' }
       const project = await svc.updateProjectProperties(projectId, { title, storyText })
@@ -150,29 +149,26 @@ export function createCanvasRoutes(config: ServerConfig) {
     })
 
     .post('/projects/:projectId/layout', async ({ params: { projectId }, body }) => {
-      const layout = body as Record<string, unknown>
-      await svc.saveCanvasLayout(projectId, layout)
+      await svc.saveCanvasLayout(projectId, body)
       return { success: true }
+    }, {
+      body: t.Record(t.String(), t.Any()),
     })
 
     .patch('/projects/:projectId/model-preferences', async ({ params: { projectId }, body }) => {
-      const prefs = body as { textModel?: string, imageModel?: string, videoModel?: string }
-      const project = await svc.updateModelPreferences(projectId, prefs)
+      const project = await svc.updateModelPreferences(projectId, body)
       return { success: true, data: project }
+    }, {
+      body: t.Object({
+        textModel: t.Optional(t.String()),
+        imageModel: t.Optional(t.String()),
+        videoModel: t.Optional(t.String()),
+      }),
     })
 
     // ===== 资源 PATCH =====
     .patch('/characters/:characterId', async ({ params: { characterId }, body }) => {
-      const patch = body as {
-        name?: string
-        role?: string
-        description?: string
-        identityPrompt?: string
-        negativePrompt?: string
-        referenceImageUrl?: string
-        locked?: boolean
-      }
-      const updated = await svc.updateCharacterData(characterId, patch)
+      const updated = await svc.updateCharacterData(characterId, body)
       return { success: true, data: updated }
     }, {
       body: t.Object({
@@ -187,15 +183,7 @@ export function createCanvasRoutes(config: ServerConfig) {
     })
 
     .patch('/locations/:locationId', async ({ params: { locationId }, body }) => {
-      const patch = body as {
-        name?: string
-        type?: string
-        scenePrompt?: string
-        negativePrompt?: string
-        referenceImageUrl?: string
-        locked?: boolean
-      }
-      const updated = await svc.updateLocationData(locationId, patch)
+      const updated = await svc.updateLocationData(locationId, body)
       return { success: true, data: updated }
     }, {
       body: t.Object({
@@ -209,16 +197,7 @@ export function createCanvasRoutes(config: ServerConfig) {
     })
 
     .patch('/shots/:shotId', async ({ params: { shotId }, body }) => {
-      const patch = body as {
-        duration?: number
-        locationId?: string
-        characterIdsJson?: string[]
-        narrative?: string
-        cameraJson?: ShotCamera
-        environmentJson?: ShotEnvironment
-        videoPrompt?: string
-      }
-      const updated = await svc.updateShotData(shotId, patch)
+      const updated = await svc.updateShotData(shotId, body)
       return { success: true, data: updated }
     }, {
       body: t.Object({
@@ -226,8 +205,18 @@ export function createCanvasRoutes(config: ServerConfig) {
         locationId: t.Optional(t.String()),
         characterIdsJson: t.Optional(t.Array(t.String())),
         narrative: t.Optional(t.String()),
-        cameraJson: t.Optional(t.Record(t.String(), t.Any())),
-        environmentJson: t.Optional(t.Record(t.String(), t.Any())),
+        cameraJson: t.Optional(t.Object({
+          shotSize: t.String(),
+          angle: t.String(),
+          movement: t.String(),
+          lens: t.String(),
+        })),
+        environmentJson: t.Optional(t.Object({
+          backgroundMotion: t.Optional(t.String()),
+          lighting: t.Optional(t.String()),
+          mood: t.Optional(t.String()),
+          style: t.Optional(t.String()),
+        })),
         videoPrompt: t.Optional(t.String()),
       }),
     })

@@ -1,4 +1,4 @@
-import type { GenerationCategory, GenerationRecordRow, GenerationStatus } from '@excuse/db'
+import type { GenerationCategory, GenerationRecordRow, GenerationStatus, OutputResult } from '@excuse/db'
 import type { ServerConfig } from '../config'
 import { calculateCost } from '@excuse/billing'
 import {
@@ -45,11 +45,7 @@ export function createGenerateRoutes(config: ServerConfig) {
       if (!userId) {
         return { success: false, error: '请先登录' }
       }
-      const { model, parameters, referenceFileIds } = body as {
-        model: string
-        parameters: Record<string, unknown>
-        referenceFileIds?: string[]
-      }
+      const { model, parameters, referenceFileIds } = body
 
       const modelConfig = getModelById(model)
       if (!modelConfig) {
@@ -115,7 +111,7 @@ export function createGenerateRoutes(config: ServerConfig) {
         // 异步任务（视频生成）— 保存 providerTaskId，Worker 会轮询
         await markGenerationProcessing(record.id, {
           taskId: result.providerTaskId,
-          outputResult: result.output as Record<string, unknown>,
+          outputResult: result.output ?? ({} as OutputResult),
         })
 
         // 通知 SSE 客户端状态变为 processing
@@ -134,8 +130,8 @@ export function createGenerateRoutes(config: ServerConfig) {
 
       // 同步任务完成（文本/图片）— 下载并保存结果
       let outputResult = result.output || {}
-      if (modelConfig.category === 'image' && outputResult.urls) {
-        const urls = outputResult.urls as string[]
+      if (modelConfig.category === 'image' && 'urls' in outputResult) {
+        const urls = Array.isArray(outputResult.urls) ? outputResult.urls : []
         const savedUrls = await storage.downloadAndMap(urls, taskId, 'img')
         outputResult = { ...outputResult, savedUrls, urls }
       }
@@ -173,8 +169,12 @@ export function createGenerateRoutes(config: ServerConfig) {
         return { success: false, error: '请先登录' }
       }
 
-      const category = (query.category || undefined) as GenerationCategory | undefined
-      const status = (query.status || undefined) as GenerationStatus | undefined
+      const category = typeof query.category === 'string'
+        ? query.category as GenerationCategory | undefined
+        : undefined
+      const status = typeof query.status === 'string'
+        ? query.status as GenerationStatus | undefined
+        : undefined
       const limit = query.limit ?? 50
       const offset = query.offset ?? 0
 
@@ -246,8 +246,10 @@ export function createGenerateRoutes(config: ServerConfig) {
       if (!modelConfig)
         return { success: false, error: `Unknown model: ${record.model}` }
 
-      const inputParams = record.inputParams as Record<string, unknown>
-      const referenceFileIds = (inputParams.referenceFileIds as string[]) ?? undefined
+      const inputParams = record.inputParams
+      const referenceFileIds = Array.isArray(inputParams.referenceFileIds)
+        ? inputParams.referenceFileIds as string[]
+        : undefined
       let referenceUrls: string[] | undefined
       if (referenceFileIds?.length) {
         const files = await getUploadedFilesByIds(referenceFileIds)
@@ -255,7 +257,7 @@ export function createGenerateRoutes(config: ServerConfig) {
       }
 
       const parameters = { ...inputParams }
-      delete parameters.referenceFileIds
+      delete (parameters as Record<string, unknown>).referenceFileIds
 
       const newTaskId = `gen_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
 
@@ -281,7 +283,7 @@ export function createGenerateRoutes(config: ServerConfig) {
       if (result.providerTaskId) {
         await markGenerationProcessing(record.id, {
           taskId: result.providerTaskId,
-          outputResult: result.output as Record<string, unknown>,
+          outputResult: result.output ?? ({} as OutputResult),
         })
         await notifyGenerationStatus({
           accountId: userId,
@@ -296,9 +298,9 @@ export function createGenerateRoutes(config: ServerConfig) {
       }
 
       // Sync task succeeded (text/image retry)
-      let outputResult = result.output || {}
-      if (modelConfig.category === 'image' && outputResult.urls) {
-        const urls = outputResult.urls as string[]
+      let outputResult = result.output || {} as OutputResult
+      if (modelConfig.category === 'image' && 'urls' in outputResult) {
+        const urls = Array.isArray(outputResult.urls) ? outputResult.urls : []
         const savedUrls = await storage.downloadAndMap(urls, newTaskId, 'img')
         outputResult = { ...outputResult, savedUrls, urls }
       }

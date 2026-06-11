@@ -20,11 +20,7 @@ export function createAuthRoutes(config: ServerConfig) {
     .use(createAuthPlugin(config))
     // 注册
     .post('/register', async ({ body, jwt }) => {
-      const { username, email, password } = body as {
-        username: string
-        email: string
-        password: string
-      }
+      const { username, email, password } = body
 
       // 检查邮箱是否已注册
       const existingEmail = await getAccountByEmail(email)
@@ -67,10 +63,7 @@ export function createAuthRoutes(config: ServerConfig) {
 
     // 登录
     .post('/login', async ({ body, jwt }) => {
-      const { email, password } = body as {
-        email: string
-        password: string
-      }
+      const { email, password } = body
 
       // 查找账户
       const account = await getAccountByEmail(email)
