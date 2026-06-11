@@ -247,7 +247,7 @@
 - [x] DevMode 开关：展示所有中间数据（rawJson、LLM 原始输出等）
 
 **仍需实现：**
-- [ ] Canvas 编辑器新增 `PromptEditor` 组件：支持 `@` 触发下拉菜单选择角色/场景/镜头，插入引用标签（如 `[Character:小明]`）
+- [x] Canvas 编辑器新增 `PromptEditor` 组件：支持 `@` 触发下拉菜单选择角色/场景/镜头，插入引用标签（如 `[Character:小明]`、`[Shot:1]`）
 - [ ] Canvas 编辑器新增 `ReferenceUploadZone` 组件：拖拽区域 + 文件预览 + 删除按钮，支持手动上传角色/场景参考图
 
 ### 5.6 Mapper 层 ✅ 已实现
@@ -383,14 +383,14 @@
 4. ~~连续性检查系统~~ ✅ continuity.ts（6 条规则 + 测试）
 5. ~~视频生成 fallback 机制~~ ⚠️ service 层硬编码，需改为声明式 fallbackModel
 6. ~~Mapper 层~~ ✅ mapper.ts
-7. OpenAPI 文档自动生成 ❌ 待实现 @elysiajs/swagger
+7. OpenAPI 文档自动生成 ❌ 待实现 @elysiajs/openapi
 
 ### Phase 6 — 前端体验升级 ⚠️ 部分完成
 1. ~~React Flow 无限画布~~ ✅ CanvasFlow + 7 种节点 + dagre 自动布局
 2. ~~角色/场景锁定功能~~ ✅ locked 字段 + 前端开关
 3. ~~视频内联预览播放~~ ✅ ShotNode video player
 4. ~~PipelineController 进度条~~ ✅ 自动/手动模式 + 3 秒暂停
-5. PromptEditor 组件（@mention 引用插入）❌ 待实现
+5. PromptEditor 组件（@mention 引用插入）✅ 已实现
 6. ReferenceUploadZone 组件（拖拽上传）❌ 待实现
 
 ### Phase 7 — 功能增强（渐进迭代）

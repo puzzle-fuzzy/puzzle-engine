@@ -1,6 +1,6 @@
 import type { ProjectDTO } from '@excuse/shared'
 import { useCallback, useState } from 'react'
-import { deleteCanvasCharacter, deleteCanvasLocation, deleteCanvasShot, updateCanvasCharacter, updateCanvasLocation, updateCanvasProject, updateCanvasShot, uploadFile } from '../../api/client'
+import { deleteCanvasCharacter, deleteCanvasLocation, deleteCanvasShot, retryCanvasShot, updateCanvasCharacter, updateCanvasLocation, updateCanvasProject, updateCanvasShot, uploadFile } from '../../api/client'
 import { Button } from '../ui/button'
 import { Input } from '../ui/input'
 import { PromptEditor } from './PromptEditor'
@@ -168,7 +168,8 @@ export default function NodeDetailPanel({ selectedNode, project, onUpdate }: Nod
               onChange={handleShotPromptUpdate}
               characters={project.characters}
               locations={project.locations}
-              placeholder="输入视频提示词，@ 插入角色/场景引用..."
+              shots={project.shots}
+              placeholder="输入视频提示词，@ 插入角色/场景/镜头引用..."
               rows={6}
             />
           </div>
@@ -262,6 +263,17 @@ export default function NodeDetailPanel({ selectedNode, project, onUpdate }: Nod
             </div>
           )}
 
+          {shot.status === 'failed' && (
+            <Button
+              size="sm"
+              onClick={() => {
+                retryCanvasShot(shot.id).then(onUpdate)
+              }}
+            >
+              重试镜头
+            </Button>
+          )}
+
           <Button
             variant="destructive"
             size="sm"
@@ -320,6 +332,10 @@ export default function NodeDetailPanel({ selectedNode, project, onUpdate }: Nod
           <ReferenceUploadZone
             currentUrl={character.referenceImageUrl}
             onUpload={handleCharacterUpload}
+            onRemove={async () => {
+              await updateCanvasCharacter(character.id, { referenceImageUrl: '' })
+              onUpdate()
+            }}
             label="角色参考图"
           />
 
@@ -369,6 +385,10 @@ export default function NodeDetailPanel({ selectedNode, project, onUpdate }: Nod
           <ReferenceUploadZone
             currentUrl={location.referenceImageUrl}
             onUpload={handleLocationUpload}
+            onRemove={async () => {
+              await updateCanvasLocation(location.id, { referenceImageUrl: '' })
+              onUpdate()
+            }}
             label="场景参考图"
           />
 

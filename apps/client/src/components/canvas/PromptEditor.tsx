@@ -1,28 +1,47 @@
-import type { CharacterDTO, LocationDTO } from '@excuse/shared'
+import type { CharacterDTO, LocationDTO, ShotDTO } from '@excuse/shared'
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { Popover, PopoverAnchor, PopoverContent } from '@/components/ui/popover'
+import { Textarea } from '@/components/ui/textarea'
+
+interface MentionItem {
+  type: 'character' | 'location' | 'shot'
+  id: string
+  name: string
+  label: string
+}
+
+interface MentionGroup {
+  heading: string
+  type: 'character' | 'location' | 'shot'
+  items: MentionItem[]
+}
 
 interface PromptEditorProps {
   value: string
   onChange: (value: string) => void
   characters: CharacterDTO[]
   locations: LocationDTO[]
+  shots?: ShotDTO[]
   placeholder?: string
   rows?: number
   disabled?: boolean
 }
 
-interface MentionItem {
-  type: 'character' | 'location'
-  id: string
-  name: string
-}
+const TYPE_PREFIX = { character: 'Character', location: 'Location', shot: 'Shot' } as const
+const TYPE_LABEL = { character: '角色', location: '场景', shot: '镜头' } as const
+const TYPE_COLORS = {
+  character: 'bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400',
+  location: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
+  shot: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
+} as const
 
 export function PromptEditor({
   value,
   onChange,
   characters,
   locations,
-  placeholder = '输入提示词，@ 插入角色或场景引用...',
+  shots,
+  placeholder = '输入提示词，@ 插入角色/场景/镜头引用...',
   rows = 4,
   disabled = false,
 }: PromptEditorProps) {
@@ -32,14 +51,34 @@ export function PromptEditor({
   const [mentionIndex, setMentionIndex] = useState(0)
   const [mentionStart, setMentionStart] = useState(-1)
 
-  const mentionItems: MentionItem[] = [
-    ...characters.map(c => ({ type: 'character' as const, id: c.id, name: c.name })),
-    ...locations.map(l => ({ type: 'location' as const, id: l.id, name: l.name })),
+  const mentionGroups: MentionGroup[] = [
+    {
+      heading: '角色',
+      type: 'character',
+      items: characters.map(c => ({ type: 'character', id: c.id, name: c.name, label: c.name })),
+    },
+    {
+      heading: '场景',
+      type: 'location',
+      items: locations.map(l => ({ type: 'location', id: l.id, name: l.name, label: l.name })),
+    },
+    ...(shots?.length
+      ? [{
+          heading: '镜头',
+          type: 'shot' as const,
+          items: shots.map(s => ({ type: 'shot' as const, id: s.id, name: `镜头 ${s.shotIndex}`, label: String(s.shotIndex) })),
+        }]
+      : []),
   ]
 
-  const filteredItems = mentionItems.filter(item =>
-    item.name.toLowerCase().includes(mentionFilter.toLowerCase()),
-  )
+  const filteredGroups = mentionGroups
+    .map(g => ({
+      ...g,
+      items: g.items.filter(item => item.name.toLowerCase().includes(mentionFilter.toLowerCase())),
+    }))
+    .filter(g => g.items.length > 0)
+
+  const filteredItems = filteredGroups.flatMap(g => g.items)
 
   const insertMention = useCallback((item: MentionItem) => {
     const textarea = textareaRef.current
@@ -48,7 +87,7 @@ export function PromptEditor({
 
     const before = value.slice(0, mentionStart)
     const after = value.slice(textarea.selectionStart)
-    const tag = `[${item.type === 'character' ? 'Character' : 'Location'}:${item.name}]`
+    const tag = `[${TYPE_PREFIX[item.type]}:${item.label}]`
     const newValue = `${before}${tag}${after}`
 
     onChange(newValue)
@@ -90,15 +129,12 @@ export function PromptEditor({
     const cursorPos = e.target.selectionStart
     onChange(newValue)
 
-    // Detect @ trigger
     const textBeforeCursor = newValue.slice(0, cursorPos)
     const atIndex = textBeforeCursor.lastIndexOf('@')
 
     if (atIndex !== -1) {
       const textAfterAt = textBeforeCursor.slice(atIndex + 1)
-      // Only show mentions if @ is at start of line, after space, or after [
       if (atIndex === 0 || /[\s[]$/.test(newValue[atIndex - 1])) {
-        // Close if there's a space after @
         if (textAfterAt.includes(' ') || textAfterAt.includes('\n')) {
           setShowMentions(false)
           return
@@ -121,40 +157,62 @@ export function PromptEditor({
     setMentionIndex(0)
   }, [filteredItems.length])
 
-  return (
-    <div className="relative">
-      <textarea
-        ref={textareaRef}
-        value={value}
-        onChange={handleChange}
-        onKeyDown={handleKeyDown}
-        onBlur={() => setTimeout(setShowMentions, 150, false)}
-        placeholder={placeholder}
-        rows={rows}
-        disabled={disabled}
-        className="w-full rounded-lg border px-3 py-2 text-sm font-mono resize-y focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-50"
-      />
+  // Compute flat index for each item across groups for highlight tracking
+  let flatIndex = 0
 
-      {showMentions && filteredItems.length > 0 && (
-        <div className="absolute z-50 left-0 right-0 mt-1 max-h-48 overflow-auto rounded-lg border bg-white shadow-lg">
-          {filteredItems.map((item, i) => (
-            <button
-              key={`${item.type}-${item.id}`}
-              type="button"
-              className={`w-full px-3 py-2 text-left text-sm flex items-center gap-2 hover:bg-gray-100 ${i === mentionIndex ? 'bg-gray-100' : ''}`}
-              onMouseDown={(e) => {
-                e.preventDefault()
-                insertMention(item)
-              }}
-            >
-              <span className={`inline-flex items-center rounded px-1.5 py-0.5 text-xs font-medium ${item.type === 'character' ? 'bg-violet-100 text-violet-700' : 'bg-amber-100 text-amber-700'}`}>
-                {item.type === 'character' ? '角色' : '场景'}
-              </span>
-              <span>{item.name}</span>
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
+  return (
+    <Popover open={showMentions} onOpenChange={setShowMentions} modal={false}>
+      <PopoverAnchor asChild>
+        <Textarea
+          ref={textareaRef}
+          value={value}
+          onChange={handleChange}
+          onKeyDown={handleKeyDown}
+          onBlur={() => setTimeout(setShowMentions, 150, false)}
+          placeholder={placeholder}
+          rows={rows}
+          disabled={disabled}
+          className="resize-y font-mono"
+        />
+      </PopoverAnchor>
+      <PopoverContent
+        onOpenAutoFocus={e => e.preventDefault()}
+        className="w-[--radix-popover-trigger-width] max-h-64 overflow-auto p-1"
+        align="start"
+        sideOffset={4}
+      >
+        {filteredGroups.length === 0 && (
+          <p className="px-3 py-2 text-sm text-muted-foreground">无匹配结果</p>
+        )}
+        {filteredGroups.map(group => (
+          <div key={group.type} className="mb-1 last:mb-0">
+            <p className="px-2 py-1 text-xs font-medium text-muted-foreground">{group.heading}</p>
+            {group.items.map((item) => {
+              const currentIndex = flatIndex++
+              return (
+                <button
+                  key={`${item.type}-${item.id}`}
+                  type="button"
+                  className={`w-full px-2 py-1.5 text-left text-sm flex items-center gap-2 rounded-sm transition-colors ${
+                    currentIndex === mentionIndex
+                      ? 'bg-accent text-accent-foreground'
+                      : 'hover:bg-accent/50'
+                  }`}
+                  onMouseDown={(e) => {
+                    e.preventDefault()
+                    insertMention(item)
+                  }}
+                >
+                  <span className={`inline-flex items-center rounded px-1.5 py-0.5 text-xs font-medium ${TYPE_COLORS[item.type]}`}>
+                    {TYPE_LABEL[item.type]}
+                  </span>
+                  <span>{item.name}</span>
+                </button>
+              )
+            })}
+          </div>
+        ))}
+      </PopoverContent>
+    </Popover>
   )
 }
