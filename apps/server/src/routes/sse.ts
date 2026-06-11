@@ -43,11 +43,13 @@ function createAsyncChannel() {
  * SSE 端点 — 实时推送生成状态和通知
  *
  * 客户端通过 fetchEventSource 连接: GET /api/sse
- * 认证方式: Authorization: Bearer <jwt>（优先）或 ?token=<jwt>（兼容旧客户端）
+ * 认证方式: Authorization: Bearer <jwt>（唯一认证方式）
+ * Query token 已移除 — JWT 不再暴露在 URL 中（避免日志泄露风险）
  * 支持的事件类型:
  *   - connected: 连接建立
  *   - heartbeat: 心跳保活（30 秒间隔）
  *   - generation_status: 生成任务状态变更
+ *   - pipeline_node_update: Canvas pipeline 进度
  *   - notification: 通知（预留）
  */
 export function createSSERoutes(config: ServerConfig) {
@@ -95,8 +97,6 @@ export function createSSERoutes(config: ServerConfig) {
         removeConnection(userId, sender)
       }
     }, {
-      query: t.Object({
-        token: t.Optional(t.String({ description: 'Deprecated: use Authorization header instead' })),
-      }),
+      // SSE 只通过 Authorization header 认证，不再支持 query token
     })
 }

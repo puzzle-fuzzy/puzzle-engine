@@ -10,12 +10,9 @@ import { t } from 'elysia'
  * 使用 Elysia 回调式插件模式：(app) => app.use(...).derive(...)
  * 这是 ElysiaJS 的最佳实践，确保 derive 的类型变更传播到父级实例。
  *
- * 支持两种认证方式：
- *   1. Authorization: Bearer <token>（推荐，所有请求均适用）
- *   2. ?token=<jwt>（兼容旧客户端，仅 SSE 连接使用）
- *
- * @see https://elysiajs.com/plugins/jwt
- * @see https://elysiajs.com/plugins/bearer
+ * 认证方式: Authorization: Bearer <token>
+ * SSE 连接也使用 Bearer header（通过 @microsoft/fetch-event-source 自定义 headers）。
+ * Query token 已移除 — JWT 不再暴露在 URL 中（避免日志泄露风险）。
  *
  * 注册后向上下文注入：
  *   - jwt: JWT 签发/验证实例（来自 @elysia/jwt）
@@ -36,13 +33,11 @@ export function createAuthPlugin(config: ServerConfig) {
           exp: config.jwtExpiresIn,
         }),
       )
-      .derive(async ({ jwt, bearer, query }) => {
-      // 优先使用 Bearer header，回退到 query token（SSE 场景）
-        const token = bearer || (query as Record<string, unknown>)?.token as string | undefined
-        if (!token) {
+      .derive(async ({ jwt, bearer }) => {
+        if (!bearer) {
           return { userId: null }
         }
-        const payload = await jwt.verify(token)
+        const payload = await jwt.verify(bearer)
         if (!payload) {
           return { userId: null }
         }

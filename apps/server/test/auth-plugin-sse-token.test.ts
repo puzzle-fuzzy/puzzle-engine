@@ -4,9 +4,13 @@ import { Elysia, t } from 'elysia'
 import { createAuthPlugin } from '../src/plugins/auth'
 
 /**
- * Auth Plugin SSE token fallback 测试
+ * Auth Plugin SSE 认证测试
  *
- * 测试 ?token=<jwt> 查询参数认证（SSE 场景下 EventSource 不支持自定义 header）。
+ * SSE 连接只通过 Authorization: Bearer <jwt> 认证。
+ * Query token (?token=<jwt>) 已移除 — JWT 不再暴露在 URL 中。
+ *
+ * 使用 @microsoft/fetch-event-source 的 SSE 客户端支持自定义 headers，
+ * 所以 Bearer 认证完全可行，无需 query token fallback。
  */
 
 const testConfig: ServerConfig = {
@@ -32,12 +36,12 @@ function createTestApp() {
     }, {
       body: t.Object({ sub: t.String() }),
     })
-    // 模拟 SSE 端点：通过 query.token 认证
+    // 模拟 SSE 端点：只通过 Bearer header 认证
     .get('/sse-check', ({ userId }) => ({ userId }))
 }
 
-describe('auth plugin — SSE token fallback (?token=)', () => {
-  it('should extract userId from query ?token=<jwt>', async () => {
+describe('auth plugin — SSE Bearer-only authentication', () => {
+  it('should extract userId from Bearer header', async () => {
     const { treaty } = await import('@elysia/eden')
     const app = createTestApp()
     const client = treaty(app)
@@ -47,50 +51,29 @@ describe('auth plugin — SSE token fallback (?token=)', () => {
     const token = (signRes.data as { token?: string } | null)?.token
     expect(token).toBeDefined()
 
-    // 通过 query token 认证（模拟 EventSource 场景）
+    // 通过 Bearer header 认证
     const { data, error } = await client['sse-check'].get({
-      query: { token },
+      headers: { Authorization: `Bearer ${token}` },
     })
 
     expect(error).toBeNull()
     expect(data).toEqual({ userId: 'sse-user-123' })
   })
 
-  it('should return userId=null for invalid query token', async () => {
+  it('should return userId=null for invalid Bearer token', async () => {
     const { treaty } = await import('@elysia/eden')
     const app = createTestApp()
     const client = treaty(app)
 
     const { data, error } = await client['sse-check'].get({
-      query: { token: 'invalid.jwt.token' },
+      headers: { Authorization: 'Bearer invalid.jwt.token' },
     })
 
     expect(error).toBeNull()
     expect(data).toEqual({ userId: null })
   })
 
-  it('should prefer Bearer header over query token when both present', async () => {
-    const { treaty } = await import('@elysia/eden')
-    const app = createTestApp()
-    const client = treaty(app)
-
-    // 签发两个 token，对应不同用户
-    const signRes1 = await client.sign.post({ sub: 'header-user' })
-    const headerToken = (signRes1.data as { token?: string } | null)?.token
-
-    const signRes2 = await client.sign.post({ sub: 'query-user' })
-    const queryToken = (signRes2.data as { token?: string } | null)?.token
-
-    // 同时提供 Bearer header 和 query token → Bearer 优先
-    const { data } = await client['sse-check'].get({
-      query: { token: queryToken },
-      headers: { Authorization: `Bearer ${headerToken}` },
-    })
-
-    expect(data).toEqual({ userId: 'header-user' })
-  })
-
-  it('should return userId=null when neither header nor query token is provided', async () => {
+  it('should return userId=null when no token is provided', async () => {
     const { treaty } = await import('@elysia/eden')
     const app = createTestApp()
     const client = treaty(app)
@@ -98,6 +81,25 @@ describe('auth plugin — SSE token fallback (?token=)', () => {
     const { data, error } = await client['sse-check'].get()
 
     expect(error).toBeNull()
+    expect(data).toEqual({ userId: null })
+  })
+
+  it('should NOT accept query ?token= (removed)', async () => {
+    const { treaty } = await import('@elysia/eden')
+    const app = createTestApp()
+    const client = treaty(app)
+
+    // 签发 token
+    const signRes = await client.sign.post({ sub: 'query-attempt-user' })
+    const token = (signRes.data as { token?: string } | null)?.token
+
+    // Query token 不应被接受 — userId 应为 null（无 Bearer header）
+    const { data, error } = await client['sse-check'].get({
+      query: { token },
+    })
+
+    expect(error).toBeNull()
+    // Query token 不再作为认证方式
     expect(data).toEqual({ userId: null })
   })
 })
