@@ -101,5 +101,5 @@ export function aggregateStatistics(records: CostRecord[]): BillingStatistics {
 }
 
 function centsToYuan(cents: number): number {
-  return currency(cents, { fromCents: true }).value / 100
+  return Math.round(cents * 100) / 10000
 }

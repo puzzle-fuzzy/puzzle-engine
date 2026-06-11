@@ -156,20 +156,38 @@ describe('parseCostDetail', () => {
     expect(parseCostDetail('string')).toBeNull()
   })
 
-  it('returns null for missing required fields', () => {
-    expect(parseCostDetail({ unit: 'token' })).toBeNull()
-    expect(parseCostDetail({ unit: 'token', quantity: 10 })).toBeNull()
+  it('returns null for missing required unit field', () => {
+    expect(parseCostDetail({ totalPrice: 1 })).toBeNull()
+    expect(parseCostDetail({ totalPriceCents: 100 })).toBeNull()
   })
 
-  it('parses complete cost detail with cents', () => {
+  it('returns null for missing totalPrice and totalPriceCents', () => {
+    expect(parseCostDetail({ unit: 'token' })).toBeNull()
+  })
+
+  it('defaults unknown unit to token', () => {
+    const result = parseCostDetail({ unit: 'other', totalPrice: 5 })
+    expect(result?.unit).toBe('token')
+  })
+
+  it('parses complete text cost with cents', () => {
     const result = parseCostDetail({
       unit: 'token',
-      quantity: 1000,
-      unitPrice: 2.4,
-      totalPrice: 0.01,
       totalPriceCents: 1,
+      totalPrice: 0.01,
+      quantity: 1000,
+      unitPriceCents: 240,
+      unitPrice: 2.4,
       inputTokens: 500,
       outputTokens: 500,
+      inputUnitPriceCents: 240,
+      inputUnitPrice: 2.4,
+      outputUnitPriceCents: 960,
+      outputUnitPrice: 9.6,
+      inputCostCents: 0.12,
+      inputCost: 0.0012,
+      outputCostCents: 0.48,
+      outputCost: 0.0048,
       estimated: true,
     })
     expect(result).toEqual({
@@ -177,18 +195,18 @@ describe('parseCostDetail', () => {
       totalPriceCents: 1,
       totalPrice: 0.01,
       quantity: 1000,
+      unitPriceCents: 240,
       unitPrice: 2.4,
-      unitPriceCents: undefined,
       inputTokens: 500,
       outputTokens: 500,
-      inputUnitPriceCents: undefined,
-      inputUnitPrice: undefined,
-      outputUnitPriceCents: undefined,
-      outputUnitPrice: undefined,
-      inputCostCents: undefined,
-      inputCost: undefined,
-      outputCostCents: undefined,
-      outputCost: undefined,
+      inputUnitPriceCents: 240,
+      inputUnitPrice: 2.4,
+      outputUnitPriceCents: 960,
+      outputUnitPrice: 9.6,
+      inputCostCents: 0.12,
+      inputCost: 0.0012,
+      outputCostCents: 0.48,
+      outputCost: 0.0048,
       resolution: undefined,
       duration: undefined,
       estimated: true,
@@ -198,10 +216,11 @@ describe('parseCostDetail', () => {
   it('parses video cost with cents', () => {
     const result = parseCostDetail({
       unit: 'video',
-      quantity: 5,
-      unitPrice: 0.5,
-      totalPrice: 2.5,
       totalPriceCents: 250,
+      totalPrice: 2.5,
+      quantity: 5,
+      unitPriceCents: 50,
+      unitPrice: 0.5,
       resolution: '1080P',
       duration: 5,
     })
@@ -210,8 +229,8 @@ describe('parseCostDetail', () => {
       totalPriceCents: 250,
       totalPrice: 2.5,
       quantity: 5,
+      unitPriceCents: 50,
       unitPrice: 0.5,
-      unitPriceCents: undefined,
       inputTokens: undefined,
       outputTokens: undefined,
       inputUnitPriceCents: undefined,
@@ -228,40 +247,37 @@ describe('parseCostDetail', () => {
     })
   })
 
-  it('defaults missing numeric fields to 0/undefined', () => {
+  it('defaults totalPriceCents to 0 and totalPrice to totalPriceCents/100 when missing', () => {
+    const result = parseCostDetail({
+      unit: 'image',
+      totalPriceCents: 25,
+    })
+    expect(result?.totalPriceCents).toBe(25)
+    expect(result?.totalPrice).toBe(0.25)
+  })
+
+  it('defaults totalPrice to totalPriceCents/100 when only totalPriceCents present', () => {
+    const result = parseCostDetail({
+      unit: 'image',
+      totalPriceCents: 100,
+    })
+    expect(result?.totalPrice).toBe(1)
+  })
+
+  it('defaults totalPriceCents to 0 when totalPrice is non-number', () => {
     const result = parseCostDetail({
       unit: 'image',
       totalPrice: true,
       totalPriceCents: 'bad',
     })
-    expect(result).toEqual({
-      unit: 'image',
-      totalPriceCents: 0,
-      totalPrice: 0,
-      quantity: undefined,
-      unitPrice: undefined,
-      unitPriceCents: undefined,
-      inputTokens: undefined,
-      outputTokens: undefined,
-      inputUnitPriceCents: undefined,
-      inputUnitPrice: undefined,
-      outputUnitPriceCents: undefined,
-      outputUnitPrice: undefined,
-      inputCostCents: undefined,
-      inputCost: undefined,
-      outputCostCents: undefined,
-      outputCost: undefined,
-      resolution: undefined,
-      duration: undefined,
-      estimated: undefined,
-    })
+    expect(result?.totalPriceCents).toBe(0)
+    expect(result?.totalPrice).toBe(0)
   })
 
   it('ignores non-string resolution and non-boolean estimated', () => {
     const result = parseCostDetail({
       unit: 'video',
-      quantity: 5,
-      unitPrice: 0.5,
+      totalPriceCents: 250,
       totalPrice: 2.5,
       resolution: 1080,
       estimated: 'yes',

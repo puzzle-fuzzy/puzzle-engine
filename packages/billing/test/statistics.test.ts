@@ -1,3 +1,4 @@
+import type { CostDetail } from '@excuse/shared'
 import type { CostRecord } from '../src/statistics'
 import { describe, expect, it } from 'bun:test'
 import { aggregateStatistics } from '../src/statistics'
@@ -6,7 +7,7 @@ import { aggregateStatistics } from '../src/statistics'
 
 function makeRecord(overrides: Partial<CostRecord> & { model: string, category: string }): CostRecord {
   return {
-    cost: { totalPrice: 0 },
+    cost: { unit: 'token', totalPriceCents: 0, totalPrice: 0 } as CostDetail,
     createdAt: new Date().toISOString(),
     ...overrides,
   }
@@ -25,6 +26,7 @@ describe('aggregateStatistics', () => {
     const stats = aggregateStatistics([])
 
     expect(stats.total).toBe(0)
+    expect(stats.totalCents).toBe(0)
     expect(stats.today).toBe(0)
     expect(stats.week).toBe(0)
     expect(stats.month).toBe(0)
@@ -34,55 +36,61 @@ describe('aggregateStatistics', () => {
     expect(stats.dailyTrend.every(d => d.total === 0)).toBe(true)
   })
 
-  it('正确聚合 total/today/week/month', () => {
+  it('正确聚合 total/today/week/month（分→元）', () => {
     const records: CostRecord[] = [
-      makeRecord({ model: 'm1', category: 'text', cost: { totalPrice: 1.5 }, createdAt: new Date().toISOString() }),
-      makeRecord({ model: 'm2', category: 'image', cost: { totalPrice: 2.0 }, createdAt: daysAgo(3) }),
-      makeRecord({ model: 'm3', category: 'video', cost: { totalPrice: 3.5 }, createdAt: daysAgo(8) }),
-      makeRecord({ model: 'm4', category: 'text', cost: { totalPrice: 4.0 }, createdAt: daysAgo(35) }),
+      makeRecord({ model: 'm1', category: 'text', cost: { unit: 'token', totalPriceCents: 150, totalPrice: 1.5 }, createdAt: new Date().toISOString() }),
+      makeRecord({ model: 'm2', category: 'image', cost: { unit: 'image', totalPriceCents: 200, totalPrice: 2 }, createdAt: daysAgo(3) }),
+      makeRecord({ model: 'm3', category: 'video', cost: { unit: 'video', totalPriceCents: 350, totalPrice: 3.5 }, createdAt: daysAgo(8) }),
+      makeRecord({ model: 'm4', category: 'text', cost: { unit: 'token', totalPriceCents: 400, totalPrice: 4 }, createdAt: daysAgo(35) }),
     ]
 
     const stats = aggregateStatistics(records)
 
+    // 150+200+350+400 = 1100分 = 11元
+    expect(stats.totalCents).toBe(1100)
     expect(stats.total).toBe(11)
+    expect(stats.todayCents).toBe(150)
     expect(stats.today).toBe(1.5)
-    expect(stats.week).toBe(3.5) // today + 3天前（8天前超出本周）
-    expect(stats.month).toBe(7) // today + 3天前 + 8天前（均在当月内）
+    expect(stats.weekCents).toBe(350) // today(150) + 3天前(200)，8天前超出本周
+    expect(stats.week).toBe(3.5)
+    expect(stats.monthCents).toBe(700) // today(150) + 3天前(200) + 8天前(350)
+    expect(stats.month).toBe(7)
   })
 
-  it('cost 为 null 或缺少 totalPrice 时视为 0', () => {
+  it('cost 为 null 或缺少 totalPriceCents 时视为 0', () => {
     const records: CostRecord[] = [
       makeRecord({ model: 'm1', category: 'text', cost: null }),
-      makeRecord({ model: 'm2', category: 'text', cost: {} }),
-      makeRecord({ model: 'm3', category: 'text', cost: { totalPrice: 'not a number' as any } }),
+      makeRecord({ model: 'm2', category: 'text', cost: {} as CostDetail }),
     ]
 
     const stats = aggregateStatistics(records)
 
     expect(stats.total).toBe(0)
-    expect(stats.byCategory).toEqual([{ category: 'text', total: 0, percentage: 0 }])
+    expect(stats.totalCents).toBe(0)
+    expect(stats.byCategory).toEqual([{ category: 'text', totalCents: 0, total: 0, percentage: 0 }])
   })
 
-  it('按类别聚合并计算百分比', () => {
+  it('按类别聚合并计算百分比（分→元）', () => {
     const records: CostRecord[] = [
-      makeRecord({ model: 'm1', category: 'text', cost: { totalPrice: 3 } }),
-      makeRecord({ model: 'm2', category: 'text', cost: { totalPrice: 2 } }),
-      makeRecord({ model: 'm3', category: 'image', cost: { totalPrice: 5 } }),
+      makeRecord({ model: 'm1', category: 'text', cost: { unit: 'token', totalPriceCents: 300, totalPrice: 3 } }),
+      makeRecord({ model: 'm2', category: 'text', cost: { unit: 'token', totalPriceCents: 200, totalPrice: 2 } }),
+      makeRecord({ model: 'm3', category: 'image', cost: { unit: 'image', totalPriceCents: 500, totalPrice: 5 } }),
     ]
 
     const stats = aggregateStatistics(records)
 
-    // image: 5, text: 5 → 各 50%
+    // image: 500分=5元, text: 500分=5元 → 各 50%
     expect(stats.byCategory).toHaveLength(2)
     expect(stats.byCategory.find(c => c.category === 'image')!.percentage).toBe(50)
+    expect(stats.byCategory.find(c => c.category === 'image')!.totalCents).toBe(500)
     expect(stats.byCategory.find(c => c.category === 'text')!.percentage).toBe(50)
   })
 
   it('按类别排序（降序）', () => {
     const records: CostRecord[] = [
-      makeRecord({ model: 'm1', category: 'text', cost: { totalPrice: 1 } }),
-      makeRecord({ model: 'm2', category: 'image', cost: { totalPrice: 5 } }),
-      makeRecord({ model: 'm3', category: 'video', cost: { totalPrice: 3 } }),
+      makeRecord({ model: 'm1', category: 'text', cost: { unit: 'token', totalPriceCents: 100, totalPrice: 1 } }),
+      makeRecord({ model: 'm2', category: 'image', cost: { unit: 'image', totalPriceCents: 500, totalPrice: 5 } }),
+      makeRecord({ model: 'm3', category: 'video', cost: { unit: 'video', totalPriceCents: 300, totalPrice: 3 } }),
     ]
 
     const stats = aggregateStatistics(records)
@@ -93,21 +101,22 @@ describe('aggregateStatistics', () => {
 
   it('按模型聚合并计算百分比', () => {
     const records: CostRecord[] = [
-      makeRecord({ model: 'qwen-max', category: 'text', cost: { totalPrice: 8 } }),
-      makeRecord({ model: 'qwen-plus', category: 'text', cost: { totalPrice: 2 } }),
+      makeRecord({ model: 'qwen-max', category: 'text', cost: { unit: 'token', totalPriceCents: 800, totalPrice: 8 } }),
+      makeRecord({ model: 'qwen-plus', category: 'text', cost: { unit: 'token', totalPriceCents: 200, totalPrice: 2 } }),
     ]
 
     const stats = aggregateStatistics(records)
 
     expect(stats.byModel).toHaveLength(2)
     expect(stats.byModel.find(m => m.model === 'qwen-max')!.percentage).toBe(80)
+    expect(stats.byModel.find(m => m.model === 'qwen-max')!.totalCents).toBe(800)
     expect(stats.byModel.find(m => m.model === 'qwen-plus')!.percentage).toBe(20)
   })
 
   it('按模型排序（降序）', () => {
     const records: CostRecord[] = [
-      makeRecord({ model: 'cheap', category: 'text', cost: { totalPrice: 1 } }),
-      makeRecord({ model: 'expensive', category: 'text', cost: { totalPrice: 10 } }),
+      makeRecord({ model: 'cheap', category: 'text', cost: { unit: 'token', totalPriceCents: 100, totalPrice: 1 } }),
+      makeRecord({ model: 'expensive', category: 'text', cost: { unit: 'token', totalPriceCents: 1000, totalPrice: 10 } }),
     ]
 
     const stats = aggregateStatistics(records)
@@ -119,55 +128,58 @@ describe('aggregateStatistics', () => {
   it('生成最近 30 天的日趋势（填充空白天）', () => {
     const today = new Date().toISOString().slice(0, 10)
     const records: CostRecord[] = [
-      makeRecord({ model: 'm1', category: 'text', cost: { totalPrice: 1.5 }, createdAt: new Date().toISOString() }),
+      makeRecord({ model: 'm1', category: 'text', cost: { unit: 'token', totalPriceCents: 150, totalPrice: 1.5 }, createdAt: new Date().toISOString() }),
     ]
 
     const stats = aggregateStatistics(records)
 
     expect(stats.dailyTrend).toHaveLength(30)
-    // 最后一天是今天
     expect(stats.dailyTrend[29]!.date).toBe(today)
+    expect(stats.dailyTrend[29]!.totalCents).toBe(150)
     expect(stats.dailyTrend[29]!.total).toBe(1.5)
-    // 其余天为 0
     expect(stats.dailyTrend.slice(0, 29).every(d => d.total === 0)).toBe(true)
   })
 
-  it('同一日期的多条记录合并', () => {
+  it('同一日期的多条记录合并（分→元）', () => {
     const today = new Date().toISOString()
     const records: CostRecord[] = [
-      makeRecord({ model: 'm1', category: 'text', cost: { totalPrice: 1 }, createdAt: today }),
-      makeRecord({ model: 'm2', category: 'image', cost: { totalPrice: 2 }, createdAt: today }),
-      makeRecord({ model: 'm3', category: 'video', cost: { totalPrice: 3 }, createdAt: today }),
+      makeRecord({ model: 'm1', category: 'text', cost: { unit: 'token', totalPriceCents: 100, totalPrice: 1 }, createdAt: today }),
+      makeRecord({ model: 'm2', category: 'image', cost: { unit: 'image', totalPriceCents: 200, totalPrice: 2 }, createdAt: today }),
+      makeRecord({ model: 'm3', category: 'video', cost: { unit: 'video', totalPriceCents: 300, totalPrice: 3 }, createdAt: today }),
     ]
 
     const stats = aggregateStatistics(records)
 
+    // 100+200+300 = 600分 = 6元
+    expect(stats.todayCents).toBe(600)
     expect(stats.today).toBe(6)
-    // 日趋势中今天应为 6
     const todayTrend = stats.dailyTrend[29]!
+    expect(todayTrend.totalCents).toBe(600)
     expect(todayTrend.total).toBe(6)
   })
 
   it('createdAt 使用 Date 对象也能正常工作', () => {
     const records: CostRecord[] = [
-      makeRecord({ model: 'm1', category: 'text', cost: { totalPrice: 5 }, createdAt: new Date() }),
+      makeRecord({ model: 'm1', category: 'text', cost: { unit: 'token', totalPriceCents: 500, totalPrice: 5 }, createdAt: new Date() }),
     ]
 
     const stats = aggregateStatistics(records)
 
+    expect(stats.todayCents).toBe(500)
     expect(stats.today).toBe(5)
     expect(stats.total).toBe(5)
   })
 
-  it('浮点精度：roundTo4 保证结果精度', () => {
+  it('currency.js 保证整数分累加精度', () => {
     const records: CostRecord[] = [
-      makeRecord({ model: 'm1', category: 'text', cost: { totalPrice: 0.0001 } }),
-      makeRecord({ model: 'm2', category: 'text', cost: { totalPrice: 0.00015 } }),
+      makeRecord({ model: 'm1', category: 'text', cost: { unit: 'token', totalPriceCents: 10, totalPrice: 0.1 } }),
+      makeRecord({ model: 'm2', category: 'text', cost: { unit: 'token', totalPriceCents: 15, totalPrice: 0.15 } }),
     ]
 
     const stats = aggregateStatistics(records)
 
-    // 0.0001 + 0.00015 = 0.00025 → roundTo4 = 0.0003 (Math.round(2.5) = 3)
-    expect(stats.total).toBe(0.0003)
+    // 10+15 = 25分 = 0.25元
+    expect(stats.totalCents).toBe(25)
+    expect(stats.total).toBe(0.25)
   })
 })

@@ -1,16 +1,17 @@
 import currency from 'currency.js'
-import type { CostDetail } from '@excuse/shared'
-import type { ModelConfig } from '@excuse/shared'
+import type { CostDetail, ModelConfig } from '@excuse/shared'
+
+const PRECISION = { precision: 4 }
 
 /**
- * 计算单次生成的费用（整数分计费）
+ * 计算单次生成的费用（分计费）
  *
  * - 文本：按输入/输出 token 数 × 每百万 token 价格（分）
  * - 图片：按张数 × 单价（分）
  * - 视频：按时长（秒）× 单价（分，按分辨率）
  *
- * 所有金额运算使用 currency.js，避免浮点误差。
- * totalPriceCents 为权威整数值，totalPrice 为向后兼容的浮点值。
+ * 所有金额运算使用 currency.js（precision=4），避免浮点误差。
+ * totalPriceCents 为权威值，totalPrice 为分→元的兼容展示值。
  */
 export function calculateCost(
   model: ModelConfig,
@@ -29,13 +30,13 @@ export function calculateCost(
       const inputTokens = usage?.inputTokens || 0
       const outputTokens = usage?.outputTokens || 0
 
-      const inputCostCents = currency(pricing.inputPriceCents)
+      const inputCostCents = currency(pricing.inputPriceCents, PRECISION)
         .multiply(inputTokens)
         .divide(1_000_000).value
-      const outputCostCents = currency(pricing.outputPriceCents || 0)
+      const outputCostCents = currency(pricing.outputPriceCents || 0, PRECISION)
         .multiply(outputTokens)
         .divide(1_000_000).value
-      const totalCents = currency(inputCostCents).add(outputCostCents).value
+      const totalCents = currency(inputCostCents, PRECISION).add(outputCostCents).value
 
       return {
         unit: 'token',
@@ -56,7 +57,7 @@ export function calculateCost(
 
     case 'image': {
       const count = usage?.imageCount || (typeof params.n === 'number' ? params.n : 1)
-      const totalCents = currency(pricing.inputPriceCents).multiply(count).value
+      const totalCents = currency(pricing.inputPriceCents, PRECISION).multiply(count).value
 
       return {
         unit: 'image',
@@ -74,7 +75,7 @@ export function calculateCost(
       const unitPriceCents = resolution === '1080P'
         ? (pricing.inputPrice1080Cents || pricing.inputPriceCents)
         : pricing.inputPriceCents
-      const totalCents = currency(unitPriceCents).multiply(duration).value
+      const totalCents = currency(unitPriceCents, PRECISION).multiply(duration).value
 
       return {
         unit: 'video',
@@ -102,5 +103,5 @@ export function estimateCost(model: ModelConfig, params: Record<string, unknown>
 }
 
 function centsToYuan(cents: number): number {
-  return currency(cents, { fromCents: true }).value / 100
+  return Math.round(cents * 100) / 10000
 }
