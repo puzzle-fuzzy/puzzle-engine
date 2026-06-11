@@ -37,7 +37,10 @@ export const loggerPlugin = new Elysia({
   .onError(({ request, error, log, set }) => {
     const method = request.method
     const url = new URL(request.url).pathname
-    const status = set.status ?? 500
 
-    log?.error({ err: error, res: { method, url, status } }, 'Unhandled error')
+    log?.error({ err: error, res: { method, url } }, 'Unhandled error')
+
+    // 返回结构化 500 JSON 错误体 — 与 utils/errors.ts 格式一致
+    set.status = 500
+    return { success: false, error: '服务端内部错误' }
   })

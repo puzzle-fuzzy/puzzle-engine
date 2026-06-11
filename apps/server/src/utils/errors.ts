@@ -9,7 +9,7 @@
  */
 
 /** Elysia Context['set'] 的最小类型约束 */
-type SetStatus = { status?: number | string | undefined }
+interface SetStatus { status?: number | string | undefined }
 
 /** 未认证 (未登录或 token 失效) */
 export function unauthorized(set: SetStatus, message = '请先登录') {
@@ -38,5 +38,11 @@ export function conflict(set: SetStatus, message: string) {
 /** 参数校验失败 */
 export function validationError(set: SetStatus, message: string) {
   set.status = 422
+  return { success: false, error: message } as const
+}
+
+/** 服务端非预期错误 — 用于 handler 中显式返回 500 的场景 */
+export function internalError(set: SetStatus, message = '服务端内部错误') {
+  set.status = 500
   return { success: false, error: message } as const
 }
