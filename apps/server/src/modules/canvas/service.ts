@@ -91,6 +91,13 @@ export async function analyzeProject(projectId: string, config: { dashscopeApiKe
 
   notifyNode(project.accountId, projectId, 'analysis', projectId, 'running')
 
+  // Re-analysis resets downstream data to ensure consistency
+  if (project.status !== 'draft') {
+    await deleteCanvasShotsByProject(projectId)
+    await deleteCanvasLocationsByProject(projectId)
+    await deleteCanvasCharactersByProject(projectId)
+  }
+
   try {
     const client = createClient(config)
     const { system, prompt: userPrompt } = buildAnalysisPrompt(project.storyText)
@@ -133,6 +140,8 @@ export async function generateCharacters(projectId: string, config: { dashscopeA
   const accountId = project.accountId
 
   await deleteCanvasCharactersByProject(projectId, { excludeLocked: true })
+  // Characters changed → downstream storyboard references become stale
+  await deleteCanvasShotsByProject(projectId)
 
   const client = createClient(config)
   const textModel = getTextModel(project.modelPreferencesJson)
@@ -186,6 +195,8 @@ export async function generateLocations(projectId: string, config: { dashscopeAp
   const accountId = project.accountId
 
   await deleteCanvasLocationsByProject(projectId, { excludeLocked: true })
+  // Locations changed → downstream storyboard references become stale
+  await deleteCanvasShotsByProject(projectId)
 
   const client = createClient(config)
   const textModel = getTextModel(project.modelPreferencesJson)
@@ -511,6 +522,8 @@ export async function generateVideos(projectId: string, config: { dashscopeApiKe
 
   await updateCanvasProject(projectId, { status: 'generating' })
 
+  let hasAnyVideo = false
+
   for (const shot of detail.shots) {
     if (!shot.videoPrompt)
       continue
@@ -565,16 +578,18 @@ export async function generateVideos(projectId: string, config: { dashscopeApiKe
         videoTaskId: actualTaskId,
         status: 'generating',
       })
+      hasAnyVideo = true
 
       const usedModelConfig = getModelById(actualModel)!
-      const cost = calculateCost(usedModelConfig, { duration: shot.duration })
+      const inputParams = { source: 'canvas', projectId, shotId: shot.id, prompt: shot.videoPrompt, resolution: '720P', duration: shot.duration }
+      const cost = calculateCost(usedModelConfig, inputParams)
       await createGenerationRecord({
         accountId,
         taskId: actualTaskId!,
         model: actualModel,
         category: 'video',
         status: 'processing',
-        inputParams: { source: 'canvas', projectId, shotId: shot.id, prompt: shot.videoPrompt },
+        inputParams,
         cost,
       })
     }
@@ -582,6 +597,10 @@ export async function generateVideos(projectId: string, config: { dashscopeApiKe
       await updateCanvasShot(shot.id, { status: 'failed', errorMessage: (error as Error).message })
       notifyNode(accountId, projectId, 'shot', shot.id, 'failed', undefined, (error as Error).message)
     }
+  }
+
+  if (hasAnyVideo) {
+    await updateCanvasProject(projectId, { status: 'completed' })
   }
 
   return getProjectDetail(projectId)

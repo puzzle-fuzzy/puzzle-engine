@@ -109,9 +109,12 @@ export function createTaskProcessor(config: WorkerConfig, deps?: Partial<TaskPro
           : []
 
         const modelConfig = getModelById(record.model)
+        const inputParams = (record.inputParams as Record<string, unknown>) || {}
+        // 从 DashScope 返回结果中提取实际视频时长
+        const actualVideoDuration = extractVideoDuration(taskStatus.output) || (inputParams.duration as number) || 5
         const actualCost = modelConfig
-          ? calculateCost(modelConfig, record.inputParams as Record<string, unknown>, {
-              videoDuration: (record.inputParams as any)?.duration || 5,
+          ? calculateCost(modelConfig, inputParams, {
+              videoDuration: actualVideoDuration,
             })
           : record.cost
 
