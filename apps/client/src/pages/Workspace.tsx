@@ -228,9 +228,8 @@ export default function Workspace() {
         parameters,
         referenceFileIds: referenceFileIds.length > 0 ? referenceFileIds : undefined,
       })
-      if (result.success && result.id) {
-        // 生成成功后重新拉取完整数据，避免手工拼凑不完整的记录
-        await loadRecords()
+      if (result.success && result.record) {
+        setRecords(prev => [result.record!, ...prev])
       }
     }
     catch (error) {
@@ -247,10 +246,10 @@ export default function Workspace() {
     try {
       const result: GenerateResponse = await generate({
         model: record.model,
-        parameters: record.inputParams as Record<string, unknown>,
+        parameters: record.inputParams,
       })
-      if (result.success && result.id) {
-        await loadRecords()
+      if (result.success && result.record) {
+        setRecords(prev => [result.record!, ...prev])
       }
     }
     catch {}

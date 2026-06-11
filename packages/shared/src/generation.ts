@@ -50,12 +50,9 @@ export interface GenerateRequest {
 
 export interface GenerateResponse {
   success: boolean
-  id?: string
-  taskId?: string
-  status: GenerationStatus
-  category: GenerationCategory
-  model: string
-  outputResult?: Record<string, unknown>
-  cost?: CostDetail
+  /** 生成成功时包含完整记录，失败时仅包含 id/错误信息 */
+  record?: GenerationRecord
+  /** 失败时的错误信息 */
+  error?: string
   errorMessage?: string
 }

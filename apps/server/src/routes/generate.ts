@@ -26,6 +26,15 @@ export function createGenerateRoutes(config: ServerConfig) {
     oss: config.oss,
   })
 
+  /** 从 DB 行序列化为前端兼容的 GenerationRecord（Date→string） */
+  function serializeRecord(record: Record<string, unknown>) {
+    return {
+      ...record,
+      createdAt: record.createdAt instanceof Date ? record.createdAt.toISOString() : String(record.createdAt),
+      updatedAt: record.updatedAt instanceof Date ? record.updatedAt.toISOString() : String(record.updatedAt),
+    }
+  }
+
   return new Elysia({ prefix: '/api' })
     .use(createAuthPlugin(config))
     // 发起生成
@@ -85,15 +94,9 @@ export function createGenerateRoutes(config: ServerConfig) {
           errorMessage: result.error,
         })
 
-        return {
-          success: false,
-          id: record.id,
-          taskId,
-          status: 'failed',
-          category: modelConfig.category,
-          model,
-          errorMessage: result.error,
-        }
+        // 重新查询以获取更新后的记录
+        const updated = await getGenerationRecordById(record.id)
+        return { success: false, record: serializeRecord(updated!) }
       }
 
       if (result.providerTaskId) {
@@ -113,15 +116,8 @@ export function createGenerateRoutes(config: ServerConfig) {
           taskId: result.providerTaskId,
         })
 
-        return {
-          success: true,
-          id: record.id,
-          taskId: result.providerTaskId,
-          status: 'processing',
-          category: modelConfig.category,
-          model,
-          cost: estimatedCost,
-        }
+        const updated = await getGenerationRecordById(record.id)
+        return { success: true, record: serializeRecord(updated!) }
       }
 
       // 同步任务完成（文本/图片）— 下载并保存结果
@@ -149,16 +145,8 @@ export function createGenerateRoutes(config: ServerConfig) {
         cost: actualCost,
       })
 
-      return {
-        success: true,
-        id: record.id,
-        taskId,
-        status: 'succeeded',
-        category: modelConfig.category,
-        model,
-        outputResult,
-        cost: actualCost,
-      }
+      const updated = await getGenerationRecordById(record.id)
+      return { success: true, record: serializeRecord(updated!) }
     }, {
       body: t.Object({
         model: t.String(),

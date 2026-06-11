@@ -90,7 +90,7 @@ export async function fetchModels(): Promise<{ models: ModelConfig[] }> {
   return data as unknown as { models: ModelConfig[] }
 }
 
-/** 发起生成 */
+/** 发起生成 — 返回完整 GenerationRecord */
 export async function generate(params: {
   model: string
   parameters: Record<string, unknown>
