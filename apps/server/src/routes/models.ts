@@ -1,5 +1,5 @@
-import { Elysia } from 'elysia'
 import { MODELS } from '@excuse/provider'
+import { Elysia } from 'elysia'
 
 export const modelsRoutes = new Elysia({ prefix: '/api/models' })
   .get('/', () => {

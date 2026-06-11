@@ -1,5 +1,5 @@
-import { describe, it, expect, mock, beforeEach } from 'bun:test'
 import { treaty } from '@elysia/eden'
+import { beforeEach, describe, expect, it, mock } from 'bun:test'
 
 /**
  * 计费统计路由测试
@@ -9,8 +9,13 @@ import { treaty } from '@elysia/eden'
 
 const mockGetCostRecords = mock(() => Promise.resolve([]))
 const mockAggregateStatistics = mock(() => ({
-  total: 0, today: 0, week: 0, month: 0,
-  byCategory: [], byModel: [], dailyTrend: [],
+  total: 0,
+  today: 0,
+  week: 0,
+  month: 0,
+  byCategory: [],
+  byModel: [],
+  dailyTrend: [],
 }))
 
 mock.module('@excuse/db', () => ({
@@ -21,6 +26,7 @@ mock.module('@excuse/billing', () => ({
   aggregateStatistics: mockAggregateStatistics,
 }))
 
+// eslint-disable-next-line import/first
 import { billingRoutes } from '../src/routes/billing'
 
 describe('billing routes', () => {
@@ -40,7 +46,10 @@ describe('billing routes', () => {
         { model: 'qwen-max', category: 'text', cost: { totalPrice: 1.5 }, createdAt: new Date().toISOString() },
       ])
       mockAggregateStatistics.mockReturnValue({
-        total: 1.5, today: 1.5, week: 1.5, month: 1.5,
+        total: 1.5,
+        today: 1.5,
+        week: 1.5,
+        month: 1.5,
         byCategory: [{ category: 'text', total: 1.5, percentage: 100 }],
         byModel: [{ model: 'qwen-max', total: 1.5, percentage: 100 }],
         dailyTrend: [],
@@ -57,8 +66,13 @@ describe('billing routes', () => {
     it('空数据返回全零统计', async () => {
       mockGetCostRecords.mockResolvedValue([])
       mockAggregateStatistics.mockReturnValue({
-        total: 0, today: 0, week: 0, month: 0,
-        byCategory: [], byModel: [], dailyTrend: [],
+        total: 0,
+        today: 0,
+        week: 0,
+        month: 0,
+        byCategory: [],
+        byModel: [],
+        dailyTrend: [],
       })
 
       const { data } = await client.api.billing.statistics.get()
@@ -71,8 +85,13 @@ describe('billing routes', () => {
     it('调用 getCostRecords 获取原始数据', async () => {
       mockGetCostRecords.mockResolvedValue([])
       mockAggregateStatistics.mockReturnValue({
-        total: 0, today: 0, week: 0, month: 0,
-        byCategory: [], byModel: [], dailyTrend: [],
+        total: 0,
+        today: 0,
+        week: 0,
+        month: 0,
+        byCategory: [],
+        byModel: [],
+        dailyTrend: [],
       })
 
       await client.api.billing.statistics.get()
@@ -86,8 +105,13 @@ describe('billing routes', () => {
       ]
       mockGetCostRecords.mockResolvedValue(records)
       mockAggregateStatistics.mockReturnValue({
-        total: 5, today: 0, week: 0, month: 0,
-        byCategory: [], byModel: [], dailyTrend: [],
+        total: 5,
+        today: 0,
+        week: 0,
+        month: 0,
+        byCategory: [],
+        byModel: [],
+        dailyTrend: [],
       })
 
       await client.api.billing.statistics.get()

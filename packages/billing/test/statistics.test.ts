@@ -1,10 +1,10 @@
-import { describe, it, expect } from 'bun:test'
-import { aggregateStatistics } from '../src/statistics'
 import type { CostRecord } from '../src/statistics'
+import { describe, expect, it } from 'bun:test'
+import { aggregateStatistics } from '../src/statistics'
 
 // ── 辅助：创建测试用 CostRecord ─────────────────────────────
 
-function makeRecord(overrides: Partial<CostRecord> & { model: string; category: string }): CostRecord {
+function makeRecord(overrides: Partial<CostRecord> & { model: string, category: string }): CostRecord {
   return {
     cost: { totalPrice: 0 },
     createdAt: new Date().toISOString(),
@@ -46,8 +46,8 @@ describe('aggregateStatistics', () => {
 
     expect(stats.total).toBe(11)
     expect(stats.today).toBe(1.5)
-    expect(stats.week).toBe(3.5)    // today + 3天前（8天前超出本周）
-    expect(stats.month).toBe(7)     // today + 3天前 + 8天前（均在当月内）
+    expect(stats.week).toBe(3.5) // today + 3天前（8天前超出本周）
+    expect(stats.month).toBe(7) // today + 3天前 + 8天前（均在当月内）
   })
 
   it('cost 为 null 或缺少 totalPrice 时视为 0', () => {

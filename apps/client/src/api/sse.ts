@@ -1,9 +1,10 @@
+import type { SSEGenerationStatusEvent, SSENotificationEvent, SSEPipelineNodeEvent } from '@excuse/shared'
 import { getAuthToken } from './client'
-import type { SSEGenerationStatusEvent, SSENotificationEvent } from '@excuse/shared'
 
 type GenerationStatusHandler = (event: SSEGenerationStatusEvent) => void
 type NotificationHandler = (event: SSENotificationEvent) => void
-type EventHandler = GenerationStatusHandler | NotificationHandler
+type PipelineNodeHandler = (event: SSEPipelineNodeEvent) => void
+type EventHandler = GenerationStatusHandler | NotificationHandler | PipelineNodeHandler
 
 /**
  * SSE 客户端 — 管理与服务器的实时连接
@@ -24,10 +25,12 @@ class SSEClient {
    * 仅在已认证时（有 token）才连接
    */
   connect() {
-    if (this.eventSource) return // 已连接
+    if (this.eventSource)
+      return // 已连接
 
     const token = getAuthToken()
-    if (!token) return // 未认证，不连接
+    if (!token)
+      return // 未认证，不连接
 
     this.intentionallyClosed = false
     // 通过 Vite dev proxy: /api → localhost:5007
@@ -41,6 +44,17 @@ class SSEClient {
       }
       catch (err) {
         console.error('[SSE] Failed to parse generation_status event:', err)
+      }
+    })
+
+    // 流水线节点更新事件
+    this.eventSource.addEventListener('pipeline_node_update', (e) => {
+      try {
+        const data: SSEPipelineNodeEvent = JSON.parse(e.data)
+        this.emit('pipeline_node_update', data)
+      }
+      catch (err) {
+        console.error('[SSE] Failed to parse pipeline_node_update event:', err)
       }
     })
 
@@ -90,6 +104,7 @@ class SSEClient {
    */
   on(event: 'generation_status', handler: GenerationStatusHandler): () => void
   on(event: 'notification', handler: NotificationHandler): () => void
+  on(event: 'pipeline_node_update', handler: PipelineNodeHandler): () => void
   on(event: string, handler: EventHandler): () => void {
     if (!this.handlers.has(event)) {
       this.handlers.set(event, new Set())
@@ -112,7 +127,8 @@ class SSEClient {
 
   private emit(event: string, data: unknown) {
     const handlers = this.handlers.get(event)
-    if (!handlers) return
+    if (!handlers)
+      return
     for (const handler of handlers) {
       try {
         ;(handler as (data: unknown) => void)(data)

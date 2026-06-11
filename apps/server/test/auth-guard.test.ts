@@ -1,6 +1,6 @@
-import { describe, it, expect, mock, beforeEach } from 'bun:test'
-import { treaty } from '@elysia/eden'
 import type { ServerConfig } from '../src/config'
+import { treaty } from '@elysia/eden'
+import { beforeEach, describe, expect, it, mock } from 'bun:test'
 
 /**
  * 路由认证守卫测试
@@ -81,11 +81,13 @@ mock.module('@excuse/billing', () => ({
   calculateCost: mock(() => ({ totalPrice: 0.01, estimated: true })),
 }))
 
-// ─── 在 mock 之后 import ──────────────────────────
-
-import { createGenerateRoutes } from '../src/routes/generate'
-import { createUploadRoutes } from '../src/routes/upload'
+// ─── 在 mock 之后 import（Bun 会自动提升 mock.module 到 import 之前）──────
+// eslint-disable-next-line import/first
 import { createAuthRoutes } from '../src/routes/auth'
+// eslint-disable-next-line import/first
+import { createGenerateRoutes } from '../src/routes/generate'
+// eslint-disable-next-line import/first
+import { createUploadRoutes } from '../src/routes/upload'
 
 // ─── 测试配置 ──────────────────────────────────────
 
@@ -136,7 +138,7 @@ async function getValidToken(client: ReturnType<typeof treaty>) {
 
 describe('route auth guards', () => {
   let generateClient: ReturnType<typeof treaty>
-  let uploadClient: ReturnType<typeof treaty>
+  let _uploadClient: ReturnType<typeof treaty>
   let authClient: ReturnType<typeof treaty>
 
   beforeEach(() => {
@@ -161,7 +163,7 @@ describe('route auth guards', () => {
     }
 
     generateClient = treaty(createGenerateRoutes(testConfig))
-    uploadClient = treaty(createUploadRoutes(testConfig))
+    _uploadClient = treaty(createUploadRoutes(testConfig))
     authClient = treaty(createAuthRoutes(testConfig))
   })
 
@@ -203,7 +205,7 @@ describe('route auth guards', () => {
       })
       mockMarkGenerationFailed.mockResolvedValue(undefined)
 
-      const { data } = await generateClient.api.generate.post(
+      const { data: _data } = await generateClient.api.generate.post(
         { model: 'test-model', parameters: { prompt: 'test' } },
         { headers: { Authorization: `Bearer ${token}` } },
       )
@@ -259,7 +261,7 @@ describe('route auth guards', () => {
         body: formData,
       }))
 
-      const data = await response.json() as { success: boolean; error?: string }
+      const data = await response.json() as { success: boolean, error?: string }
       expect(data.success).toBe(false)
       expect(data.error).toContain('登录')
       expect(mockSaveUploadedFile).not.toHaveBeenCalled()
@@ -294,7 +296,12 @@ describe('route auth guards', () => {
 
       const text = await response.text()
       let data: any
-      try { data = JSON.parse(text) } catch { data = { raw: text } }
+      try {
+        data = JSON.parse(text)
+      }
+      catch {
+        data = { raw: text }
+      }
 
       // 关键断言：认证守卫通过了 — 没有返回 "请先登录"
       // （可能因 Elysia in-process FormData 限制返回其他错误，但不是认证错误）

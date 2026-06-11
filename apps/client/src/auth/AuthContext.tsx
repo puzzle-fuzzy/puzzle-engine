@@ -1,5 +1,5 @@
-import { createContext, useContext } from 'react'
 import type { AuthUser } from '@excuse/shared'
+import { createContext, useContext } from 'react'
 
 export interface AuthContextValue {
   user: AuthUser | null

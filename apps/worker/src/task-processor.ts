@@ -1,21 +1,21 @@
-import {
-  markGenerationFailed,
-  markGenerationSucceeded,
-  markGenerationProcessing,
-  notifyGenerationStatus,
-} from '@excuse/db'
-import { DashScopeClient, getModelById, AssetStorage } from '@excuse/provider'
-import { calculateCost } from '@excuse/billing'
 import type { GenerationNotifyPayload } from '@excuse/shared'
 import type { WorkerConfig } from './config'
+import { calculateCost } from '@excuse/billing'
+import {
+  markGenerationFailed,
+  markGenerationProcessing,
+  markGenerationSucceeded,
+  notifyGenerationStatus,
+} from '@excuse/db'
+import { AssetStorage, DashScopeClient, getModelById } from '@excuse/provider'
 
 /**
  * 单条 generation record 的处理结果
  */
-export type TaskResult =
-  | { action: 'completed'; taskId: string }
-  | { action: 'skipped'; taskId: string; reason: string }
-  | { action: 'ignored'; taskId: string; status: string }
+export type TaskResult
+  = | { action: 'completed', taskId: string }
+    | { action: 'skipped', taskId: string, reason: string }
+    | { action: 'ignored', taskId: string, status: string }
 
 /**
  * 可注入的外部依赖（测试时替换）
@@ -73,6 +73,9 @@ export function createTaskProcessor(config: WorkerConfig, deps?: Partial<TaskPro
     inputParams: Record<string, unknown> | null
     cost: Record<string, unknown> | null
   }): Promise<TaskResult> {
+    const canvasMeta = (record.inputParams as Record<string, unknown>)?.source === 'canvas'
+      ? { projectId: String((record.inputParams as Record<string, unknown>).projectId), shotId: String((record.inputParams as Record<string, unknown>).shotId) }
+      : undefined
     const taskId = record.taskId
     if (!taskId) {
       return { action: 'skipped', taskId: record.id, reason: 'no taskId' }
@@ -129,6 +132,7 @@ export function createTaskProcessor(config: WorkerConfig, deps?: Partial<TaskPro
           taskId,
           outputResult: output,
           cost: actualCost as Record<string, unknown> | undefined,
+          canvasMeta,
         })
 
         return { action: 'completed', taskId }
@@ -146,6 +150,7 @@ export function createTaskProcessor(config: WorkerConfig, deps?: Partial<TaskPro
           model: record.model,
           taskId,
           errorMessage: errMsg,
+          canvasMeta,
         })
         return { action: 'completed', taskId }
       }
@@ -168,10 +173,12 @@ export function createTaskProcessor(config: WorkerConfig, deps?: Partial<TaskPro
 // ── 工具函数 ────────────────────────────────────────────
 
 export function extractVideoUrl(output: Record<string, unknown> | undefined): string | undefined {
-  if (!output) return undefined
+  if (!output)
+    return undefined
   // HappyHorse / 万相 2.7：output.video_url
   const videoUrl = (output as any).video_url
-  if (videoUrl) return videoUrl
+  if (videoUrl)
+    return videoUrl
   // 图片异步任务：output.results[0].url
   const results = (output as any).results
   if (Array.isArray(results) && results.length > 0) {

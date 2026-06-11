@@ -1,19 +1,20 @@
-import { cors } from '@elysia/cors'
-import { Elysia } from 'elysia'
-import { staticPlugin } from '@elysia/static'
-import { join } from 'node:path'
 import { mkdirSync } from 'node:fs'
+import { join } from 'node:path'
+import { cors } from '@elysia/cors'
+import { staticPlugin } from '@elysia/static'
 import { logger } from '@excuse/shared'
+import { Elysia } from 'elysia'
 import { loadConfig } from './config'
-import { loggerPlugin } from './plugins/logger'
 import { createAuthPlugin } from './plugins/auth'
+import { loggerPlugin } from './plugins/logger'
 import { createAuthRoutes } from './routes/auth'
+import { createCanvasRoutes } from './routes/canvas'
+import { billingRoutes } from './routes/billing'
+import { createGenerateRoutes } from './routes/generate'
 import { healthRoutes } from './routes/health'
 import { modelsRoutes } from './routes/models'
-import { createGenerateRoutes } from './routes/generate'
-import { createUploadRoutes } from './routes/upload'
-import { billingRoutes } from './routes/billing'
 import { createSSERoutes } from './routes/sse'
+import { createUploadRoutes } from './routes/upload'
 import { startSSEListener } from './services/sse-manager'
 
 const config = loadConfig()
@@ -37,6 +38,7 @@ const app = new Elysia()
   .use(createAuthRoutes(config))
   .use(healthRoutes)
   .use(modelsRoutes)
+  .use(createCanvasRoutes(config))
   .use(createGenerateRoutes(config))
   .use(createUploadRoutes(config))
   .use(createSSERoutes(config))

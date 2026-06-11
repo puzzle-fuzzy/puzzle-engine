@@ -2,10 +2,10 @@
 // 核心原则：类型从 Drizzle schema 推导，不手动重复定义
 
 import type {
-  GenerationRecordRow,
-  Serialize,
   GenerationCategory,
+  GenerationRecordRow,
   GenerationStatus,
+  Serialize,
 } from '@excuse/db'
 
 // ===== 枚举类型 — 从 @excuse/db 的 pgEnum 定义推断 =====

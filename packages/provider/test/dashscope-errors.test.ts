@@ -1,5 +1,5 @@
-import { describe, it, expect } from 'bun:test'
-import { parseDashScopeError, getDashScopeErrorMessage } from '../src/dashscope-errors'
+import { describe, expect, it } from 'bun:test'
+import { getDashScopeErrorMessage, parseDashScopeError } from '../src/dashscope-errors'
 
 describe('getDashScopeErrorMessage', () => {
   it('返回已知错误码的中文消息', () => {

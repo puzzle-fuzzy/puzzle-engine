@@ -1,6 +1,6 @@
-import { describe, it, expect, mock, beforeEach, spyOn } from 'bun:test'
-import { DashScopeClient } from '../src/dashscope-client'
 import type { DashScopeConfig } from '../src/types'
+import { beforeEach, describe, expect, it, mock } from 'bun:test'
+import { DashScopeClient } from '../src/dashscope-client'
 
 // ── 测试配置 ──────────────────────────────────────────────
 
@@ -11,18 +11,30 @@ const config: DashScopeConfig = {
 
 // ── fetch mock 工具 ────────────────────────────────────────
 
+/** 创建符合 typeof fetch 的 mock，补齐 preconnect 等静态方法 */
+function mockFetch(
+  impl: (...args: any[]) => Promise<Response>,
+): typeof fetch {
+  const fn = mock(impl)
+  return Object.assign(fn, { preconnect() {} }) as unknown as typeof fetch
+}
+
 function mockFetchResponse(status: number, body: unknown) {
   const originalFetch = globalThis.fetch
-  globalThis.fetch = mock(() =>
+  globalThis.fetch = mockFetch(() =>
     Promise.resolve(new Response(JSON.stringify(body), { status })),
   )
-  return () => { globalThis.fetch = originalFetch }
+  return () => {
+    globalThis.fetch = originalFetch
+  }
 }
 
 function mockFetchError(error: Error) {
   const originalFetch = globalThis.fetch
-  globalThis.fetch = mock(() => Promise.reject(error))
-  return () => { globalThis.fetch = originalFetch }
+  globalThis.fetch = mockFetch(() => Promise.reject(error))
+  return () => {
+    globalThis.fetch = originalFetch
+  }
 }
 
 // ── tests ─────────────────────────────────────────────────
@@ -100,7 +112,7 @@ describe('DashScopeClient', () => {
       const originalFetch = globalThis.fetch
       let capturedBody: any = null
 
-      globalThis.fetch = mock((url: string, init: any) => {
+      globalThis.fetch = mockFetch((url: string, init: any) => {
         capturedBody = JSON.parse(init.body)
         return Promise.resolve(new Response(JSON.stringify({
           output: { choices: [{ message: { content: [{ text: 'ok' }] } }] },
@@ -122,7 +134,7 @@ describe('DashScopeClient', () => {
       const originalFetch = globalThis.fetch
       let capturedHeaders: any = null
 
-      globalThis.fetch = mock((url: string, init: any) => {
+      globalThis.fetch = mockFetch((url: string, init: any) => {
         capturedHeaders = init.headers
         return Promise.resolve(new Response(JSON.stringify({
           output: { choices: [{ message: { content: [{ text: 'ok' }] } }] },
@@ -133,7 +145,7 @@ describe('DashScopeClient', () => {
       await client.chatCompletion('qwen-max', { prompt: 'test' })
       globalThis.fetch = originalFetch
 
-      expect(capturedHeaders['Authorization']).toBe('Bearer test-api-key')
+      expect(capturedHeaders.Authorization).toBe('Bearer test-api-key')
       expect(capturedHeaders['Content-Type']).toBe('application/json')
     })
   })
@@ -206,7 +218,7 @@ describe('DashScopeClient', () => {
       const originalFetch = globalThis.fetch
       let capturedHeaders: any = null
 
-      globalThis.fetch = mock((url: string, init: any) => {
+      globalThis.fetch = mockFetch((url: string, init: any) => {
         capturedHeaders = init.headers
         return Promise.resolve(new Response(JSON.stringify({
           output: { task_id: 't1' },

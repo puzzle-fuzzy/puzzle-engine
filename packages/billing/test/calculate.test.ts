@@ -1,6 +1,6 @@
-import { describe, it, expect } from 'bun:test'
-import { calculateCost, estimateCost } from '../src/calculate'
 import type { ModelConfig } from '@excuse/shared'
+import { describe, expect, it } from 'bun:test'
+import { calculateCost, estimateCost } from '../src/calculate'
 
 // ── 测试用模型配置 ──────────────────────────────────────────
 
@@ -82,8 +82,8 @@ describe('calculateCost', () => {
         outputTokens: 500,
         inputUnitPrice: 2.4,
         outputUnitPrice: 9.6,
-        inputCost: 0.0024,   // 1000/1M * 2.4
-        outputCost: 0.0048,  // 500/1M * 9.6
+        inputCost: 0.0024, // 1000/1M * 2.4
+        outputCost: 0.0048, // 500/1M * 9.6
         totalPrice: 0.0072,
       })
     })

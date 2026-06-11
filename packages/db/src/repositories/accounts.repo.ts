@@ -1,7 +1,7 @@
-import { eq } from 'drizzle-orm'
-import { accounts } from '../schema'
-import { getDb } from '../db'
 import type { AccountInsert } from '../types'
+import { eq } from 'drizzle-orm'
+import { getDb } from '../db'
+import { accounts } from '../schema'
 
 /**
  * 根据邮箱查询账户

@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cat node_modules/.bun/@antfu+eslint-config*/node_modules/@antfu/eslint-config/package.json)",
+      "Bash(node:*)",
+      "mcp__ide__getDiagnostics"
+    ]
+  }
+}

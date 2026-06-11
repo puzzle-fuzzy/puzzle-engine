@@ -1,39 +1,37 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
-import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
-import { Textarea } from '@/components/ui/textarea'
-import { Input } from '@/components/ui/input'
-import { Select } from '@/components/ui/select'
-import { ScrollArea } from '@/components/ui/scroll-area'
+import type { SSEGenerationStatusEvent } from '@excuse/shared'
+import type { GenerateResponse, GenerationRecord, ModelConfig, ModelParameter } from '@/api/client'
 import {
+  CheckCircle2,
+  Clock,
+  Download,
   FileText,
   ImageIcon,
-  Video,
   Loader2,
-  CheckCircle2,
-  XCircle,
-  Clock,
   RotateCcw,
   Sparkles,
-  Download,
   Trash2,
   Upload,
+  Video,
   X,
+  XCircle,
 } from 'lucide-react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import {
-  fetchModels,
-  generate,
-  fetchRecords,
   deleteRecord,
+  fetchModels,
+  fetchRecords,
+  generate,
+
   uploadFile,
-  type ModelConfig,
-  type ModelParameter,
-  type GenerateResponse,
-  type GenerationRecord,
 } from '@/api/client'
 import { sseClient } from '@/api/sse'
-import type { SSEGenerationStatusEvent } from '@excuse/shared'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
+import { ScrollArea } from '@/components/ui/scroll-area'
+import { Select } from '@/components/ui/select'
+import { Textarea } from '@/components/ui/textarea'
 
 const CATEGORY_CONFIG = {
   text: { label: '文本生成', color: 'bg-blue-500', icon: FileText, activeColor: 'bg-blue-500 text-white' },
@@ -43,7 +41,7 @@ const CATEGORY_CONFIG = {
 
 type Category = keyof typeof CATEGORY_CONFIG
 
-const STATUS_CONFIG: Record<string, { label: string; color: string; icon: typeof Clock }> = {
+const STATUS_CONFIG: Record<string, { label: string, color: string, icon: typeof Clock }> = {
   pending: { label: '等待中', color: 'bg-yellow-100 text-yellow-700', icon: Clock },
   processing: { label: '处理中', color: 'bg-blue-100 text-blue-700', icon: Loader2 },
   succeeded: { label: '已完成', color: 'bg-green-100 text-green-700', icon: CheckCircle2 },
@@ -58,7 +56,7 @@ export default function Workspace() {
   const [records, setRecords] = useState<GenerationRecord[]>([])
   const [loading, setLoading] = useState(false)
   const [uploadingRefs, setUploadingRefs] = useState(false)
-  const [referenceFiles, setReferenceFiles] = useState<{ id: string; url: string; name: string }[]>([])
+  const [referenceFiles, setReferenceFiles] = useState<{ id: string, url: string, name: string }[]>([])
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
   // 每个媒体参数的上传状态：paramName → { uploading, uploadedUrl, uploadedName }
   const [mediaUploadState, setMediaUploadState] = useState<Record<string, {
@@ -81,7 +79,7 @@ export default function Workspace() {
 
   // 切换类别时自动选择第一个模型
   useEffect(() => {
-    if (categoryModels.length > 0 && !categoryModels.find(m => m.id === selectedModelId)) {
+    if (categoryModels.length > 0 && !categoryModels.some(m => m.id === selectedModelId)) {
       setSelectedModelId(categoryModels[0].id)
       setParameters({})
     }
@@ -133,19 +131,22 @@ export default function Workspace() {
 
   // 获取参数默认值
   function getParamDefault(param: ModelParameter): unknown {
-    if (param.name === 'prompt') return ''
+    if (param.name === 'prompt')
+      return ''
     return param.defaultValue ?? (param.type === 'number' ? 0 : param.type === 'boolean' ? false : '')
   }
 
   // 初始化参数
   useEffect(() => {
-    if (!selectedModel) return
+    if (!selectedModel)
+      return
     const defaults: Record<string, unknown> = {}
     for (const p of selectedModel.parameters) {
       defaults[p.name] = getParamDefault(p)
     }
     setParameters(defaults)
     setMediaUploadState({})
+    // eslint-disable-next-line react/exhaustive-deps
   }, [selectedModelId])
 
   // 检查必填参数是否都已填写
@@ -156,7 +157,8 @@ export default function Workspace() {
 
   // 处理生成 — 提交后直接用响应数据更新列表，后续状态变更由 SSE 推送
   async function handleGenerate() {
-    if (!selectedModel || !canGenerate) return
+    if (!selectedModel || !canGenerate)
+      return
     setLoading(true)
     try {
       const referenceFileIds = referenceFiles.map(f => f.id)
@@ -167,7 +169,7 @@ export default function Workspace() {
       })
       if (result.success && result.id) {
         // 将新记录插入到列表顶部，SSE 后续会推送状态变更
-        setRecords((prev) => [
+        setRecords(prev => [
           {
             id: result.id!,
             taskId: result.taskId!,
@@ -202,7 +204,7 @@ export default function Workspace() {
         parameters: record.inputParams as Record<string, unknown>,
       })
       if (result.success && result.id) {
-        setRecords((prev) => [
+        setRecords(prev => [
           {
             id: result.id!,
             taskId: result.taskId!,
@@ -228,11 +230,12 @@ export default function Workspace() {
 
   // 删除记录 — 直接从 state 移除
   async function handleDelete(id: string) {
+    // eslint-disable-next-line no-alert
     if (!confirm('确定要删除这条记录吗？'))
       return
     try {
       await deleteRecord(id)
-      setRecords((prev) => prev.filter(r => r.id !== id))
+      setRecords(prev => prev.filter(r => r.id !== id))
     }
     catch {}
   }
@@ -240,7 +243,8 @@ export default function Workspace() {
   // 参考图上传（r2v 模型）
   async function handleReferenceUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const files = e.target.files
-    if (!files || files.length === 0) return
+    if (!files || files.length === 0)
+      return
     setUploadingRefs(true)
     try {
       for (const file of Array.from(files)) {
@@ -262,7 +266,8 @@ export default function Workspace() {
     input.accept = accept
     input.onchange = async (e) => {
       const file = (e.target as HTMLInputElement).files?.[0]
-      if (!file) return
+      if (!file)
+        return
       setMediaUploadState(prev => ({ ...prev, [paramName]: { uploading: true } }))
       try {
         const result = await uploadFile(file)
@@ -287,7 +292,7 @@ export default function Workspace() {
   // 清除已上传的媒体
   function handleClearMedia(paramName: string) {
     setParameters(p => ({ ...p, [paramName]: '' }))
-    setMediaUploadState(prev => {
+    setMediaUploadState((prev) => {
       const next = { ...prev }
       delete next[paramName]
       return next
@@ -345,11 +350,13 @@ export default function Workspace() {
             onClick={() => handleMediaUpload(param.name, param.mediaUpload!.accept)}
             disabled={state?.uploading}
           >
-            {state?.uploading ? (
-              <Loader2 className="size-4 animate-spin" />
-            ) : (
-              <Upload className="size-4" />
-            )}
+            {state?.uploading
+              ? (
+                  <Loader2 className="size-4 animate-spin" />
+                )
+              : (
+                  <Upload className="size-4" />
+                )}
             {state?.uploading ? '上传中...' : `点击上传${isImage ? '图片' : isVideo ? '视频' : isAudio ? '音频' : '文件'}`}
           </button>
         )}
@@ -364,7 +371,8 @@ export default function Workspace() {
     switch (param.type) {
       case 'text':
         // 媒体参数 → 上传控件
-        if (param.mediaUpload) return renderMediaUpload(param)
+        if (param.mediaUpload)
+          return renderMediaUpload(param)
         // prompt / negative_prompt → 文本域
         if (param.name === 'prompt' || param.name === 'negative_prompt') {
           return (
@@ -485,15 +493,17 @@ export default function Workspace() {
                       onChange={handleReferenceUpload}
                       disabled={uploadingRefs}
                     />
-                    {uploadingRefs ? (
-                      <Loader2 className="size-5 animate-spin text-muted-foreground" />
-                    ) : (
-                      <span className="text-sm text-muted-foreground">点击上传参考图片（最多 5 张）</span>
-                    )}
+                    {uploadingRefs
+                      ? (
+                          <Loader2 className="size-5 animate-spin text-muted-foreground" />
+                        )
+                      : (
+                          <span className="text-sm text-muted-foreground">点击上传参考图片（最多 5 张）</span>
+                        )}
                   </label>
                   {referenceFiles.length > 0 && (
                     <div className="flex gap-2 flex-wrap">
-                      {referenceFiles.map((file) => (
+                      {referenceFiles.map(file => (
                         <div key={file.id} className="relative size-16 overflow-hidden rounded-lg border">
                           <img src={file.url} alt={file.name} className="size-full object-cover" />
                           <button
@@ -540,17 +550,19 @@ export default function Workspace() {
             disabled={loading || !canGenerate}
             onClick={handleGenerate}
           >
-            {loading ? (
-              <>
-                <Loader2 className="size-4 animate-spin" />
-                生成中...
-              </>
-            ) : (
-              <>
-                <Sparkles className="size-4" />
-                开始生成
-              </>
-            )}
+            {loading
+              ? (
+                  <>
+                    <Loader2 className="size-4 animate-spin" />
+                    生成中...
+                  </>
+                )
+              : (
+                  <>
+                    <Sparkles className="size-4" />
+                    开始生成
+                  </>
+                )}
           </Button>
         </div>
 
@@ -593,21 +605,31 @@ export default function Workspace() {
 
                       {/* 参数标签 */}
                       <div className="mt-2 flex flex-wrap gap-1">
-                        {record.category === 'video' && record.inputParams?.resolution ? (
-                          <Badge variant="outline" className="text-[10px]">{String(record.inputParams.resolution)}</Badge>
-                        ) : null}
-                        {record.category === 'video' && record.inputParams?.duration ? (
-                          <Badge variant="outline" className="text-[10px]">{String(record.inputParams.duration)}秒</Badge>
-                        ) : null}
-                        {record.category === 'image' && record.inputParams?.size ? (
-                          <Badge variant="outline" className="text-[10px]">{String(record.inputParams.size)}</Badge>
-                        ) : null}
+                        {record.category === 'video' && record.inputParams?.resolution
+                          ? (
+                              <Badge variant="outline" className="text-[10px]">{String(record.inputParams.resolution)}</Badge>
+                            )
+                          : null}
+                        {record.category === 'video' && record.inputParams?.duration
+                          ? (
+                              <Badge variant="outline" className="text-[10px]">
+                                {String(record.inputParams.duration)}
+                                秒
+                              </Badge>
+                            )
+                          : null}
+                        {record.category === 'image' && record.inputParams?.size
+                          ? (
+                              <Badge variant="outline" className="text-[10px]">{String(record.inputParams.size)}</Badge>
+                            )
+                          : null}
                       </div>
 
                       {/* 费用 */}
                       {record.cost?.totalPrice != null && (
                         <p className="mt-1 text-xs text-muted-foreground">
-                          费用: ¥{Number(record.cost.totalPrice).toFixed(4)}
+                          费用: ¥
+                          {Number(record.cost.totalPrice).toFixed(4)}
                         </p>
                       )}
 
@@ -616,11 +638,11 @@ export default function Workspace() {
                         <div className="mt-2">
                           {record.category === 'image' && (record.outputResult as any).savedUrls && (
                             <div className="flex gap-2 flex-wrap">
-                              {((record.outputResult as any).savedUrls as string[]).map((url: string, i: number) => (
+                              {((record.outputResult as any).savedUrls as string[]).map((url: string) => (
                                 <img
-                                  key={i}
+                                  key={url}
                                   src={url}
-                                  alt={`生成图片 ${i + 1}`}
+                                  alt={`生成图片 ${url}`}
                                   className="size-32 cursor-pointer rounded-lg border object-cover hover:opacity-80 transition-opacity"
                                   onClick={() => setPreviewUrl(url)}
                                 />
@@ -634,9 +656,9 @@ export default function Workspace() {
                           )}
                           {record.category === 'video' && (record.outputResult as any).savedUrls && (
                             <div className="flex gap-2">
-                              {((record.outputResult as any).savedUrls as string[]).map((url: string, i: number) => (
+                              {((record.outputResult as any).savedUrls as string[]).map((url: string) => (
                                 <video
-                                  key={i}
+                                  key={url}
                                   src={url}
                                   className="w-full max-w-xs rounded-lg border aspect-video object-cover"
                                   controls
@@ -658,7 +680,7 @@ export default function Workspace() {
                           && record.outputResult
                           && (record.outputResult as any).savedUrls?.length > 0
                           && ((record.outputResult as any).savedUrls as string[]).map((url: string, i: number) => (
-                            <Button key={i} variant="outline" size="sm" asChild>
+                            <Button key={url} variant="outline" size="sm" asChild>
                               <a href={url} download>
                                 <Download className="size-3" />
                                 {((record.outputResult as any).savedUrls as string[]).length > 1 ? `下载 ${i + 1}` : '下载'}

@@ -1,17 +1,18 @@
 import { useEffect } from 'react'
 import { Route, Routes } from 'react-router'
-import Layout from './pages/Layout'
-import Workspace from './pages/Workspace'
+import { getAuthToken } from './api/client'
+import { sseClient } from './api/sse'
+import { ProtectedRoute } from './auth/ProtectedRoute'
+import Canvas from './pages/Canvas'
+import CanvasEditor from './pages/CanvasEditor'
 import Assets from './pages/Assets'
 import Billing from './pages/Billing'
+import Layout from './pages/Layout'
 import Login from './pages/Login'
 import Register from './pages/Register'
-import { ProtectedRoute } from './auth/ProtectedRoute'
-import { sseClient } from './api/sse'
-import { getAuthToken } from './api/client'
+import Workspace from './pages/Workspace'
 
 function App() {
-  // 应用级 SSE 连接管理：已登录时自动连接，卸载时断开
   useEffect(() => {
     if (getAuthToken()) {
       sseClient.connect()
@@ -26,6 +27,8 @@ function App() {
       <Route element={<Layout />}>
         <Route element={<ProtectedRoute />}>
           <Route path="/" element={<Workspace />} />
+          <Route path="/canvas" element={<Canvas />} />
+          <Route path="/canvas/:projectId" element={<CanvasEditor />} />
           <Route path="/assets" element={<Assets />} />
           <Route path="/billing" element={<Billing />} />
         </Route>

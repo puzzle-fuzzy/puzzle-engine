@@ -1,9 +1,9 @@
+import type { StorageConfig } from './types'
+import { mkdir, writeFile } from 'node:fs/promises'
+import { dirname, join } from 'node:path'
+import { logger } from '@excuse/shared'
 /// <reference path="./ali-oss.d.ts" />
 import OSS from 'ali-oss'
-import { mkdir, writeFile } from 'node:fs/promises'
-import { join, dirname } from 'node:path'
-import { logger } from '@excuse/shared'
-import type { StorageConfig } from './types'
 
 /**
  * 文件存储服务
@@ -137,7 +137,7 @@ export class AssetStorage {
 
   // ── 保存上传的文件 ────────────────────────────────────
 
-  async saveUploadedFile(file: File, subDir: string): Promise<{ storagePath: string; publicUrl: string }> {
+  async saveUploadedFile(file: File, subDir: string): Promise<{ storagePath: string, publicUrl: string }> {
     const ext = file.name.split('.').pop() || 'bin'
     const baseName = AssetStorage.generateFileName('upload', ext)
     const fileName = `${subDir}/${baseName}`
@@ -158,7 +158,8 @@ export class AssetStorage {
    * 检查 URL 是否为 OSS URL
    */
   isOSSUrl(url: string): boolean {
-    if (!this.config.oss) return false
+    if (!this.config.oss)
+      return false
     return url.includes(`${this.config.oss.bucket}.aliyuncs.com`)
   }
 

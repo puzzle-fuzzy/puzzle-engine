@@ -1,7 +1,7 @@
-import { eq, desc, and, inArray, isNotNull } from 'drizzle-orm'
-import { generationRecords } from '../schema'
+import type { GenerationRecordInsert, ListGenerationRecordsFilter } from '../types'
+import { and, desc, eq, inArray, isNotNull } from 'drizzle-orm'
 import { getDb } from '../db'
-import type { ListGenerationRecordsFilter, GenerationRecordInsert } from '../types'
+import { generationRecords } from '../schema'
 
 /**
  * 创建生成记录
@@ -30,9 +30,12 @@ export async function listGenerationRecords(filter: ListGenerationRecordsFilter 
   const { accountId, category, status, limit = 50, offset = 0 } = filter
 
   const conditions = []
-  if (accountId) conditions.push(eq(generationRecords.accountId, accountId))
-  if (category) conditions.push(eq(generationRecords.category, category))
-  if (status) conditions.push(eq(generationRecords.status, status))
+  if (accountId)
+    conditions.push(eq(generationRecords.accountId, accountId))
+  if (category)
+    conditions.push(eq(generationRecords.category, category))
+  if (status)
+    conditions.push(eq(generationRecords.status, status))
 
   return getDb()
     .select()
@@ -58,7 +61,7 @@ export async function markGenerationFailed(id: string, errorMessage: string) {
  */
 export async function markGenerationProcessing(
   id: string,
-  extra?: { taskId?: string; outputResult?: Record<string, unknown> },
+  extra?: { taskId?: string, outputResult?: Record<string, unknown> },
 ) {
   await getDb()
     .update(generationRecords)

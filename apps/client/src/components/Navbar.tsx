@@ -1,10 +1,11 @@
+import { FolderOpen, LayoutDashboard, LogOut, Map, Receipt } from 'lucide-react'
 import { NavLink } from 'react-router'
-import { LayoutDashboard, FolderOpen, Receipt, LogOut } from 'lucide-react'
 import { useAuth } from '../auth/AuthContext'
 import { Button } from './ui/button'
 
 const NAV_ITEMS = [
   { to: '/', label: '工作台', icon: LayoutDashboard },
+  { to: '/canvas', label: '画布', icon: Map },
   { to: '/assets', label: '资产', icon: FolderOpen },
   { to: '/billing', label: '计费', icon: Receipt },
 ] as const
@@ -26,8 +27,7 @@ export default function Navbar() {
                   isActive
                     ? 'bg-accent text-accent-foreground'
                     : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground'
-                }`
-              }
+                }`}
             >
               <Icon className="size-4" />
               {label}

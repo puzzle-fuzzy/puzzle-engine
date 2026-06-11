@@ -1,6 +1,6 @@
-import { describe, it, expect, mock, beforeAll, beforeEach } from 'bun:test'
-import { treaty } from '@elysia/eden'
 import type { ServerConfig } from '../src/config'
+import { treaty } from '@elysia/eden'
+import { beforeAll, beforeEach, describe, expect, it, mock } from 'bun:test'
 
 /**
  * 认证路由单元测试
@@ -29,6 +29,7 @@ mock.module('@excuse/db', () => ({
 }))
 
 // mock.module 会被 Bun 自动提升到 import 之前
+// eslint-disable-next-line import/first
 import { createAuthRoutes } from '../src/routes/auth'
 
 // ─── 测试配置 ──────────────────────────────────────

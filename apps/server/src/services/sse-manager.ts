@@ -1,6 +1,6 @@
+import type { GenerationNotifyPayload, SSEGenerationStatusEvent, SSEPipelineNodeEvent } from '@excuse/shared'
 import { pgClient } from '@excuse/db'
 import { createLogger } from '@excuse/shared'
-import type { GenerationNotifyPayload, SSEGenerationStatusEvent } from '@excuse/shared'
 
 const logger = createLogger('sse-manager')
 
@@ -30,7 +30,8 @@ export function addConnection(userId: string, send: Sender) {
  */
 export function removeConnection(userId: string, send: Sender) {
   const userConns = connections.get(userId)
-  if (!userConns) return
+  if (!userConns)
+    return
   userConns.delete(send)
   if (userConns.size === 0) {
     connections.delete(userId)
@@ -43,7 +44,8 @@ export function removeConnection(userId: string, send: Sender) {
  */
 export function dispatchToUser(userId: string, event: string, data: unknown) {
   const userConns = connections.get(userId)
-  if (!userConns || userConns.size === 0) return
+  if (!userConns || userConns.size === 0)
+    return
 
   for (const send of userConns) {
     try {
@@ -89,6 +91,17 @@ export async function startSSEListener() {
         { userId: payload.accountId, recordId: payload.recordId, status: payload.status },
         'SSE event dispatched',
       )
+
+      // Canvas pipeline: dispatch pipeline_node_update for canvas-sourced records
+      if (payload.canvasMeta) {
+        const pipelineEvent: SSEPipelineNodeEvent = {
+          projectId: payload.canvasMeta.projectId,
+          nodeType: 'shot',
+          nodeId: payload.canvasMeta.shotId,
+          status: payload.status === 'succeeded' ? 'completed' : payload.status === 'failed' ? 'failed' : 'running',
+        }
+        dispatchToUser(payload.accountId, 'pipeline_node_update', pipelineEvent)
+      }
     }
     catch (err) {
       logger.error({ err, rawPayload }, 'Failed to parse generation_status notification')

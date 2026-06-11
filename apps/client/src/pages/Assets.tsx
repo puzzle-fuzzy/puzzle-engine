@@ -1,17 +1,18 @@
-import { useState, useEffect, useCallback } from 'react'
-import { Card, CardContent } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
+import type { GenerationRecord } from '@/api/client'
 import {
+  Download,
+  FileText,
   FolderOpen,
   ImageIcon,
-  Video,
-  FileText,
-  Download,
-  X,
   Layers,
+  Video,
+  X,
 } from 'lucide-react'
-import { fetchRecords, type GenerationRecord } from '@/api/client'
+import { useCallback, useEffect, useState } from 'react'
+import { fetchRecords } from '@/api/client'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent } from '@/components/ui/card'
 
 type FilterType = 'all' | 'image' | 'video' | 'text'
 
@@ -81,7 +82,7 @@ export default function Assets() {
 
       {/* 筛选栏 */}
       <div className="flex gap-2">
-        {(['all', 'image', 'video', 'text'] as FilterType[]).map((type) => (
+        {(['all', 'image', 'video', 'text'] as FilterType[]).map(type => (
           <Button
             key={type}
             variant={filter === type ? 'default' : 'outline'}
@@ -94,56 +95,58 @@ export default function Assets() {
       </div>
 
       {/* 资产网格 */}
-      {filtered.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
-          <FolderOpen className="mb-2 size-10" />
-          <p>暂无资产</p>
-        </div>
-      ) : (
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
-          {filtered.map((record) => {
-            const Icon = TYPE_ICONS[record.category as keyof typeof TYPE_ICONS] || FileText
-            const urls = getAssetUrls(record)
+      {filtered.length === 0
+        ? (
+            <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
+              <FolderOpen className="mb-2 size-10" />
+              <p>暂无资产</p>
+            </div>
+          )
+        : (
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
+              {filtered.map((record) => {
+                const Icon = TYPE_ICONS[record.category as keyof typeof TYPE_ICONS] || FileText
+                const urls = getAssetUrls(record)
 
-            return (
-              <Card
-                key={record.id}
-                className="group cursor-pointer overflow-hidden transition-shadow hover:shadow-md"
-                onClick={() => setPreviewRecord(record)}
-              >
-                <div className="relative aspect-video bg-muted">
-                  {record.category === 'image' && urls[0] && (
-                    <img src={urls[0]} alt="" className="size-full object-cover" />
-                  )}
-                  {record.category === 'video' && urls[0] && (
-                    <div className="relative size-full">
-                      <video src={urls[0]} className="size-full object-cover" />
-                      <div className="absolute inset-0 flex items-center justify-center bg-black/20">
-                        <Video className="size-6 text-white" />
-                      </div>
+                return (
+                  <Card
+                    key={record.id}
+                    className="group cursor-pointer overflow-hidden transition-shadow hover:shadow-md"
+                    onClick={() => setPreviewRecord(record)}
+                  >
+                    <div className="relative aspect-video bg-muted">
+                      {record.category === 'image' && urls[0] && (
+                        <img src={urls[0]} alt="" className="size-full object-cover" />
+                      )}
+                      {record.category === 'video' && urls[0] && (
+                        <div className="relative size-full">
+                          <video src={urls[0]} className="size-full object-cover" />
+                          <div className="absolute inset-0 flex items-center justify-center bg-black/20">
+                            <Video className="size-6 text-white" />
+                          </div>
+                        </div>
+                      )}
+                      {record.category === 'text' && (
+                        <div className="flex size-full items-center justify-center">
+                          <FileText className="size-8 text-muted-foreground" />
+                        </div>
+                      )}
+                      <Badge variant="secondary" className="absolute left-1.5 top-1.5 text-[10px]">
+                        <Icon className="mr-1 size-3" />
+                        {record.category === 'image' ? '图片' : record.category === 'video' ? '视频' : '文本'}
+                      </Badge>
                     </div>
-                  )}
-                  {record.category === 'text' && (
-                    <div className="flex size-full items-center justify-center">
-                      <FileText className="size-8 text-muted-foreground" />
-                    </div>
-                  )}
-                  <Badge variant="secondary" className="absolute left-1.5 top-1.5 text-[10px]">
-                    <Icon className="mr-1 size-3" />
-                    {record.category === 'image' ? '图片' : record.category === 'video' ? '视频' : '文本'}
-                  </Badge>
-                </div>
-                <CardContent className="p-2">
-                  <p className="text-xs font-medium truncate">{record.model}</p>
-                  <p className="text-[10px] text-muted-foreground">
-                    {new Date(record.createdAt).toLocaleDateString('zh-CN')}
-                  </p>
-                </CardContent>
-              </Card>
-            )
-          })}
-        </div>
-      )}
+                    <CardContent className="p-2">
+                      <p className="text-xs font-medium truncate">{record.model}</p>
+                      <p className="text-[10px] text-muted-foreground">
+                        {new Date(record.createdAt).toLocaleDateString('zh-CN')}
+                      </p>
+                    </CardContent>
+                  </Card>
+                )
+              })}
+            </div>
+          )}
 
       {/* 预览弹窗 */}
       {previewRecord && (
@@ -181,11 +184,14 @@ export default function Assets() {
             <div className="space-y-1">
               <p className="text-sm font-medium">{previewRecord.model}</p>
               <p className="text-xs text-muted-foreground">
-                Prompt: {String(previewRecord.inputParams?.prompt || '').slice(0, 200)}
+                Prompt:
+                {' '}
+                {String(previewRecord.inputParams?.prompt || '').slice(0, 200)}
               </p>
               {previewRecord.cost?.totalPrice != null && (
                 <p className="text-xs text-muted-foreground">
-                  费用: ¥{Number(previewRecord.cost.totalPrice).toFixed(4)}
+                  费用: ¥
+                  {Number(previewRecord.cost.totalPrice).toFixed(4)}
                 </p>
               )}
             </div>
@@ -208,10 +214,13 @@ export default function Assets() {
 
 function getAssetUrls(record: GenerationRecord): string[] {
   const output = record.outputResult
-  if (!output) return []
+  if (!output)
+    return []
   const saved = (output as any).savedUrls as string[] | undefined
-  if (saved?.length) return saved
+  if (saved?.length)
+    return saved
   const urls = (output as any).urls as string[] | undefined
-  if (urls?.length) return urls
+  if (urls?.length)
+    return urls
   return []
 }

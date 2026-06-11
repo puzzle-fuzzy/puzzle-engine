@@ -1,10 +1,11 @@
-import { useState, type FormEvent } from 'react'
-import { Link, useNavigate } from 'react-router'
+import type { FormEvent } from 'react'
 import { Loader2 } from 'lucide-react'
+import { useState } from 'react'
+import { Link, useNavigate } from 'react-router'
 import { useAuth } from '../auth/AuthContext'
+import { Button } from '../components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card'
 import { Input } from '../components/ui/input'
-import { Button } from '../components/ui/button'
 
 export default function Login() {
   const navigate = useNavigate()
@@ -28,9 +29,11 @@ export default function Login() {
     try {
       await login(email.trim(), password)
       navigate('/')
-    } catch (err: any) {
+    }
+    catch (err: any) {
       setError(err?.message || '登录失败，请重试')
-    } finally {
+    }
+    finally {
       setLoading(false)
     }
   }
@@ -59,7 +62,7 @@ export default function Login() {
                 type="email"
                 placeholder="you@example.com"
                 value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                onChange={e => setEmail(e.target.value)}
                 disabled={loading}
                 autoComplete="email"
               />
@@ -74,7 +77,7 @@ export default function Login() {
                 type="password"
                 placeholder="••••••"
                 value={password}
-                onChange={(e) => setPassword(e.target.value)}
+                onChange={e => setPassword(e.target.value)}
                 disabled={loading}
                 autoComplete="current-password"
               />
@@ -86,7 +89,8 @@ export default function Login() {
             </Button>
 
             <p className="text-center text-sm text-muted-foreground">
-              还没有账户？{' '}
+              还没有账户？
+              {' '}
               <Link to="/register" className="text-primary underline-offset-4 hover:underline">
                 注册
               </Link>

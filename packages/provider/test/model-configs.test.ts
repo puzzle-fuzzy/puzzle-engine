@@ -1,5 +1,5 @@
-import { describe, it, expect } from 'bun:test'
-import { MODELS, getModelById, getModelsByCategory } from '../src/model-configs'
+import { describe, expect, it } from 'bun:test'
+import { getModelById, getModelsByCategory, MODELS } from '../src/model-configs'
 
 describe('getModelById', () => {
   it('返回已存在的模型配置', () => {
@@ -84,7 +84,8 @@ describe('模型配置完整性', () => {
     for (const model of Object.values(MODELS)) {
       if (model.category === 'video') {
         expect(model.async, `${model.id} 应为异步`).toBe(true)
-      } else {
+      }
+      else {
         expect(model.async, `${model.id} 应为同步`).toBe(false)
       }
     }

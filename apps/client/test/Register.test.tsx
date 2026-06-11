@@ -1,9 +1,10 @@
-import { describe, it, expect, vi } from 'vitest'
+import type { AuthContextValue } from '../src/auth/AuthContext'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import Register from '../Register'
-import { AuthContext, type AuthContextValue } from '../../auth/AuthContext'
-import { MemoryRouter, Routes, Route } from 'react-router'
+import { MemoryRouter, Route, Routes } from 'react-router'
+import { describe, expect, it, vi } from 'vitest'
+import { AuthContext } from '../src/auth/AuthContext'
+import Register from '../src/pages/Register'
 
 function renderRegister(authOverrides: Partial<AuthContextValue> = {}) {
   const mockRegister = vi.fn()
@@ -31,7 +32,7 @@ function renderRegister(authOverrides: Partial<AuthContextValue> = {}) {
   return { ...result, mockRegister }
 }
 
-describe('Register 页面', () => {
+describe('register 页面', () => {
   it('渲染注册表单', () => {
     renderRegister()
 

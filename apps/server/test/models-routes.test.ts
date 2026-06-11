@@ -1,5 +1,5 @@
-import { describe, it, expect, mock, beforeEach } from 'bun:test'
 import { treaty } from '@elysia/eden'
+import { beforeEach, describe, expect, it, mock } from 'bun:test'
 
 /**
  * 模型列表路由测试
@@ -9,20 +9,35 @@ import { treaty } from '@elysia/eden'
 
 const MOCK_MODELS: Record<string, any> = {
   'qwen-max': {
-    id: 'qwen-max', name: '千问 Max', category: 'text', type: 'generation',
-    description: '最强文本', endpoint: 'https://api.test', async: false,
+    id: 'qwen-max',
+    name: '千问 Max',
+    category: 'text',
+    type: 'generation',
+    description: '最强文本',
+    endpoint: 'https://api.test',
+    async: false,
     pricing: { inputPrice: 2.4, outputPrice: 9.6, unit: 'token', note: '标准定价' },
     parameters: [{ name: 'prompt', type: 'text', required: true }],
   },
   'qwen-image-2.0-pro': {
-    id: 'qwen-image-2.0-pro', name: '千问图像', category: 'image', type: 'generation',
-    description: '最强图像', endpoint: 'https://api.test', async: false,
+    id: 'qwen-image-2.0-pro',
+    name: '千问图像',
+    category: 'image',
+    type: 'generation',
+    description: '最强图像',
+    endpoint: 'https://api.test',
+    async: false,
     pricing: { inputPrice: 0.25, unit: 'image', note: '0.25元/张' },
     parameters: [{ name: 'prompt', type: 'text', required: true }],
   },
   'happyhorse-1.0-t2v': {
-    id: 'happyhorse-1.0-t2v', name: '视频', category: 'video', type: 'generation',
-    description: '视频生成', endpoint: 'https://api.test', async: true,
+    id: 'happyhorse-1.0-t2v',
+    name: '视频',
+    category: 'video',
+    type: 'generation',
+    description: '视频生成',
+    endpoint: 'https://api.test',
+    async: true,
     pricing: { inputPrice: 0.9, inputPrice1080: 1.6, unit: 'video' },
     parameters: [{ name: 'prompt', type: 'text', required: true }],
   },
@@ -32,6 +47,7 @@ mock.module('@excuse/provider', () => ({
   MODELS: MOCK_MODELS,
 }))
 
+// eslint-disable-next-line import/first
 import { modelsRoutes } from '../src/routes/models'
 
 describe('models routes', () => {

@@ -1,10 +1,11 @@
-import { useState, type FormEvent } from 'react'
-import { Link, useNavigate } from 'react-router'
+import type { FormEvent } from 'react'
 import { Loader2 } from 'lucide-react'
+import { useState } from 'react'
+import { Link, useNavigate } from 'react-router'
 import { useAuth } from '../auth/AuthContext'
+import { Button } from '../components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card'
 import { Input } from '../components/ui/input'
-import { Button } from '../components/ui/button'
 
 export default function Register() {
   const navigate = useNavigate()
@@ -40,9 +41,11 @@ export default function Register() {
     try {
       await register(username.trim(), email.trim(), password)
       navigate('/')
-    } catch (err: any) {
+    }
+    catch (err: any) {
       setError(err?.message || '注册失败，请重试')
-    } finally {
+    }
+    finally {
       setLoading(false)
     }
   }
@@ -71,7 +74,7 @@ export default function Register() {
                 type="text"
                 placeholder="your_name"
                 value={username}
-                onChange={(e) => setUsername(e.target.value)}
+                onChange={e => setUsername(e.target.value)}
                 disabled={loading}
                 autoComplete="username"
               />
@@ -86,7 +89,7 @@ export default function Register() {
                 type="email"
                 placeholder="you@example.com"
                 value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                onChange={e => setEmail(e.target.value)}
                 disabled={loading}
                 autoComplete="email"
               />
@@ -101,7 +104,7 @@ export default function Register() {
                 type="password"
                 placeholder="至少 6 个字符"
                 value={password}
-                onChange={(e) => setPassword(e.target.value)}
+                onChange={e => setPassword(e.target.value)}
                 disabled={loading}
                 autoComplete="new-password"
               />
@@ -116,7 +119,7 @@ export default function Register() {
                 type="password"
                 placeholder="再次输入密码"
                 value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
+                onChange={e => setConfirmPassword(e.target.value)}
                 disabled={loading}
                 autoComplete="new-password"
               />
@@ -128,7 +131,8 @@ export default function Register() {
             </Button>
 
             <p className="text-center text-sm text-muted-foreground">
-              已有账户？{' '}
+              已有账户？
+              {' '}
               <Link to="/login" className="text-primary underline-offset-4 hover:underline">
                 登录
               </Link>

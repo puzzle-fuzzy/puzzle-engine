@@ -14,6 +14,11 @@ export interface GenerationNotifyPayload {
   outputResult?: Record<string, unknown>
   errorMessage?: string
   cost?: Record<string, unknown>
+  /** Canvas pipeline metadata (present when source === 'canvas') */
+  canvasMeta?: {
+    projectId: string
+    shotId: string
+  }
 }
 
 /**

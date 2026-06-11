@@ -6,11 +6,11 @@ export interface ModelParameter {
   description?: string
   required?: boolean
   defaultValue?: unknown
-  options?: { label: string; value: unknown }[]
+  options?: { label: string, value: unknown }[]
   min?: number
   max?: number
   /** 存在则渲染为上传控件而非文本框。accept 为 MIME 类型（如 'image/*'） */
-  mediaUpload?: { accept: string; multiple?: boolean }
+  mediaUpload?: { accept: string, multiple?: boolean }
 }
 
 export interface ModelPricing {
@@ -25,12 +25,12 @@ export interface ModelPricing {
  * 参数到请求体的映射规则
  * 让客户端无需 model-name 分支即可构建正确的 API 请求
  */
-export type InputMapping =
-  | { target: 'prompt' }                     // → input.prompt（或 chat/image 模型的 messages content）
-  | { target: 'media'; mediaType: string }   // → input.media[].{type, url}
-  | { target: 'mediaField'; field: string }  // → input.<field>（如 audio_url、media_type）
-  | { target: 'parameter' }                  // → parameters.<paramName>
-  | { target: 'ignored' }                    // 仅 UI 展示，不发 API
+export type InputMapping
+  = | { target: 'prompt' } // → input.prompt（或 chat/image 模型的 messages content）
+    | { target: 'media', mediaType: string } // → input.media[].{type, url}
+    | { target: 'mediaField', field: string } // → input.<field>（如 audio_url、media_type）
+    | { target: 'parameter' } // → parameters.<paramName>
+    | { target: 'ignored' } // 仅 UI 展示，不发 API
 
 /**
  * 请求体形状

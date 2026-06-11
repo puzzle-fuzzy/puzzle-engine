@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'bun:test'
+import { afterEach, describe, expect, it } from 'bun:test'
 import { createLogger } from '../src/logger'
 
 describe('createLogger', () => {
@@ -9,7 +9,8 @@ describe('createLogger', () => {
     process.env.NODE_ENV = originalEnv
     if (originalLogLevel) {
       process.env.LOG_LEVEL = originalLogLevel
-    } else {
+    }
+    else {
       delete process.env.LOG_LEVEL
     }
   })

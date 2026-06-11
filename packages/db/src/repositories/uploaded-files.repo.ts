@@ -1,7 +1,7 @@
-import { eq, inArray } from 'drizzle-orm'
-import { uploadedFiles } from '../schema'
-import { getDb } from '../db'
 import type { UploadedFileInsert } from '../types'
+import { eq, inArray } from 'drizzle-orm'
+import { getDb } from '../db'
+import { uploadedFiles } from '../schema'
 
 /**
  * 创建上传文件记录
@@ -27,7 +27,8 @@ export async function getUploadedFileById(id: string) {
  * 按 ID 列表批量查询上传文件记录
  */
 export async function getUploadedFilesByIds(ids: string[]) {
-  if (ids.length === 0) return []
+  if (ids.length === 0)
+    return []
   return getDb()
     .select()
     .from(uploadedFiles)

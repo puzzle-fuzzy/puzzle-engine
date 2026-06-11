@@ -7,8 +7,8 @@ declare module 'ali-oss' {
       region: string
       endpoint?: string
     })
-    put(key: string, data: Buffer | Blob | string, options?: { headers?: Record<string, string> }): Promise<{ url: string; name: string }>
-    get(key: string): Promise<{ content: Buffer; res: any }>
+    put(key: string, data: Buffer | Blob | string, options?: { headers?: Record<string, string> }): Promise<{ url: string, name: string }>
+    get(key: string): Promise<{ content: Buffer, res: any }>
     delete(key: string): Promise<any>
   }
   export default OSS

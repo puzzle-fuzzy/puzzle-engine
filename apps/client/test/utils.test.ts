@@ -1,5 +1,5 @@
-import { describe, it, expect } from 'vitest'
-import { cn } from '../utils'
+import { describe, expect, it } from 'vitest'
+import { cn } from '../src/lib/utils'
 
 describe('cn', () => {
   it('合并多个类名', () => {

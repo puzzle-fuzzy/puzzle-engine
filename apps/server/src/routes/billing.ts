@@ -1,6 +1,6 @@
-import { Elysia } from 'elysia'
-import { getCostRecords } from '@excuse/db'
 import { aggregateStatistics } from '@excuse/billing'
+import { getCostRecords } from '@excuse/db'
+import { Elysia } from 'elysia'
 
 export const billingRoutes = new Elysia({ prefix: '/api/billing' })
   .get('/statistics', async () => {

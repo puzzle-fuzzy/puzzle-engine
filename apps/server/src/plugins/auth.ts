@@ -1,7 +1,8 @@
-import { Elysia, t } from 'elysia'
-import { jwt } from '@elysia/jwt'
-import { bearer } from '@elysia/bearer'
+import type { Elysia } from 'elysia'
 import type { ServerConfig } from '../config'
+import { bearer } from '@elysia/bearer'
+import { jwt } from '@elysia/jwt'
+import { t } from 'elysia'
 
 /**
  * 认证插件 — JWT + Bearer token 解析
@@ -21,28 +22,30 @@ import type { ServerConfig } from '../config'
  *   - bearer: Bearer token 原文（来自 @elysia/bearer）
  *   - userId: 从 JWT sub 提取的用户 ID（未认证时为 null）
  */
-export const createAuthPlugin = (config: ServerConfig) => (app: Elysia) =>
-  app
-    .use(bearer())
-    .use(
-      jwt({
-        name: 'jwt',
-        secret: config.jwtSecret,
-        schema: t.Object({
-          sub: t.String(),
+export function createAuthPlugin(config: ServerConfig) {
+  return (app: Elysia) =>
+    app
+      .use(bearer())
+      .use(
+        jwt({
+          name: 'jwt',
+          secret: config.jwtSecret,
+          schema: t.Object({
+            sub: t.String(),
+          }),
+          exp: config.jwtExpiresIn,
         }),
-        exp: config.jwtExpiresIn,
-      }),
-    )
-    .derive(async ({ jwt, bearer, query }) => {
+      )
+      .derive(async ({ jwt, bearer, query }) => {
       // 优先使用 Bearer header，回退到 query token（SSE 场景）
-      const token = bearer || (query as Record<string, unknown>)?.token as string | undefined
-      if (!token) {
-        return { userId: null }
-      }
-      const payload = await jwt.verify(token)
-      if (!payload) {
-        return { userId: null }
-      }
-      return { userId: payload.sub }
-    })
+        const token = bearer || (query as Record<string, unknown>)?.token as string | undefined
+        if (!token) {
+          return { userId: null }
+        }
+        const payload = await jwt.verify(token)
+        if (!payload) {
+          return { userId: null }
+        }
+        return { userId: payload.sub }
+      })
+}

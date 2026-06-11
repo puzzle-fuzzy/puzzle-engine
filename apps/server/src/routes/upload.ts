@@ -1,7 +1,7 @@
-import { Elysia, t } from 'elysia'
+import type { ServerConfig } from '../config'
 import { createUploadedFile } from '@excuse/db'
 import { AssetStorage } from '@excuse/provider'
-import type { ServerConfig } from '../config'
+import { Elysia, t } from 'elysia'
 import { createAuthPlugin } from '../plugins/auth'
 
 export function createUploadRoutes(config: ServerConfig) {

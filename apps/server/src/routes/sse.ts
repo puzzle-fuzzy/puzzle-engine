@@ -1,7 +1,7 @@
+import type { ServerConfig } from '../config'
 import { Elysia, sse, t } from 'elysia'
 import { createAuthPlugin } from '../plugins/auth'
 import { addConnection, removeConnection } from '../services/sse-manager'
-import type { ServerConfig } from '../config'
 
 // ===== Push → Pull 适配器 =====
 // Elysia 的 sse() 使用 generator（pull 模式），
@@ -28,7 +28,8 @@ function createAsyncChannel() {
       }
     },
     async next(): Promise<SSEMessage> {
-      if (queue.length > 0) return queue.shift()!
+      if (queue.length > 0)
+        return queue.shift()!
       return new Promise<SSEMessage>((resolve) => {
         resolver = resolve
       })
@@ -53,7 +54,8 @@ export function createSSERoutes(config: ServerConfig) {
     .use(createAuthPlugin(config))
     .get('/sse', async function* ({ userId }) {
       // 未认证时直接返回（generator 无 yield 时 Elysia 自动转普通响应）
-      if (!userId) return
+      if (!userId)
+        return
 
       const channel = createAsyncChannel()
       const sender = (event: string, data: unknown) => {

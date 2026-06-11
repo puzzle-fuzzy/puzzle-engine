@@ -1,6 +1,6 @@
-import { Outlet, Navigate } from 'react-router'
-import { useAuth } from './AuthContext'
 import { Loader2 } from 'lucide-react'
+import { Navigate, Outlet } from 'react-router'
+import { useAuth } from './AuthContext'
 
 /**
  * 路由守卫 — 未登录时重定向到 /login

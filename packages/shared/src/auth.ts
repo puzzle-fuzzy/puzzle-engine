@@ -1,4 +1,4 @@
-import type { Serialize, AccountRow } from '@excuse/db'
+import type { AccountRow, Serialize } from '@excuse/db'
 
 /**
  * API 返回的用户信息类型（password 已剥离，Date → string）

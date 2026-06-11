@@ -1,5 +1,19 @@
-import { describe, it, expect, afterEach } from 'bun:test'
+import { afterEach, describe, expect, it, mock } from 'bun:test'
 import { loadConfig } from '../src/config'
+
+// Mock heavy dependencies to avoid drizzle-orm isFalse import error
+mock.module('@excuse/db', () => ({
+  markGenerationFailed: async () => {},
+  markGenerationProcessing: async () => {},
+  markGenerationSucceeded: async () => {},
+  notifyGenerationStatus: async () => {},
+}))
+
+mock.module('@excuse/provider', () => ({
+  DashScopeClient: class {},
+  AssetStorage: class {},
+  getModelById: () => undefined,
+}))
 
 describe('loadConfig', () => {
   const originalEnv = { ...process.env }

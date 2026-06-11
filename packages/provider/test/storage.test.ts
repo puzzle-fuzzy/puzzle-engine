@@ -1,8 +1,7 @@
-import { describe, it, expect, mock, beforeEach } from 'bun:test'
-import { AssetStorage } from '../src/storage'
-import { mkdir, writeFile, readFile } from 'node:fs/promises'
-import { join, dirname } from 'node:path'
 import type { StorageConfig } from '../src/types'
+import { mkdir, writeFile } from 'node:fs/promises'
+import { beforeEach, describe, expect, it } from 'bun:test'
+import { AssetStorage } from '../src/storage'
 
 // ── 静态方法测试（无 IO） ─────────────────────────────────
 
@@ -112,10 +111,10 @@ describe('AssetStorage 实例方法', () => {
       const buffer = Buffer.from('test-content')
 
       // mock mkdir 和 writeFile
-      const originalMkdir = mkdir
-      const originalWriteFile = writeFile
+      const _originalMkdir = mkdir
+      const _originalWriteFile = writeFile
 
-      const { mkdir: rm } = await import('node:fs/promises')
+      const { mkdir: _rm } = await import('node:fs/promises')
       // 用临时目录实际测试（/tmp 在所有系统上可写）
       const realStorage = new AssetStorage({
         storageRoot: '/tmp/excuse-test-storage',

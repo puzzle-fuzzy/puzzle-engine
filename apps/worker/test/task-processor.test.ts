@@ -1,6 +1,20 @@
-import { describe, it, expect } from 'bun:test'
-import { createTaskProcessor, extractVideoUrl } from '../src/task-processor'
 import type { TaskProcessorDeps } from '../src/task-processor'
+import { describe, expect, it, mock } from 'bun:test'
+import { createTaskProcessor, extractVideoUrl } from '../src/task-processor'
+
+// Mock heavy dependencies to avoid drizzle-orm isFalse import error
+mock.module('@excuse/db', () => ({
+  markGenerationFailed: async () => {},
+  markGenerationProcessing: async () => {},
+  markGenerationSucceeded: async () => {},
+  notifyGenerationStatus: async () => {},
+}))
+
+mock.module('@excuse/provider', () => ({
+  DashScopeClient: class {},
+  AssetStorage: class {},
+  getModelById: () => undefined,
+}))
 
 // ─── 测试用 mock 依赖 ──────────────────────────────────
 
@@ -11,6 +25,7 @@ function createMockDeps(overrides: Partial<TaskProcessorDeps> = {}): TaskProcess
     markGenerationFailed: async () => {},
     markGenerationSucceeded: async () => {},
     markGenerationProcessing: async () => {},
+    notifyGenerationStatus: async () => {},
     ...overrides,
   }
 }
@@ -33,6 +48,7 @@ function createTestProcessor(deps: Partial<TaskProcessorDeps> = {}) {
 function createRecord(overrides: Record<string, unknown> = {}) {
   return {
     id: 'rec-001',
+    accountId: 'acc-001',
     taskId: 'task-001',
     model: 'happyhorse-1.0-t2v',
     status: 'pending',
@@ -89,7 +105,7 @@ describe('processTask', () => {
   // ── 超时 ──────────────────────────────────────────
 
   it('should mark as failed when task is stale', async () => {
-    const failed: Array<{ id: string; msg: string }> = []
+    const failed: Array<{ id: string, msg: string }> = []
     const deps = createMockDeps({
       markGenerationFailed: async (id, msg) => {
         failed.push({ id, msg })
@@ -111,7 +127,7 @@ describe('processTask', () => {
   // ── SUCCEEDED ─────────────────────────────────────
 
   it('should download, calculate cost and mark succeeded', async () => {
-    const succeeded: Array<{ id: string; output: Record<string, unknown> }> = []
+    const succeeded: Array<{ id: string, output: Record<string, unknown> }> = []
     const downloaded: string[][] = []
     const deps = createMockDeps({
       queryTask: async () => ({
@@ -148,7 +164,7 @@ describe('processTask', () => {
         status: 'SUCCEEDED',
         output: {},
       }),
-      downloadAndMap: async (urls) => urls,
+      downloadAndMap: async urls => urls,
       markGenerationSucceeded: async (id, _output, _cost) => {
         succeeded.push({ id })
       },
@@ -164,7 +180,7 @@ describe('processTask', () => {
   // ── FAILED ────────────────────────────────────────
 
   it('should mark as failed with error message', async () => {
-    const failed: Array<{ id: string; msg: string }> = []
+    const failed: Array<{ id: string, msg: string }> = []
     const deps = createMockDeps({
       queryTask: async () => ({
         status: 'FAILED',
@@ -184,7 +200,7 @@ describe('processTask', () => {
   })
 
   it('should use default error message when missing', async () => {
-    const failed: Array<{ id: string; msg: string }> = []
+    const failed: Array<{ id: string, msg: string }> = []
     const deps = createMockDeps({
       queryTask: async () => ({
         status: 'FAILED',

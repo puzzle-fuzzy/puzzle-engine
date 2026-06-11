@@ -1,11 +1,7 @@
-import { describe, it, expect } from 'vitest'
-import { useAuth, AuthContext } from '../AuthContext'
-
-/**
- * useAuth hook 测试
- */
-import { renderHook } from '@testing-library/react'
 import type { ReactNode } from 'react'
+import { renderHook } from '@testing-library/react'
+import { describe, expect, it } from 'vitest'
+import { AuthContext, useAuth } from '../src/auth/AuthContext'
 
 describe('useAuth', () => {
   it('在 AuthProvider 内使用时返回 context 值', () => {

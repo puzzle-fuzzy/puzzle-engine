@@ -1,14 +1,16 @@
-import { useState, useEffect, useCallback, type ReactNode } from 'react'
-import { useNavigate } from 'react-router'
 import type { AuthUser } from '@excuse/shared'
-import { AuthContext, type AuthContextValue } from './AuthContext'
+import type { ReactNode } from 'react'
+import type { AuthContextValue } from './AuthContext'
+import { useCallback, useEffect, useState } from 'react'
+import { useNavigate } from 'react-router'
 import {
-  setAuthToken,
+  fetchCurrentUser,
   getAuthToken,
   loginRequest,
   registerRequest,
-  fetchCurrentUser,
+  setAuthToken,
 } from '../api/client'
+import { AuthContext } from './AuthContext'
 
 interface AuthProviderProps {
   children: ReactNode
@@ -31,7 +33,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
       .then((res) => {
         if (res.success && res.user) {
           setUser(res.user)
-        } else {
+        }
+        else {
           // token 无效，清除
           setAuthToken(null)
         }

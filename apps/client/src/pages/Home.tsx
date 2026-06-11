@@ -1,12 +1,11 @@
-import { useEffect } from 'react'
 import type { App } from '../../../server/src'
 import { treaty } from '@elysia/eden'
+import { useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 
 const app = treaty<App>('localhost:5007')
 
 function Home() {
-
   useEffect(() => {
     app.api.health.get().then(({ data }) => {
       console.log(data)

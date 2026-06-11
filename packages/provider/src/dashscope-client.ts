@@ -1,7 +1,7 @@
-import type { DashScopeConfig, ProviderResult, TaskStatus } from './types'
 import type { InputMapping, ModelConfig } from '@excuse/shared'
-import { getModelById } from './model-configs'
+import type { DashScopeConfig, ProviderResult, TaskStatus } from './types'
 import { parseDashScopeError } from './dashscope-errors'
+import { getModelById } from './model-configs'
 
 export class DashScopeClient {
   private config: DashScopeConfig
@@ -45,9 +45,11 @@ export class DashScopeClient {
     for (const [paramName, mapping] of Object.entries(inputMapping)) {
       const value = params[paramName]
       // 跳过未提供、null 的参数
-      if (value === undefined || value === null) continue
+      if (value === undefined || value === null)
+        continue
       // 跳过空字符串
-      if (typeof value === 'string' && value.trim() === '') continue
+      if (typeof value === 'string' && value.trim() === '')
+        continue
       // 保留 false / 0 等有意义的 falsy 值
 
       switch (mapping.target) {

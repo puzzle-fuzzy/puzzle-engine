@@ -15,13 +15,14 @@
  * 而是直接用底层 SQL 控制 BEGIN/ROLLBACK，让测试完全掌控事务生命周期。
  */
 
-import { drizzle, type PostgresJsDatabase } from 'drizzle-orm/postgres-js'
+import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
+import { resolve } from 'node:path'
+import { drizzle } from 'drizzle-orm/postgres-js'
 import { migrate } from 'drizzle-orm/postgres-js/migrator'
 import postgres from 'postgres'
-import * as schema from '../../src/schema'
 import { setDb } from '../../src/db'
 
-import { resolve } from 'node:path'
+import * as schema from '../../src/schema'
 
 const TEST_DATABASE_URL = 'postgres://excuse:excuse_dev@localhost:5433/excuse_test'
 const MIGRATIONS_FOLDER = resolve(import.meta.dir, '../../drizzle')

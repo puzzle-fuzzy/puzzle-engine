@@ -1,7 +1,8 @@
-import { useState, useEffect } from 'react'
+import type { BillingStatistics } from '@/api/client'
+import { Calendar, CalendarDays, DollarSign, TrendingUp } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { fetchBillingStatistics } from '@/api/client'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { DollarSign, TrendingUp, Calendar, CalendarDays } from 'lucide-react'
-import { fetchBillingStatistics, type BillingStatistics } from '@/api/client'
 
 const CATEGORY_LABELS: Record<string, string> = {
   text: '文本生成',
@@ -21,8 +22,9 @@ export default function Billing() {
   const [stats, setStats] = useState<BillingStatistics | null>(null)
 
   useEffect(() => {
-    fetchBillingStatistics().then(data => {
-      if (data.success) setStats(data.statistics)
+    fetchBillingStatistics().then((data) => {
+      if (data.success)
+        setStats(data.statistics)
     }).catch(() => {})
   }, [])
 
@@ -58,7 +60,10 @@ export default function Billing() {
             <CardContent className="flex items-center gap-3 p-4">
               <Icon className="size-5 text-muted-foreground" />
               <div>
-                <p className="text-2xl font-bold">¥{value.toFixed(2)}</p>
+                <p className="text-2xl font-bold">
+                  ¥
+                  {value.toFixed(2)}
+                </p>
                 <p className="text-xs text-muted-foreground">{label}</p>
               </div>
             </CardContent>
@@ -73,24 +78,33 @@ export default function Billing() {
             <CardTitle className="text-sm">类别分布</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
-            {stats.byCategory.length === 0 ? (
-              <p className="text-sm text-muted-foreground">暂无数据</p>
-            ) : (
-              stats.byCategory.map((item) => (
-                <div key={item.category} className="space-y-1">
-                  <div className="flex items-center justify-between text-sm">
-                    <span>{CATEGORY_LABELS[item.category] || item.category}</span>
-                    <span className="text-muted-foreground">¥{item.total.toFixed(4)} ({item.percentage}%)</span>
-                  </div>
-                  <div className="h-2 overflow-hidden rounded-full bg-muted">
-                    <div
-                      className={`h-full rounded-full ${CATEGORY_COLORS[item.category] || 'bg-gray-500'}`}
-                      style={{ width: `${item.percentage}%` }}
-                    />
-                  </div>
-                </div>
-              ))
-            )}
+            {stats.byCategory.length === 0
+              ? (
+                  <p className="text-sm text-muted-foreground">暂无数据</p>
+                )
+              : (
+                  stats.byCategory.map(item => (
+                    <div key={item.category} className="space-y-1">
+                      <div className="flex items-center justify-between text-sm">
+                        <span>{CATEGORY_LABELS[item.category] || item.category}</span>
+                        <span className="text-muted-foreground">
+                          ¥
+                          {item.total.toFixed(4)}
+                          {' '}
+                          (
+                          {item.percentage}
+                          %)
+                        </span>
+                      </div>
+                      <div className="h-2 overflow-hidden rounded-full bg-muted">
+                        <div
+                          className={`h-full rounded-full ${CATEGORY_COLORS[item.category] || 'bg-gray-500'}`}
+                          style={{ width: `${item.percentage}%` }}
+                        />
+                      </div>
+                    </div>
+                  ))
+                )}
           </CardContent>
         </Card>
 
@@ -100,24 +114,33 @@ export default function Billing() {
             <CardTitle className="text-sm">模型分布</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
-            {stats.byModel.length === 0 ? (
-              <p className="text-sm text-muted-foreground">暂无数据</p>
-            ) : (
-              stats.byModel.map((item) => (
-                <div key={item.model} className="space-y-1">
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="truncate">{item.model}</span>
-                    <span className="text-muted-foreground">¥{item.total.toFixed(4)} ({item.percentage}%)</span>
-                  </div>
-                  <div className="h-2 overflow-hidden rounded-full bg-muted">
-                    <div
-                      className="h-full rounded-full bg-primary"
-                      style={{ width: `${item.percentage}%` }}
-                    />
-                  </div>
-                </div>
-              ))
-            )}
+            {stats.byModel.length === 0
+              ? (
+                  <p className="text-sm text-muted-foreground">暂无数据</p>
+                )
+              : (
+                  stats.byModel.map(item => (
+                    <div key={item.model} className="space-y-1">
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="truncate">{item.model}</span>
+                        <span className="text-muted-foreground">
+                          ¥
+                          {item.total.toFixed(4)}
+                          {' '}
+                          (
+                          {item.percentage}
+                          %)
+                        </span>
+                      </div>
+                      <div className="h-2 overflow-hidden rounded-full bg-muted">
+                        <div
+                          className="h-full rounded-full bg-primary"
+                          style={{ width: `${item.percentage}%` }}
+                        />
+                      </div>
+                    </div>
+                  ))
+                )}
           </CardContent>
         </Card>
       </div>
@@ -128,28 +151,31 @@ export default function Billing() {
           <CardTitle className="text-sm">30 天趋势</CardTitle>
         </CardHeader>
         <CardContent>
-          {stats.dailyTrend.every(d => d.total === 0) ? (
-            <p className="text-sm text-muted-foreground">暂无数据</p>
-          ) : (
-            <div className="flex items-end gap-1 h-32">
-              {stats.dailyTrend.map((item) => {
-                const maxTotal = Math.max(...stats.dailyTrend.map(d => d.total), 0.01)
-                const height = Math.max((item.total / maxTotal) * 100, 1)
-                return (
-                  <div
-                    key={item.date}
-                    className="group relative flex-1 rounded-t bg-primary/20 hover:bg-primary/40 transition-colors"
-                    style={{ height: `${height}%` }}
-                    title={`${item.date}: ¥${item.total.toFixed(4)}`}
-                  >
-                    <div className="absolute -top-6 left-1/2 -translate-x-1/2 hidden group-hover:block whitespace-nowrap rounded bg-black/80 px-1.5 py-0.5 text-[10px] text-white">
-                      ¥{item.total.toFixed(2)}
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-          )}
+          {stats.dailyTrend.every(d => d.total === 0)
+            ? (
+                <p className="text-sm text-muted-foreground">暂无数据</p>
+              )
+            : (
+                <div className="flex items-end gap-1 h-32">
+                  {stats.dailyTrend.map((item) => {
+                    const maxTotal = Math.max(...stats.dailyTrend.map(d => d.total), 0.01)
+                    const height = Math.max((item.total / maxTotal) * 100, 1)
+                    return (
+                      <div
+                        key={item.date}
+                        className="group relative flex-1 rounded-t bg-primary/20 hover:bg-primary/40 transition-colors"
+                        style={{ height: `${height}%` }}
+                        title={`${item.date}: ¥${item.total.toFixed(4)}`}
+                      >
+                        <div className="absolute -top-6 left-1/2 -translate-x-1/2 hidden group-hover:block whitespace-nowrap rounded bg-black/80 px-1.5 py-0.5 text-[10px] text-white">
+                          ¥
+                          {item.total.toFixed(2)}
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
         </CardContent>
       </Card>
     </div>

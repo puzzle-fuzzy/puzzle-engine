@@ -1,10 +1,10 @@
-import { describe, it, expect, vi } from 'vitest'
+import type { AuthContextValue } from '../src/auth/AuthContext'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import Login from '../Login'
-import { AuthContext, type AuthContextValue } from '../../auth/AuthContext'
-import { MemoryRouter, Routes, Route } from 'react-router'
-import type { ReactNode } from 'react'
+import { MemoryRouter, Route, Routes } from 'react-router'
+import { describe, expect, it, vi } from 'vitest'
+import { AuthContext } from '../src/auth/AuthContext'
+import Login from '../src/pages/Login'
 
 function renderLogin(authOverrides: Partial<AuthContextValue> = {}) {
   const mockLogin = vi.fn()
@@ -32,7 +32,7 @@ function renderLogin(authOverrides: Partial<AuthContextValue> = {}) {
   return { ...result, mockLogin }
 }
 
-describe('Login 页面', () => {
+describe('login 页面', () => {
   it('渲染登录表单', () => {
     renderLogin()
 

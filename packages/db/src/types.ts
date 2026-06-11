@@ -1,5 +1,5 @@
 import type { InferInsertModel, InferSelectModel } from 'drizzle-orm'
-import type { accounts, generationRecords, uploadedFiles, generationCategoryEnum, generationStatusEnum } from './schema'
+import type { accounts, canvasCharacters, canvasContinuityReports, canvasLocations, canvasProjects, canvasProjectStatusEnum, canvasShots, canvasShotStatusEnum, generationCategoryEnum, generationRecords, generationStatusEnum, uploadedFiles } from './schema'
 
 // ===== Drizzle 行类型（从 schema 自动推导） =====
 
@@ -21,6 +21,36 @@ export type UploadedFileRow = InferSelectModel<typeof uploadedFiles>
 /** uploaded_files 表 — 插入参数类型 */
 export type UploadedFileInsert = InferInsertModel<typeof uploadedFiles>
 
+/** canvas_projects 表 — 查询结果行类型 */
+export type CanvasProjectRow = InferSelectModel<typeof canvasProjects>
+
+/** canvas_projects 表 — 插入参数类型 */
+export type CanvasProjectInsert = InferInsertModel<typeof canvasProjects>
+
+/** canvas_characters 表 — 查询结果行类型 */
+export type CanvasCharacterRow = InferSelectModel<typeof canvasCharacters>
+
+/** canvas_characters 表 — 插入参数类型 */
+export type CanvasCharacterInsert = InferInsertModel<typeof canvasCharacters>
+
+/** canvas_locations 表 — 查询结果行类型 */
+export type CanvasLocationRow = InferSelectModel<typeof canvasLocations>
+
+/** canvas_locations 表 — 插入参数类型 */
+export type CanvasLocationInsert = InferInsertModel<typeof canvasLocations>
+
+/** canvas_shots 表 — 查询结果行类型 */
+export type CanvasShotRow = InferSelectModel<typeof canvasShots>
+
+/** canvas_shots 表 — 插入参数类型 */
+export type CanvasShotInsert = InferInsertModel<typeof canvasShots>
+
+/** canvas_continuity_reports 表 — 查询结果行类型 */
+export type CanvasContinuityRow = InferSelectModel<typeof canvasContinuityReports>
+
+/** canvas_continuity_reports 表 — 插入参数类型 */
+export type CanvasContinuityInsert = InferInsertModel<typeof canvasContinuityReports>
+
 // ===== 枚举类型（从 pgEnum 定义推断） =====
 
 /** 生成内容类别：从 pgEnum 定义推断 */
@@ -28,6 +58,12 @@ export type GenerationCategory = typeof generationCategoryEnum.enumValues extend
 
 /** 生成任务状态：从 pgEnum 定义推断 */
 export type GenerationStatus = typeof generationStatusEnum.enumValues extends (infer T)[] ? T : never
+
+/** 画布项目状态：从 pgEnum 定义推断 */
+export type CanvasProjectStatus = typeof canvasProjectStatusEnum.enumValues extends (infer T)[] ? T : never
+
+/** 画布镜头状态：从 pgEnum 定义推断 */
+export type CanvasShotStatus = typeof canvasShotStatusEnum.enumValues extends (infer T)[] ? T : never
 
 // ===== 序列化工具类型 =====
 
@@ -50,6 +86,18 @@ export type GenerationRecordSerialized = Serialize<GenerationRecordRow>
 
 /** uploaded_files 序列化后类型（Date → string） */
 export type UploadedFileSerialized = Serialize<UploadedFileRow>
+
+/** canvas_projects 序列化后类型（Date → string） */
+export type CanvasProjectSerialized = Serialize<CanvasProjectRow>
+
+/** canvas_characters 序列化后类型（Date → string） */
+export type CanvasCharacterSerialized = Serialize<CanvasCharacterRow>
+
+/** canvas_locations 序列化后类型（Date → string） */
+export type CanvasLocationSerialized = Serialize<CanvasLocationRow>
+
+/** canvas_shots 序列化后类型（Date → string） */
+export type CanvasShotSerialized = Serialize<CanvasShotRow>
 
 // ===== 查询过滤条件 =====
 

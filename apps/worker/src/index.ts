@@ -26,7 +26,8 @@ async function main() {
       const records = await pollPendingVideoTasks()
 
       for (const record of records) {
-        if (!running) break // 退出信号检查
+        if (!running)
+          break // 退出信号检查
 
         const taskLogger = logger.child({ taskId: record.taskId })
         const result = await processor.processTask(record)

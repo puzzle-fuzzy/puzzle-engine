@@ -1,7 +1,7 @@
-import { Elysia, t } from 'elysia'
-import { getAccountByEmail, getAccountByUsername, getAccountById, createAccount } from '@excuse/db'
 import type { AccountRow } from '@excuse/db'
 import type { ServerConfig } from '../config'
+import { createAccount, getAccountByEmail, getAccountById, getAccountByUsername } from '@excuse/db'
+import { Elysia, t } from 'elysia'
 import { createAuthPlugin } from '../plugins/auth'
 
 /**

@@ -1,16 +1,16 @@
-import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from 'bun:test'
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'bun:test'
 import {
-  initTestDb,
-  teardownTestDb,
-  beginTestTransaction,
-  rollbackTestTransaction,
-} from './helpers/test-db'
-import {
-  getAccountByEmail,
-  getAccountByUsername,
-  getAccountById,
   createAccount,
+  getAccountByEmail,
+  getAccountById,
+  getAccountByUsername,
 } from '../src/repositories/accounts.repo'
+import {
+  beginTestTransaction,
+  initTestDb,
+  rollbackTestTransaction,
+  teardownTestDb,
+} from './helpers/test-db'
 
 describe('accounts repository', () => {
   let accountId: string

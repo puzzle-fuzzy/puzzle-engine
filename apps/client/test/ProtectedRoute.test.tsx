@@ -1,9 +1,9 @@
-import { describe, it, expect, vi } from 'vitest'
+import type { AuthContextValue } from '../src/auth/AuthContext'
 import { render, screen } from '@testing-library/react'
-import { ProtectedRoute } from '../ProtectedRoute'
-import { AuthContext, type AuthContextValue } from '../AuthContext'
-import { MemoryRouter, Routes, Route } from 'react-router'
-import type { ReactNode } from 'react'
+import { MemoryRouter, Route, Routes } from 'react-router'
+import { describe, expect, it } from 'vitest'
+import { AuthContext } from '../src/auth/AuthContext'
+import { ProtectedRoute } from '../src/auth/ProtectedRoute'
 
 function renderProtectedRoute(authValue: Partial<AuthContextValue>) {
   const defaultValue: AuthContextValue = {
@@ -29,7 +29,7 @@ function renderProtectedRoute(authValue: Partial<AuthContextValue>) {
   )
 }
 
-describe('ProtectedRoute', () => {
+describe('protectedRoute', () => {
   it('用户已登录时渲染子路由', () => {
     renderProtectedRoute({
       user: { id: '1', username: 'testuser', email: 'test@test.com', isActive: true, createdAt: '', updatedAt: '' },

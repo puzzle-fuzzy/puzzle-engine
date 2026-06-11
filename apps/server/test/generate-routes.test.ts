@@ -1,6 +1,6 @@
-import { describe, it, expect, mock, beforeAll, beforeEach } from 'bun:test'
-import { treaty } from '@elysia/eden'
 import type { ServerConfig } from '../src/config'
+import { treaty } from '@elysia/eden'
+import { beforeAll, beforeEach, describe, expect, it, mock } from 'bun:test'
 
 /**
  * 生成路由单元测试
@@ -32,25 +32,33 @@ mock.module('@excuse/db', () => ({
 }))
 
 mock.module('@excuse/provider', () => ({
-  DashScopeClient: function () {
+  DashScopeClient() {
     return { generate: mockGenerate }
   },
   getModelById: (id: string) => {
     const models: Record<string, any> = {
       'qwen-max': {
-        id: 'qwen-max', category: 'text', type: 'generation',
+        id: 'qwen-max',
+        category: 'text',
+        type: 'generation',
         pricing: { inputPrice: 2.4, outputPrice: 9.6, unit: 'token' },
-        parameters: [], requestType: 'chat', inputMapping: { prompt: { target: 'prompt' } },
+        parameters: [],
+        requestType: 'chat',
+        inputMapping: { prompt: { target: 'prompt' } },
       },
       'qwen-image-2.0-pro': {
-        id: 'qwen-image-2.0-pro', category: 'image', type: 'generation',
+        id: 'qwen-image-2.0-pro',
+        category: 'image',
+        type: 'generation',
         pricing: { inputPrice: 0.25, unit: 'image' },
-        parameters: [], requestType: 'image', inputMapping: { prompt: { target: 'prompt' } },
+        parameters: [],
+        requestType: 'image',
+        inputMapping: { prompt: { target: 'prompt' } },
       },
     }
     return models[id]
   },
-  AssetStorage: function () {
+  AssetStorage() {
     return {
       downloadAndMap: mock(() => Promise.resolve(['https://saved.url/img.png'])),
     }
@@ -61,7 +69,8 @@ mock.module('@excuse/billing', () => ({
   calculateCost: mockCalculateCost,
 }))
 
-// mock.module 提升到 import 之前
+// mock.module 提升到 import 之前（Bun 会自动提升 mock.module）
+// eslint-disable-next-line import/first
 import { createGenerateRoutes } from '../src/routes/generate'
 
 // ─── 测试配置 ────────────────────────────────────────────
@@ -99,9 +108,9 @@ function makeRecord(overrides: Record<string, any> = {}) {
 
 // ─── 辅助：获取有效 token ────────────────────────────────
 
-async function getAuthToken(client: ReturnType<typeof treaty>): Promise<string> {
+async function getAuthToken(_client: ReturnType<typeof treaty>): Promise<string> {
   // 直接用 Elysia JWT 签一个 token
-  const { sign } = await import('@elysia/jwt')
+  const { sign: _sign } = await import('@elysia/jwt')
   // 使用 treaty 的方式不太方便直接签名，用一个简单的 workaround
   // 创建一个小 app 来签发 token
   const { Elysia } = await import('elysia')
@@ -211,7 +220,7 @@ describe('generate routes', () => {
         usage: { videoDuration: 5 },
       })
 
-      const { data } = await client.api.generate.post(
+      const { data: _data } = await client.api.generate.post(
         { model: 'qwen-max', parameters: { prompt: '生成视频' } },
         { headers: { Authorization: `Bearer ${token}` } },
       )

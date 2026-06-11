@@ -1,20 +1,20 @@
-import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from 'bun:test'
-import {
-  initTestDb,
-  teardownTestDb,
-  beginTestTransaction,
-  rollbackTestTransaction,
-} from './helpers/test-db'
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'bun:test'
 import {
   createGenerationRecord,
+  getCostRecords,
   getGenerationRecordById,
   listGenerationRecords,
   markGenerationFailed,
   markGenerationProcessing,
   markGenerationSucceeded,
   pollPendingVideoTasks,
-  getCostRecords,
 } from '../src/repositories/generation-records.repo'
+import {
+  beginTestTransaction,
+  initTestDb,
+  rollbackTestTransaction,
+  teardownTestDb,
+} from './helpers/test-db'
 
 describe('generation-records repository', () => {
   let accountId: string
@@ -237,7 +237,7 @@ describe('generation-records repository', () => {
       const costs = await getCostRecords()
       const testCosts = costs.filter(c => c.model === 'qwen-vl')
       expect(testCosts.length).toBeGreaterThanOrEqual(2)
-      testCosts.forEach(c => {
+      testCosts.forEach((c) => {
         expect(typeof (c.cost as any).totalPrice).toBe('number')
       })
     })

@@ -1,8 +1,8 @@
-import { describe, it, expect } from 'bun:test'
-import { Elysia, t } from 'elysia'
-import { treaty } from '@elysia/eden'
-import { createAuthPlugin } from '../src/plugins/auth'
 import type { ServerConfig } from '../src/config'
+import { treaty } from '@elysia/eden'
+import { describe, expect, it } from 'bun:test'
+import { Elysia, t } from 'elysia'
+import { createAuthPlugin } from '../src/plugins/auth'
 
 /**
  * 认证插件单元测试
