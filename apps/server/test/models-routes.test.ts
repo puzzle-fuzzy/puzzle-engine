@@ -16,7 +16,7 @@ const MOCK_MODELS: Record<string, any> = {
     description: '最强文本',
     endpoint: 'https://api.test',
     async: false,
-    pricing: { inputPrice: 2.4, outputPrice: 9.6, unit: 'token', note: '标准定价' },
+    pricing: { inputPriceCents: 240, outputPriceCents: 960, unit: 'token', note: '标准定价' },
     parameters: [{ name: 'prompt', type: 'text', required: true }],
   },
   'qwen-image-2.0-pro': {
@@ -27,7 +27,7 @@ const MOCK_MODELS: Record<string, any> = {
     description: '最强图像',
     endpoint: 'https://api.test',
     async: false,
-    pricing: { inputPrice: 0.25, unit: 'image', note: '0.25元/张' },
+    pricing: { inputPriceCents: 25, unit: 'image', note: '0.25元/张' },
     parameters: [{ name: 'prompt', type: 'text', required: true }],
   },
   'happyhorse-1.0-t2v': {
@@ -38,7 +38,7 @@ const MOCK_MODELS: Record<string, any> = {
     description: '视频生成',
     endpoint: 'https://api.test',
     async: true,
-    pricing: { inputPrice: 0.9, inputPrice1080: 1.6, unit: 'video' },
+    pricing: { inputPriceCents: 90, inputPrice1080Cents: 160, unit: 'video' },
     parameters: [{ name: 'prompt', type: 'text', required: true }],
   },
 }
@@ -87,19 +87,19 @@ describe('models routes', () => {
     }
   })
 
-  it('pricing 包含 unit/inputPrice/outputPrice 信息', async () => {
+  it('pricing 包含 unit/inputPriceCents/outputPriceCents 信息', async () => {
     const { data } = await client.api.models.get()
 
     const textModel = data!.models.find(m => m.id === 'qwen-max')
     expect(textModel).toBeDefined()
     expect(textModel!.pricing.unit).toBe('token')
-    expect(textModel!.pricing.inputPrice).toBe(2.4)
-    expect(textModel!.pricing.outputPrice).toBe(9.6)
+    expect(textModel!.pricing.inputPriceCents).toBe(240)
+    expect(textModel!.pricing.outputPriceCents).toBe(960)
 
     const imageModel = data!.models.find(m => m.id === 'qwen-image-2.0-pro')
     expect(imageModel!.pricing.unit).toBe('image')
 
     const videoModel = data!.models.find(m => m.id === 'happyhorse-1.0-t2v')
-    expect(videoModel!.pricing.inputPrice1080).toBe(1.6)
+    expect(videoModel!.pricing.inputPrice1080Cents).toBe(160)
   })
 })
