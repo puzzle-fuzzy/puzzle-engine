@@ -2,6 +2,7 @@ import type { GenerationCategory, GenerationRecordRow, GenerationStatus } from '
 import type { ServerConfig } from '../config'
 import { calculateCost } from '@excuse/billing'
 import {
+  cancelGenerationRecord,
   createGenerationRecord,
   deleteGenerationRecord,
   getGenerationRecordById,
@@ -11,6 +12,7 @@ import {
   markGenerationProcessing,
   markGenerationSucceeded,
   notifyGenerationStatus,
+  resetGenerationToPending,
 } from '@excuse/db'
 import { AssetStorage, DashScopeClient, getModelById } from '@excuse/provider'
 import { Elysia, t } from 'elysia'
@@ -210,6 +212,137 @@ export function createGenerateRoutes(config: ServerConfig) {
 
       await deleteGenerationRecord(params.id)
       return { success: true }
+    }, {
+      params: t.Object({
+        id: t.String(),
+      }),
+    })
+
+    // 重试失败任务
+    .post('/records/:id/retry', async ({ params, userId }) => {
+      if (!userId)
+        return { success: false, error: '请先登录' }
+
+      const record = await getGenerationRecordById(params.id)
+      if (!record)
+        return { success: false, error: '记录不存在' }
+      if (record.accountId !== userId)
+        return { success: false, error: '无权操作该记录' }
+      if (record.status !== 'failed')
+        return { success: false, error: '只能重试失败的任务' }
+
+      // Re-submit to DashScope with the same parameters
+      const modelConfig = getModelById(record.model)
+      if (!modelConfig)
+        return { success: false, error: `Unknown model: ${record.model}` }
+
+      const inputParams = record.inputParams as Record<string, unknown>
+      const referenceFileIds = (inputParams.referenceFileIds as string[]) ?? undefined
+      let referenceUrls: string[] | undefined
+      if (referenceFileIds?.length) {
+        const files = await getUploadedFilesByIds(referenceFileIds)
+        referenceUrls = files.map(f => f.publicUrl)
+      }
+
+      const parameters = { ...inputParams }
+      delete parameters.referenceFileIds
+
+      const newTaskId = `gen_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
+
+      await resetGenerationToPending(record.id)
+
+      const result = await client.generate(record.model, parameters, referenceUrls)
+
+      if (!result.success) {
+        await markGenerationFailed(record.id, result.error!)
+        await notifyGenerationStatus({
+          accountId: userId,
+          recordId: record.id,
+          status: 'failed',
+          category: modelConfig.category,
+          model: record.model,
+          taskId: newTaskId,
+          errorMessage: result.error,
+        })
+        const updated = await getGenerationRecordById(record.id)
+        return { success: false, record: serializeRecord(updated!) }
+      }
+
+      if (result.providerTaskId) {
+        await markGenerationProcessing(record.id, {
+          taskId: result.providerTaskId,
+          outputResult: result.output as Record<string, unknown>,
+        })
+        await notifyGenerationStatus({
+          accountId: userId,
+          recordId: record.id,
+          status: 'processing',
+          category: modelConfig.category,
+          model: record.model,
+          taskId: result.providerTaskId,
+        })
+        const updated = await getGenerationRecordById(record.id)
+        return { success: true, record: serializeRecord(updated!) }
+      }
+
+      // Sync task succeeded (text/image retry)
+      let outputResult = result.output || {}
+      if (modelConfig.category === 'image' && outputResult.urls) {
+        const urls = outputResult.urls as string[]
+        const savedUrls = await storage.downloadAndMap(urls, newTaskId, 'img')
+        outputResult = { ...outputResult, savedUrls, urls }
+      }
+      const actualCost = calculateCost(modelConfig, parameters, result.usage)
+      await markGenerationSucceeded(record.id, outputResult, actualCost)
+      await notifyGenerationStatus({
+        accountId: userId,
+        recordId: record.id,
+        status: 'succeeded',
+        category: modelConfig.category,
+        model: record.model,
+        taskId: newTaskId,
+        outputResult,
+        cost: actualCost,
+      })
+      const updated = await getGenerationRecordById(record.id)
+      return { success: true, record: serializeRecord(updated!) }
+    }, {
+      params: t.Object({
+        id: t.String(),
+      }),
+    })
+
+    // 取消进行中的任务
+    .post('/records/:id/cancel', async ({ params, userId }) => {
+      if (!userId)
+        return { success: false, error: '请先登录' }
+
+      const record = await getGenerationRecordById(params.id)
+      if (!record)
+        return { success: false, error: '记录不存在' }
+      if (record.accountId !== userId)
+        return { success: false, error: '无权操作该记录' }
+      if (record.status !== 'pending' && record.status !== 'processing')
+        return { success: false, error: '只能取消等待中或处理中的任务' }
+
+      // Try to cancel at DashScope if we have a taskId
+      if (record.taskId) {
+        await client.cancelTask(record.taskId)
+      }
+
+      await cancelGenerationRecord(record.id)
+      await notifyGenerationStatus({
+        accountId: userId,
+        recordId: record.id,
+        status: 'failed',
+        category: record.category,
+        model: record.model,
+        taskId: record.taskId,
+        errorMessage: '用户取消',
+      })
+
+      const updated = await getGenerationRecordById(record.id)
+      return { success: true, record: serializeRecord(updated!) }
     }, {
       params: t.Object({
         id: t.String(),

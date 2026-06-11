@@ -34,3 +34,7 @@ export async function getUploadedFilesByIds(ids: string[]) {
     .from(uploadedFiles)
     .where(inArray(uploadedFiles.id, ids))
 }
+
+export async function deleteUploadedFileById(id: string) {
+  await getDb().delete(uploadedFiles).where(eq(uploadedFiles.id, id))
+}

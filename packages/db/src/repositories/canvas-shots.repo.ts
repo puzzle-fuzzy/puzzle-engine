@@ -60,3 +60,10 @@ export async function listPendingVideoShots(projectId: string) {
 export async function deleteCanvasShotById(id: string) {
   await getDb().delete(canvasShots).where(eq(canvasShots.id, id))
 }
+
+export async function resetCanvasShotToDraft(id: string) {
+  await getDb()
+    .update(canvasShots)
+    .set({ status: 'draft', videoTaskId: null, videoUrl: null, errorMessage: null, updatedAt: new Date() })
+    .where(eq(canvasShots.id, id))
+}

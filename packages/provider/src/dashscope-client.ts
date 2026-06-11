@@ -362,6 +362,20 @@ export class DashScopeClient {
     }
   }
 
+  async cancelTask(taskId: string): Promise<boolean> {
+    const url = `${this.baseUrl}/tasks/${taskId}`
+    try {
+      const response = await fetch(url, {
+        method: 'DELETE',
+        headers: this.headers,
+      })
+      return response.ok
+    }
+    catch {
+      return false
+    }
+  }
+
   /**
    * 生成内容 — 根据模型类别自动路由到正确的 API
    */

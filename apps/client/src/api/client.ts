@@ -137,6 +137,18 @@ export async function deleteRecord(id: string): Promise<{ success: boolean }> {
   )
 }
 
+export async function retryRecord(id: string): Promise<GenerateResponse> {
+  return unwrapEden<GenerateResponse>(
+    await api.api.records({ id }).retry.post(),
+  )
+}
+
+export async function cancelRecord(id: string): Promise<{ success: boolean, record: GenerationRecord }> {
+  return unwrapEden<{ success: boolean, record: GenerationRecord }>(
+    await api.api.records({ id }).cancel.post(),
+  )
+}
+
 export async function uploadFile(file: File): Promise<{
   success: boolean
   file: { id: string, fileName: string, publicUrl: string, mimeType: string }
@@ -146,6 +158,12 @@ export async function uploadFile(file: File): Promise<{
     file: { id: string, fileName: string, publicUrl: string, mimeType: string }
   }>(
     await api.api.upload.post({ file }),
+  )
+}
+
+export async function deleteUploadedFile(id: string): Promise<{ success: boolean }> {
+  return unwrapEden<{ success: boolean }>(
+    await api.api.upload({ id }).delete(),
   )
 }
 
@@ -319,5 +337,11 @@ export async function deleteCanvasLocation(locationId: string): Promise<{ succes
 export async function deleteCanvasShot(shotId: string): Promise<{ success: boolean }> {
   return unwrapEden<{ success: boolean }>(
     await api.api.canvas.shots({ shotId }).delete(),
+  )
+}
+
+export async function retryCanvasShot(shotId: string): Promise<{ success: boolean }> {
+  return unwrapEden<{ success: boolean }>(
+    await api.api.canvas.shots({ shotId }).retry.post(),
   )
 }

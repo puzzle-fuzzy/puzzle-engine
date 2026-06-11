@@ -1,5 +1,5 @@
 import type { StorageConfig } from './types'
-import { mkdir, writeFile } from 'node:fs/promises'
+import { mkdir, unlink, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { logger } from '@excuse/shared'
 /// <reference path="./ali-oss.d.ts" />
@@ -153,6 +153,35 @@ export class AssetStorage {
   }
 
   // ── URL 工具方法 ──────────────────────────────────────
+
+  /**
+   * 删除存储中的文件（本地 + OSS）
+   */
+  async deleteFile(storagePath: string): Promise<void> {
+    // Delete local file
+    const localPath = join(this.config.storageRoot, storagePath)
+    try {
+      await unlink(localPath)
+    }
+    catch (err) {
+      // File may not exist locally if OSS-only, ignore ENOENT
+      const code = (err as any)?.code
+      if (code !== 'ENOENT')
+        logger.warn({ err, storagePath }, 'Failed to delete local file')
+    }
+
+    // Delete from OSS if enabled
+    if (this.ossClient) {
+      const prefix = this.config.oss?.uploadPrefix || 'uploads'
+      const key = `${prefix}/${storagePath}`
+      try {
+        await this.ossClient.delete(key)
+      }
+      catch (err) {
+        logger.warn({ err, key }, 'Failed to delete OSS file')
+      }
+    }
+  }
 
   /**
    * 检查 URL 是否为 OSS URL

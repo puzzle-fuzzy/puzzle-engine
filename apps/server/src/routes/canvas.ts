@@ -252,4 +252,12 @@ export function createCanvasRoutes(config: ServerConfig) {
       await svc.deleteShot(shotId)
       return { success: true }
     })
+
+    // 重试单个失败的镜头视频
+    .post('/shots/:shotId/retry', async ({ params: { shotId }, userId }) => {
+      if (!userId)
+        return { success: false, error: '请先登录' }
+      fireAndForget(userId, shotId, 'retry', svc.retryShotVideo(shotId, config))
+      return { success: true, message: '开始重试镜头' }
+    })
 }

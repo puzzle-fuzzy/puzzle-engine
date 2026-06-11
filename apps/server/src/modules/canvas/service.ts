@@ -18,9 +18,11 @@ import {
   getCanvasCharacterById,
   getCanvasLocationById,
   getCanvasProjectDetail,
+  getCanvasShotById,
   getGenerationRecordsByTaskIds,
   listCanvasProjectsByAccount,
   listCanvasShotsByProject,
+  resetCanvasShotToDraft,
   softDeleteCanvasProject,
   updateCanvasCharacter,
   updateCanvasLocation,
@@ -772,4 +774,89 @@ export async function deleteLocation(locationId: string) {
 
 export async function deleteShot(shotId: string) {
   await deleteCanvasShotById(shotId)
+}
+
+export async function retryShotVideo(shotId: string, config: { dashscopeApiKey: string, dashscopeBaseUrl?: string }) {
+  const shot = await getCanvasShotById(shotId)
+  if (!shot)
+    throw new Error('镜头不存在')
+  if (shot.status !== 'failed')
+    throw new Error('只能重试失败的镜头')
+
+  // Reset shot to draft state
+  await resetCanvasShotToDraft(shotId)
+
+  // Re-run generateVideos for just this single shot
+  const detail = await getCanvasProjectDetail(shot.projectId)
+  if (!detail)
+    throw new Error('项目不存在')
+
+  const client = createClient(config)
+  const characterMap = new Map(detail.characters.map(c => [c.id, c]))
+  const locationMap = new Map(detail.locations.map(l => [l.id, l]))
+
+  await updateCanvasProject(shot.projectId, { status: 'generating' })
+
+  notifyNode(detail.project.accountId, shot.projectId, 'shot', shot.id, 'running')
+
+  const charRefUrls = shot.characterIdsJson
+    .map(id => characterMap.get(id)?.referenceImageUrl)
+    .filter(Boolean) as string[]
+  const locRefUrl = shot.locationId
+    ? locationMap.get(shot.locationId)?.referenceImageUrl ?? null
+    : null
+  const referenceUrls = [...charRefUrls, ...(locRefUrl ? [locRefUrl] : [])]
+
+  const model = referenceUrls.length > 0 ? 'happyhorse-1.0-r2v' : 'happyhorse-1.0-t2v'
+  const modelConfig = getModelById(model)
+  const fallbackId = modelConfig?.fallbackModel
+
+  const result = await client.submitVideoTask(model, {
+    prompt: shot.videoPrompt!.slice(0, 2500),
+    negative_prompt: shot.negativePrompt || '',
+    resolution: '720P',
+    duration: shot.duration,
+  }, referenceUrls.length > 0 ? referenceUrls : undefined)
+
+  let actualModel = model
+  let actualTaskId = result.providerTaskId
+  let actualSuccess = result.success
+
+  if (!result.success || !result.providerTaskId) {
+    if (fallbackId) {
+      const fallbackResult = await client.submitVideoTask(fallbackId, {
+        prompt: shot.videoPrompt!.slice(0, 2500),
+        negative_prompt: shot.negativePrompt || '',
+        resolution: '720P',
+        duration: shot.duration,
+      })
+
+      if (fallbackResult.success && fallbackResult.providerTaskId) {
+        actualModel = fallbackId
+        actualTaskId = fallbackResult.providerTaskId
+        actualSuccess = true
+      }
+    }
+
+    if (!actualSuccess || !actualTaskId) {
+      await updateCanvasShot(shot.id, { status: 'failed', errorMessage: result.error || '视频提交失败' })
+      notifyNode(detail.project.accountId, shot.projectId, 'shot', shot.id, 'failed', undefined, result.error)
+      throw new Error(result.error || '视频提交失败')
+    }
+  }
+
+  await updateCanvasShot(shot.id, { videoTaskId: actualTaskId, status: 'generating' })
+
+  const usedModelConfig = getModelById(actualModel)!
+  const inputParams = { source: 'canvas', projectId: shot.projectId, shotId, prompt: shot.videoPrompt, resolution: '720P', duration: shot.duration }
+  const cost = calculateCost(usedModelConfig, inputParams)
+  await createGenerationRecord({
+    accountId: detail.project.accountId,
+    taskId: actualTaskId,
+    model: actualModel,
+    category: 'video',
+    status: 'processing',
+    inputParams,
+    cost: { ...cost, estimated: true },
+  })
 }

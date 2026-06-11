@@ -124,6 +124,20 @@ export async function deleteGenerationRecord(id: string) {
   await getDb().delete(generationRecords).where(eq(generationRecords.id, id))
 }
 
+export async function resetGenerationToPending(id: string) {
+  await getDb()
+    .update(generationRecords)
+    .set({ status: 'pending', errorMessage: null, updatedAt: new Date() })
+    .where(eq(generationRecords.id, id))
+}
+
+export async function cancelGenerationRecord(id: string) {
+  await getDb()
+    .update(generationRecords)
+    .set({ status: 'failed', errorMessage: '用户取消', updatedAt: new Date() })
+    .where(eq(generationRecords.id, id))
+}
+
 /**
  * 获取含费用信息的记录，用于账单统计
  * 返回所有 cost 不为 NULL 的记录
