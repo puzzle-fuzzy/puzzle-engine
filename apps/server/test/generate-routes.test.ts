@@ -1,4 +1,5 @@
 import type { GenerationRecordRow } from '@excuse/db'
+import type { UploadedFileRow } from '@excuse/db'
 import { treaty } from '@elysia/eden'
 import { beforeAll, beforeEach, describe, expect, it, mock } from 'bun:test'
 
@@ -266,6 +267,65 @@ describe('generate routes', () => {
         expect.objectContaining({ taskId: 'dashscope-task-123' }),
       )
       expect(mockNotifyStatus).toHaveBeenCalled()
+    })
+
+    it('referenceFileIds 不属于当前用户时不创建记录（403）', async () => {
+      // 模拟部分文件不属于当前用户 — 返回数量少于请求数量
+      mockGetUploadedFilesByIdsForAccount.mockResolvedValue([
+        { id: 'file-001', publicUrl: '/uploads/file1.png' } as UploadedFileRow,
+      ] as unknown as UploadedFileRow[])
+
+      const res = await client.api.generate.post(
+        {
+          model: 'qwen-max',
+          parameters: { prompt: '你好' },
+          referenceFileIds: ['file-001', 'file-002'], // 请求 2 个，但只有 1 个属于用户
+        },
+        { headers: { Authorization: `Bearer ${token}` } },
+      )
+
+      const err = extractEdenError(res)
+      expect(err).toBeTruthy()
+      expect(err!.status).toBe(403)
+      expect(err!.error).toContain('参考文件')
+      // 关键：校验失败时不创建任何 DB 记录
+      expect(mockCreateRecord).not.toHaveBeenCalled()
+      expect(mockGenerate).not.toHaveBeenCalled()
+    })
+
+    it('referenceFileIds 全部属于当前用户时正常创建记录', async () => {
+      mockCreateRecord.mockResolvedValue(makeRecord())
+      mockGetRecordById.mockResolvedValue(makeRecord({ status: 'succeeded' }))
+      mockGenerate.mockResolvedValue({
+        success: true,
+        output: { text: '你好' },
+        usage: { inputTokens: 10, outputTokens: 20 },
+      })
+      mockCalculateCost.mockReturnValue({ unit: 'token', totalPriceCents: 1, totalPrice: 0.01 })
+
+      // 模拟所有文件都属于当前用户
+      mockGetUploadedFilesByIdsForAccount.mockResolvedValue([
+        { id: 'file-001', publicUrl: '/uploads/file1.png' } as unknown as UploadedFileRow,
+        { id: 'file-002', publicUrl: '/uploads/file2.png' } as unknown as UploadedFileRow,
+      ])
+
+      const { data } = await client.api.generate.post(
+        {
+          model: 'qwen-max',
+          parameters: { prompt: '你好' },
+          referenceFileIds: ['file-001', 'file-002'],
+        },
+        { headers: { Authorization: `Bearer ${token}` } },
+      )
+
+      expect(data?.success).toBe(true)
+      expect(mockCreateRecord).toHaveBeenCalled()
+      // referenceUrls 应传给 provider
+      expect(mockGenerate).toHaveBeenCalledWith(
+        'qwen-max',
+        { prompt: '你好' },
+        ['/uploads/file1.png', '/uploads/file2.png'],
+      )
     })
   })
 

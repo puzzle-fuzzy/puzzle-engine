@@ -30,8 +30,10 @@ import { forbidden, notFound, unauthorized, validationError } from '../utils/err
  *   failed → (retry) → pending → ...
  *
  * 关键约束:
+ *   - 校验顺序：认证 → 模型存在 → reference 归属 → dedupe → 创建记录 → provider
+ *     所有 DB 写操作必须在所有校验通过之后，防止校验失败留下脏记录/脏状态
  *   - dedupe: 同一用户 + 同模型 + 同参数在 pending/processing 时不重复提交
- *   - referenceFileIds: 必须属于当前用户，校验在 DB 写入之后但在 provider 调用之前
+ *   - referenceFileIds: 必须属于当前用户，校验在创建记录之前（不在之后）
  *   - 异步任务（视频）: provider 返回 providerTaskId，Worker 轮询完成后更新
  *   - 同步任务（文本/图片）: 直接下载并保存输出，一步到位
  */
@@ -70,6 +72,17 @@ export function createGenerateRoutes(config: ServerConfig) {
 
       const category = modelConfig.category
 
+      // 解析参考图 URL（仅允许当前用户的文件）— 必须在创建 DB 记录之前校验
+      // 否则校验失败时会留下 pending 状态的脏记录
+      let referenceUrls: string[] | undefined
+      if (referenceFileIds?.length) {
+        const files = await getUploadedFilesByIdsForAccount(referenceFileIds, userId)
+        if (files.length !== referenceFileIds.length) {
+          return forbidden(set, '部分参考文件不存在或不属于当前用户')
+        }
+        referenceUrls = files.map(f => f.publicUrl)
+      }
+
       // 去重：同一用户 + 同一 model + 相同参数短时间内不重复提交
       const dedupeKey = `${userId}:${model}:${JSON.stringify(parameters)}`
       const existing = await findGenerationByDedupeKeyForAccount(dedupeKey, userId)
@@ -84,7 +97,7 @@ export function createGenerateRoutes(config: ServerConfig) {
       // 生成唯一 taskId
       const taskId = `gen_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
 
-      // 创建数据库记录
+      // 创建数据库记录 — 此时所有前置校验已完成，不会有脏记录风险
       const record = await createGenerationRecord({
         accountId: userId,
         taskId,
@@ -95,16 +108,6 @@ export function createGenerateRoutes(config: ServerConfig) {
         cost: { ...estimatedCost, estimated: true },
         dedupeKey,
       })
-
-      // 解析参考图 URL（仅允许当前用户的文件）
-      let referenceUrls: string[] | undefined
-      if (referenceFileIds?.length) {
-        const files = await getUploadedFilesByIdsForAccount(referenceFileIds, userId)
-        if (files.length !== referenceFileIds.length) {
-          return forbidden(set, '部分参考文件不存在或不属于当前用户')
-        }
-        referenceUrls = files.map(f => f.publicUrl)
-      }
 
       const result = await client.generate(model, parameters, referenceUrls)
 
@@ -288,6 +291,9 @@ export function createGenerateRoutes(config: ServerConfig) {
       const referenceFileIds = Array.isArray(inputParams.referenceFileIds)
         ? inputParams.referenceFileIds as string[]
         : undefined
+
+      // 参考文件归属校验 — 必须在 resetGenerationToPending 之前完成
+      // 否则校验失败时记录状态已被改写，产生脏状态
       let referenceUrls: string[] | undefined
       if (referenceFileIds?.length) {
         const files = await getUploadedFilesByIdsForAccount(referenceFileIds, userId)
@@ -302,6 +308,7 @@ export function createGenerateRoutes(config: ServerConfig) {
 
       const newTaskId = `gen_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
 
+      // 所有校验通过后才重置状态 — 防止校验失败产生脏状态
       await resetGenerationToPending(record.id)
 
       const result = await client.generate(record.model, parameters, referenceUrls)

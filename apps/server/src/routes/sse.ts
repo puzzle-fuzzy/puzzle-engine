@@ -1,5 +1,5 @@
 import type { ServerConfig } from '../config'
-import { Elysia, sse, t } from 'elysia'
+import { Elysia, sse } from 'elysia'
 import { createAuthPlugin } from '../plugins/auth'
 import { addConnection, removeConnection } from '../services/sse-manager'
 

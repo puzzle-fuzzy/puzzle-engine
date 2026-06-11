@@ -1,4 +1,4 @@
-import type { GenerationRecordRow } from '@excuse/db'
+import type { GenerationRecordRow, UploadedFileRow } from '@excuse/db'
 import { treaty } from '@elysia/eden'
 import { beforeAll, beforeEach, describe, expect, it, mock } from 'bun:test'
 
@@ -235,6 +235,30 @@ describe('generate routes — retry & cancel', () => {
       const err = extractEdenError(res)
       expect(err).toBeTruthy()
       expect(err!.error).toContain('Unknown model')
+    })
+
+    it('重试时 reference 文件不再属于用户时不重置状态（403）', async () => {
+      // 记录包含 referenceFileIds 但文件已不再属于用户
+      mockGetRecordById.mockResolvedValue(makeFailedRecord({
+        inputParams: { prompt: '你好', referenceFileIds: ['file-001', 'file-002'] },
+      }))
+      // 只返回 1 个文件（说明 file-002 不属于用户）
+      mockGetUploadedFilesByIdsForAccount.mockResolvedValue([
+        { id: 'file-001', publicUrl: '/uploads/file1.png' } as unknown as UploadedFileRow,
+      ])
+
+      const res = await client.api.records({ id: 'rec-failed-001' }).retry.post(
+        null,
+        { headers: { Authorization: `Bearer ${token}` } },
+      )
+
+      const err = extractEdenError(res)
+      expect(err).toBeTruthy()
+      expect(err!.status).toBe(403)
+      expect(err!.error).toContain('参考文件')
+      // 关键：校验失败时不重置记录状态
+      expect(mockResetToPending).not.toHaveBeenCalled()
+      expect(mockGenerate).not.toHaveBeenCalled()
     })
   })
 
