@@ -3,6 +3,7 @@ import { join } from 'node:path'
 import { cors } from '@elysia/cors'
 import { staticPlugin } from '@elysia/static'
 import { openapi } from '@elysiajs/openapi'
+import { swagger } from '@elysiajs/swagger'
 import { logger } from '@excuse/shared'
 import { Elysia } from 'elysia'
 import { loadConfig } from './config'
@@ -34,6 +35,16 @@ const app = new Elysia()
       },
     },
     path: '/api/docs',
+  }))
+  .use(swagger({
+    path: '/api/swagger',
+    documentation: {
+      info: {
+        title: 'Excuse API',
+        version: '0.1.0',
+        description: 'AI 内容生成平台 — 创意流水线 API 文档',
+      },
+    },
   }))
   .use(loggerPlugin)
   .use(cors({
