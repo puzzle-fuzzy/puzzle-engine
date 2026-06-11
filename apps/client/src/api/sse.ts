@@ -1,4 +1,5 @@
 import type { SSEGenerationStatusEvent, SSENotificationEvent, SSEPipelineNodeEvent } from '@excuse/shared'
+import { fetchEventSource } from '@microsoft/fetch-event-source'
 import { getAuthToken } from './client'
 
 interface SSEEventMap {
@@ -7,16 +8,24 @@ interface SSEEventMap {
   notification: SSENotificationEvent
 }
 
+// ===== 错误类型 — 控制重连策略 =====
+
+class RetriableError extends Error {}
+class FatalError extends Error {}
+class UnauthorizedError extends FatalError {}
+
 /**
  * SSE 客户端 — 管理与服务器的实时连接
  *
- * 使用浏览器原生 EventSource API:
- *   - 自动重连（连接断开后延迟 3 秒重试）
- *   - 事件类型分发（generation_status / notification / heartbeat）
- *   - 认证 token 通过 query 参数传递（EventSource 不支持自定义 header）
+ * 使用 @microsoft/fetch-event-source（基于 Fetch API）:
+ *   - 支持自定义 Authorization header（JWT 不再暴露在 URL 中）
+ *   - 可根据 HTTP 状态码区分重连策略
+ *   - AbortController 可靠中止 fetch 流
+ *   - 事件类型分发（generation_status / pipeline_node_update / notification / heartbeat）
  */
 class SSEClient {
-  private eventSource: EventSource | null = null
+  private abortController: AbortController | null = null
+  private isConnecting = false
   private handlers: { [K in keyof SSEEventMap]?: Set<(data: SSEEventMap[K]) => void> } = {}
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null
   private intentionallyClosed = false
@@ -26,7 +35,7 @@ class SSEClient {
    * 仅在已认证时（有 token）才连接
    */
   connect() {
-    if (this.eventSource)
+    if (this.abortController || this.isConnecting)
       return
 
     const token = getAuthToken()
@@ -34,53 +43,66 @@ class SSEClient {
       return
 
     this.intentionallyClosed = false
-    this.eventSource = new EventSource(`/api/sse?token=${encodeURIComponent(token)}`)
+    this.isConnecting = true
+    this.abortController = new AbortController()
 
-    this.eventSource.addEventListener('generation_status', (e) => {
-      try {
-        const data = JSON.parse(e.data) as SSEGenerationStatusEvent
-        this.emit('generation_status', data)
-      }
-      catch (err) {
-        console.error('[SSE] Failed to parse generation_status event:', err)
-      }
-    })
+    const baseUrl = import.meta.env.VITE_API_BASE_URL ?? ''
 
-    this.eventSource.addEventListener('pipeline_node_update', (e) => {
-      try {
-        const data = JSON.parse(e.data) as SSEPipelineNodeEvent
-        this.emit('pipeline_node_update', data)
-      }
-      catch (err) {
-        console.error('[SSE] Failed to parse pipeline_node_update event:', err)
-      }
-    })
+    fetchEventSource(`${baseUrl}/api/sse`, {
+      signal: this.abortController.signal,
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+      async onopen(response) {
+        if (response.ok && response.headers.get('content-type')?.includes('text/event-stream')) {
+          return
+        }
 
-    this.eventSource.addEventListener('notification', (e) => {
-      try {
-        const data = JSON.parse(e.data) as SSENotificationEvent
-        this.emit('notification', data)
-      }
-      catch (err) {
-        console.error('[SSE] Failed to parse notification event:', err)
-      }
-    })
+        if (response.status === 401 || response.status === 403) {
+          throw new UnauthorizedError('SSE authentication failed')
+        }
 
-    this.eventSource.addEventListener('heartbeat', () => {
-      // no-op: 收到即表示连接正常
-    })
+        if (response.status >= 500) {
+          throw new RetriableError(`SSE server error: ${response.status}`)
+        }
 
-    this.eventSource.addEventListener('connected', (e) => {
-      console.info('[SSE] Connected:', e.data)
-    })
+        throw new FatalError(`Unexpected SSE response: ${response.status}`)
+      },
+      onmessage: (msg) => {
+        this.handleMessage(msg.event, msg.data)
+      },
+      onerror: (err) => {
+        if (this.intentionallyClosed)
+          throw err
 
-    this.eventSource.onerror = () => {
-      console.warn('[SSE] Connection error, will reconnect...')
+        if (err instanceof UnauthorizedError) {
+          this.cleanupConnection()
+          console.warn('[SSE] Authentication failed, stopping reconnect')
+          throw err
+        }
+
+        if (err instanceof FatalError)
+          throw err
+
+        // RetriableError / 网络错误：返回重试间隔（ms）
+        return 3000
+      },
+      onclose: () => {
+        this.cleanupConnection()
+        if (!this.intentionallyClosed) {
+          this.scheduleReconnect()
+        }
+      },
+      openWhenHidden: true,
+    }).catch((err) => {
       this.cleanupConnection()
-      if (!this.intentionallyClosed) {
+      if (!this.intentionallyClosed && !(err instanceof UnauthorizedError)) {
+        console.warn('[SSE] Connection closed:', err)
         this.scheduleReconnect()
       }
-    }
+    }).finally(() => {
+      this.isConnecting = false
+    })
   }
 
   disconnect() {
@@ -115,6 +137,36 @@ class SSEClient {
     this.connect()
   }
 
+  // ===== 事件解析 =====
+
+  private handleMessage(event: string, data: string) {
+    try {
+      switch (event) {
+        case 'generation_status':
+          this.emit('generation_status', JSON.parse(data) as SSEGenerationStatusEvent)
+          break
+        case 'pipeline_node_update':
+          this.emit('pipeline_node_update', JSON.parse(data) as SSEPipelineNodeEvent)
+          break
+        case 'notification':
+          this.emit('notification', JSON.parse(data) as SSENotificationEvent)
+          break
+        case 'heartbeat':
+          break
+        case 'connected':
+          console.info('[SSE] Connected:', data)
+          break
+        default:
+          console.debug('[SSE] Ignored event:', event)
+      }
+    }
+    catch (err) {
+      console.error(`[SSE] Failed to parse ${event} event:`, err)
+    }
+  }
+
+  // ===== 内部工具 =====
+
   private emit<K extends keyof SSEEventMap>(event: K, data: SSEEventMap[K]) {
     const set = this.handlers[event] as Set<(data: SSEEventMap[K]) => void> | undefined
     if (!set)
@@ -130,9 +182,9 @@ class SSEClient {
   }
 
   private cleanupConnection() {
-    if (this.eventSource) {
-      this.eventSource.close()
-      this.eventSource = null
+    if (this.abortController) {
+      this.abortController.abort()
+      this.abortController = null
     }
   }
 

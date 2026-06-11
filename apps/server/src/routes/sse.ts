@@ -42,7 +42,8 @@ function createAsyncChannel() {
 /**
  * SSE 端点 — 实时推送生成状态和通知
  *
- * 客户端通过 EventSource 连接: GET /api/sse?token=<jwt>
+ * 客户端通过 fetchEventSource 连接: GET /api/sse
+ * 认证方式: Authorization: Bearer <jwt>（优先）或 ?token=<jwt>（兼容旧客户端）
  * 支持的事件类型:
  *   - connected: 连接建立
  *   - heartbeat: 心跳保活（30 秒间隔）
@@ -95,7 +96,7 @@ export function createSSERoutes(config: ServerConfig) {
       }
     }, {
       query: t.Object({
-        token: t.String({ description: 'JWT token（EventSource 不支持自定义 header）' }),
+        token: t.Optional(t.String({ description: 'Deprecated: use Authorization header instead' })),
       }),
     })
 }
