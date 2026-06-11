@@ -22,9 +22,10 @@ const mockCalculateCost = mock(() => ({ unit: 'token', totalPriceCents: 1, total
 const mockGenerate = mock(() => Promise.resolve({ success: false, error: 'mock error' }))
 
 const mockNotifyStatus = mock(() => Promise.resolve(undefined))
-const mockGetUploadedFilesByIds = mock(() => Promise.resolve([]))
+const mockGetUploadedFilesByIdsForAccount = mock(() => Promise.resolve([]))
 const mockCancelRecord = mock(() => Promise.resolve(undefined))
 const mockResetToPending = mock(() => Promise.resolve(undefined))
+const mockFindGenerationByDedupeKeyForAccount = mock(() => Promise.resolve(null))
 
 mock.module('@excuse/db', () => ({
   createGenerationRecord: mockCreateRecord,
@@ -35,9 +36,10 @@ mock.module('@excuse/db', () => ({
   markGenerationProcessing: mockMarkProcessing,
   markGenerationSucceeded: mockMarkSucceeded,
   notifyGenerationStatus: mockNotifyStatus,
-  getUploadedFilesByIds: mockGetUploadedFilesByIds,
+  getUploadedFilesByIdsForAccount: mockGetUploadedFilesByIdsForAccount,
   cancelGenerationRecord: mockCancelRecord,
   resetGenerationToPending: mockResetToPending,
+  findGenerationByDedupeKeyForAccount: mockFindGenerationByDedupeKeyForAccount,
 }))
 
 mock.module('@excuse/provider', () => ({
@@ -161,9 +163,11 @@ describe('generate routes', () => {
     mockCalculateCost.mockClear()
     mockGenerate.mockClear()
     mockNotifyStatus.mockClear()
-    mockGetUploadedFilesByIds.mockClear()
+    mockGetUploadedFilesByIdsForAccount.mockClear()
     mockCancelRecord.mockClear()
     mockResetToPending.mockClear()
+    mockFindGenerationByDedupeKeyForAccount.mockClear()
+    mockGetUploadedFilesByIdsForAccount.mockClear()
 
     const app = createGenerateRoutes(testConfig)
     client = treaty(app)
@@ -343,19 +347,20 @@ describe('generate routes', () => {
   // ═══════════════════════════════════════════════════
 
   describe('GET /api/records/:id', () => {
-    it('未登录时也能查询单条记录（公开接口）', async () => {
+    it('未登录时返回错误', async () => {
       mockGetRecordById.mockResolvedValue(makeRecord())
 
       const { data } = await client.api.records({ id: 'rec-001' }).get()
 
-      expect(data?.success).toBe(true)
-      expect(data?.record).toBeDefined()
+      expect(data?.success === false || data === undefined).toBe(true)
     })
 
-    it('返回单条记录', async () => {
+    it('登录后返回自己的记录', async () => {
       mockGetRecordById.mockResolvedValue(makeRecord())
 
-      const { data } = await client.api.records({ id: 'rec-001' }).get()
+      const { data } = await client.api.records({ id: 'rec-001' }).get({
+        headers: { Authorization: `Bearer ${token}` },
+      })
 
       expect(data?.success).toBe(true)
       expect(data?.record).toBeDefined()
@@ -364,10 +369,23 @@ describe('generate routes', () => {
     it('记录不存在返回错误', async () => {
       mockGetRecordById.mockResolvedValue(null)
 
-      const { data } = await client.api.records({ id: 'nonexistent' }).get()
+      const { data } = await client.api.records({ id: 'nonexistent' }).get({
+        headers: { Authorization: `Bearer ${token}` },
+      })
 
       expect(data?.success).toBe(false)
       expect(data?.error).toContain('not found')
+    })
+
+    it('不能查看其他用户的记录', async () => {
+      mockGetRecordById.mockResolvedValue(makeRecord({ accountId: 'other-user-id' }))
+
+      const { data } = await client.api.records({ id: 'rec-001' }).get({
+        headers: { Authorization: `Bearer ${token}` },
+      })
+
+      expect(data?.success).toBe(false)
+      expect(data?.error).toContain('无权')
     })
   })
 

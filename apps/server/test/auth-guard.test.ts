@@ -35,6 +35,12 @@ const mockCreateUploadedFile = mock(() =>
     mimeType: 'image/png',
   }),
 )
+const mockNotifyStatus = mock(() => Promise.resolve(undefined))
+const mockGetUploadedFilesByIdsForAccount = mock(() => Promise.resolve([]))
+const mockDeleteGenerationRecord = mock(() => Promise.resolve(undefined))
+const mockCancelGenerationRecord = mock(() => Promise.resolve(undefined))
+const mockResetGenerationToPending = mock(() => Promise.resolve(undefined))
+const mockFindGenerationByDedupeKeyForAccount = mock(() => Promise.resolve(null))
 
 mock.module('@excuse/db', () => ({
   getAccountByEmail: mockGetAccountByEmail,
@@ -48,6 +54,12 @@ mock.module('@excuse/db', () => ({
   markGenerationProcessing: mockMarkGenerationProcessing,
   markGenerationSucceeded: mockMarkGenerationSucceeded,
   createUploadedFile: mockCreateUploadedFile,
+  notifyGenerationStatus: mockNotifyStatus,
+  getUploadedFilesByIdsForAccount: mockGetUploadedFilesByIdsForAccount,
+  deleteGenerationRecord: mockDeleteGenerationRecord,
+  cancelGenerationRecord: mockCancelGenerationRecord,
+  resetGenerationToPending: mockResetGenerationToPending,
+  findGenerationByDedupeKeyForAccount: mockFindGenerationByDedupeKeyForAccount,
 }))
 
 // @excuse/provider — DashScope + AssetStorage

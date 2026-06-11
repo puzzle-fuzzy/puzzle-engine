@@ -53,7 +53,10 @@ const mockUpdateCanvasShot = mock(() => Promise.resolve({ id: 'shot-001', update
 const mockDeleteCanvasCharacterById = mock(() => Promise.resolve(undefined))
 const mockDeleteCanvasLocationById = mock(() => Promise.resolve(undefined))
 const mockDeleteCanvasShotById = mock(() => Promise.resolve(undefined))
-
+const mockGetCanvasProjectByIdForAccount = mock(() => Promise.resolve(makeProjectRow()))
+const mockGetCanvasCharacterForAccount = mock(() => Promise.resolve({ id: 'char-001' }))
+const mockGetCanvasLocationForAccount = mock(() => Promise.resolve({ id: 'loc-001' }))
+const mockGetCanvasShotForAccount = mock(() => Promise.resolve({ id: 'shot-001' }))
 mock.module('@excuse/db', () => ({
   createCanvasProject: mockCreateCanvasProject,
   getCanvasProjectById: mockGetCanvasProjectById,
@@ -78,6 +81,10 @@ mock.module('@excuse/db', () => ({
   updateCanvasShot: mockUpdateCanvasShot,
   deleteCanvasShotsByProject: async () => {},
   deleteCanvasShotById: mockDeleteCanvasShotById,
+  getCanvasProjectByIdForAccount: mockGetCanvasProjectByIdForAccount,
+  getCanvasCharacterForAccount: mockGetCanvasCharacterForAccount,
+  getCanvasLocationForAccount: mockGetCanvasLocationForAccount,
+  getCanvasShotForAccount: mockGetCanvasShotForAccount,
   resetCanvasShotToDraft: async () => {},
   listPendingVideoShots: async () => [],
   createContinuityReport: async () => ({ id: 'cont-001' }),
@@ -153,6 +160,10 @@ describe('canvas routes', () => {
     mockUpdateCanvasLocation.mockClear()
     mockUpdateCanvasShot.mockClear()
     mockDeleteCanvasCharacterById.mockClear()
+    mockGetCanvasProjectByIdForAccount.mockClear()
+    mockGetCanvasCharacterForAccount.mockClear()
+    mockGetCanvasLocationForAccount.mockClear()
+    mockGetCanvasShotForAccount.mockClear()
 
     const app = createCanvasRoutes(testConfig)
     client = treaty(app)
@@ -204,6 +215,7 @@ describe('canvas routes', () => {
 
   describe('GET /projects/:projectId', () => {
     it('登录后返回项目详情', async () => {
+      mockGetCanvasProjectByIdForAccount.mockResolvedValue(makeProjectRow())
       mockGetCanvasProjectDetail.mockResolvedValue(makeProjectDetail())
       const { data } = await client.api.canvas.projects({ projectId: 'proj-001' }).get({
         headers: { Authorization: `Bearer ${token}` },
@@ -213,7 +225,7 @@ describe('canvas routes', () => {
     })
 
     it('项目不存在返回错误', async () => {
-      mockGetCanvasProjectDetail.mockResolvedValue(null)
+      mockGetCanvasProjectByIdForAccount.mockResolvedValue(null)
       const { data } = await client.api.canvas.projects({ projectId: 'nonexistent' }).get({
         headers: { Authorization: `Bearer ${token}` },
       })
@@ -227,6 +239,7 @@ describe('canvas routes', () => {
 
   describe('DELETE /projects/:projectId', () => {
     it('登录后软删除项目', async () => {
+      mockGetCanvasProjectByIdForAccount.mockResolvedValue(makeProjectRow())
       const { data } = await client.api.canvas.projects({ projectId: 'proj-001' }).delete(null, {
         headers: { Authorization: `Bearer ${token}` },
       })
@@ -241,21 +254,33 @@ describe('canvas routes', () => {
 
   describe('PATCH /characters/:characterId', () => {
     it('更新角色数据', async () => {
-      const { data } = await client.api.canvas.characters({ characterId: 'char-001' }).patch({ name: '新名' })
+      mockGetCanvasCharacterForAccount.mockResolvedValue({ id: 'char-001' })
+      const { data } = await client.api.canvas.characters({ characterId: 'char-001' }).patch(
+        { name: '新名' },
+        { headers: { Authorization: `Bearer ${token}` } },
+      )
       expect(data?.success).toBe(true)
     })
   })
 
   describe('PATCH /locations/:locationId', () => {
     it('更新场景数据', async () => {
-      const { data } = await client.api.canvas.locations({ locationId: 'loc-001' }).patch({ scenePrompt: '新描述' })
+      mockGetCanvasLocationForAccount.mockResolvedValue({ id: 'loc-001' })
+      const { data } = await client.api.canvas.locations({ locationId: 'loc-001' }).patch(
+        { scenePrompt: '新描述' },
+        { headers: { Authorization: `Bearer ${token}` } },
+      )
       expect(data?.success).toBe(true)
     })
   })
 
   describe('PATCH /shots/:shotId', () => {
     it('更新镜头数据', async () => {
-      const { data } = await client.api.canvas.shots({ shotId: 'shot-001' }).patch({ narrative: '新叙述' })
+      mockGetCanvasShotForAccount.mockResolvedValue({ id: 'shot-001' })
+      const { data } = await client.api.canvas.shots({ shotId: 'shot-001' }).patch(
+        { narrative: '新叙述' },
+        { headers: { Authorization: `Bearer ${token}` } },
+      )
       expect(data?.success).toBe(true)
     })
   })
@@ -266,6 +291,7 @@ describe('canvas routes', () => {
 
   describe('DELETE /characters/:characterId', () => {
     it('登录后删除角色', async () => {
+      mockGetCanvasCharacterForAccount.mockResolvedValue({ id: 'char-001' })
       const { data } = await client.api.canvas.characters({ characterId: 'char-001' }).delete(null, {
         headers: { Authorization: `Bearer ${token}` },
       })

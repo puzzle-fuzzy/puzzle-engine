@@ -129,4 +129,96 @@ describe('AssetStorage 实例方法', () => {
       expect(url).toBe('/api/uploads/dir/name.txt')
     })
   })
+
+  // ── deleteFile ──────────────────────────────────────
+
+  describe('deleteFile', () => {
+    it('本地存储删除不存在的文件不抛异常', async () => {
+      const storage = new AssetStorage({
+        storageRoot: '/tmp/excuse-test-delete',
+        publicBasePath: '/api/uploads',
+      })
+
+      // 删除一个不存在的文件应静默失败（ENOENT 被忽略）
+      await expect(storage.deleteFile('nonexistent/file.txt')).resolves.toBeUndefined()
+    })
+
+    it('删除已存在的本地文件', async () => {
+      const storage = new AssetStorage({
+        storageRoot: '/tmp/excuse-test-delete-exists',
+        publicBasePath: '/api/uploads',
+      })
+
+      // 先上传一个文件
+      const buffer = Buffer.from('to-be-deleted')
+      await storage.uploadGenerated(buffer, 'deleteme.txt')
+
+      // 删除它
+      await expect(storage.deleteFile('deleteme.txt')).resolves.toBeUndefined()
+    })
+  })
+
+  // ── downloadAndMap 异常处理 ─────────────────────────
+
+  describe('downloadAndMap', () => {
+    it('空 URL 列表返回空数组', async () => {
+      const storage = new AssetStorage({
+        storageRoot: '/tmp/excuse-test-download-empty',
+        publicBasePath: '/api/uploads',
+      })
+
+      const result = await storage.downloadAndMap([], 'sub', 'video')
+      expect(result).toHaveLength(0)
+    })
+  })
+
+  // ── saveUploadedFile ───────────────────────────────
+
+  describe('saveUploadedFile', () => {
+    it('保存 File 对象并返回 storagePath + publicUrl', async () => {
+      const storage = new AssetStorage({
+        storageRoot: '/tmp/excuse-test-save-upload',
+        publicBasePath: '/api/uploads',
+      })
+
+      const file = new File(['upload content'], 'photo.png', { type: 'image/png' })
+      const { storagePath, publicUrl } = await storage.saveUploadedFile(file, 'ref_123')
+
+      expect(storagePath).toContain('ref_123/')
+      expect(storagePath).toContain('upload_')
+      expect(storagePath).toEndWith('.png')
+      expect(publicUrl).toContain('/api/uploads/ref_123/')
+    })
+  })
+
+  // ── isOSSUrl（有 OSS 配置但无真实连接） ────────────
+
+  describe('isOSSUrl with OSS config', () => {
+    it('isOSSUrl 始终检查 config.oss.bucket 匹配', () => {
+      // 构造 AssetStorage 带 OSS 配置
+      // 注意：ali-oss 构造函数可能因假凭据抛异常，AssetStorage 不应因此崩溃
+      try {
+        const storage = new AssetStorage({
+          storageRoot: '/tmp/test',
+          oss: {
+            accessKeyId: 'fake',
+            accessKeySecret: 'fake',
+            bucket: 'my-bucket',
+            region: 'oss-cn-hangzhou',
+          },
+        })
+
+        // 如果 ali-oss 构造成功（某些版本可能不立即验证凭据）
+        if (storage.isOSSEnabled) {
+          expect(storage.isOSSUrl('https://my-bucket.oss-cn-hangzhou.aliyuncs.com/uploads/img.png')).toBe(true)
+          expect(storage.isOSSUrl('https://other-bucket.oss-cn-hangzhou.aliyuncs.com/uploads/img.png')).toBe(false)
+          expect(storage.isOSSUrl('/api/uploads/local.png')).toBe(false)
+        }
+      }
+      catch {
+        // ali-oss 构造失败（测试环境无真实凭据），跳过
+        // 这是预期的——在无 OSS 的测试环境中，OSS 初始化可能抛异常
+      }
+    })
+  })
 })

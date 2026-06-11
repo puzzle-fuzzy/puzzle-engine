@@ -357,4 +357,92 @@ describe('processTask', () => {
     expect(notifications).toHaveLength(1)
     expect(notifications[0]!.canvasMeta).toBeUndefined()
   })
+
+  // ── 异常处理：queryTask 抛出异常 ────────────────────
+
+  it('should propagate error when queryTask throws', async () => {
+    const deps = createMockDeps({
+      queryTask: async () => { throw new Error('Network timeout') },
+    })
+
+    const { processTask } = createTestProcessor(deps)
+
+    // queryTask 异常应该向上传播，由轮询循环捕获
+    await expect(processTask(createRecord())).rejects.toThrow('Network timeout')
+  })
+
+  // ── 异常处理：downloadAndMap 抛出异常 ──────────────
+
+  it('should propagate error when downloadAndMap throws on SUCCEEDED', async () => {
+    const deps = createMockDeps({
+      queryTask: async () => ({
+        status: 'SUCCEEDED',
+        output: { video_url: 'https://cdn/video.mp4' },
+      }),
+      downloadAndMap: async () => { throw new Error('Disk full') },
+    })
+
+    const { processTask } = createTestProcessor(deps)
+
+    // downloadAndMap 异常应向上传播
+    await expect(processTask(createRecord())).rejects.toThrow('Disk full')
+  })
+
+  // ── 异常处理：markGenerationFailed 抛出异常 ────────
+
+  it('should propagate error when markGenerationFailed throws', async () => {
+    const deps = createMockDeps({
+      queryTask: async () => ({
+        status: 'FAILED',
+        errorMessage: 'Model error',
+      }),
+      markGenerationFailed: async () => { throw new Error('DB connection lost') },
+    })
+
+    const { processTask } = createTestProcessor(deps)
+
+    await expect(processTask(createRecord())).rejects.toThrow('DB connection lost')
+  })
+
+  // ── RUNNING + stale 记录也应超时 ──────────────────
+
+  it('should mark as failed when RUNNING task is stale', async () => {
+    const failed: Array<{ id: string, msg: string }> = []
+    const deps = createMockDeps({
+      markGenerationFailed: async (id, msg) => {
+        failed.push({ id, msg })
+      },
+    })
+    const { processTask } = createTestProcessor(deps)
+
+    const result = await processTask(createRecord({
+      status: 'processing',
+      createdAt: new Date(Date.now() - 2000), // 超过 staleTimeoutMs=1000
+    }))
+
+    expect(result.action).toBe('completed')
+    expect(failed).toHaveLength(1)
+    expect(failed[0]!.msg).toContain('timed out')
+  })
+
+  // ── extractVideoDuration ──────────────────────────
+
+  it('should extract video duration from output', async () => {
+    const succeeded: Array<{ id: string, output: OutputResult }> = []
+    const deps = createMockDeps({
+      queryTask: async () => ({
+        status: 'SUCCEEDED',
+        output: { video_url: 'https://cdn/video.mp4', video_duration: 8 },
+      }),
+      downloadAndMap: async urls => urls,
+      markGenerationSucceeded: async (id, output) => {
+        succeeded.push({ id, output })
+      },
+    })
+
+    const { processTask } = createTestProcessor(deps)
+    await processTask(createRecord({ inputParams: { prompt: 'test', duration: 5 } }))
+
+    expect(succeeded).toHaveLength(1)
+  })
 })

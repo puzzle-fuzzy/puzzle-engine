@@ -1,0 +1,348 @@
+import type { ServerConfig } from '../src/config'
+import { treaty } from '@elysia/eden'
+import { beforeAll, beforeEach, describe, expect, it, mock } from 'bun:test'
+
+/**
+ * Generate 路由 retry / cancel 端点测试
+ *
+ * 测试 POST /api/records/:id/retry 和 POST /api/records/:id/cancel
+ */
+
+// ─── Mocks ───────────────────────────────────────────────
+
+const mockCreateRecord = mock(() => Promise.resolve(null))
+const mockListRecords = mock(() => Promise.resolve([]))
+const mockGetRecordById = mock(() => Promise.resolve(null))
+const mockDeleteRecord = mock(() => Promise.resolve(undefined))
+const mockMarkFailed = mock(() => Promise.resolve(undefined))
+const mockMarkProcessing = mock(() => Promise.resolve(undefined))
+const mockMarkSucceeded = mock(() => Promise.resolve(undefined))
+const mockCalculateCost = mock(() => ({ unit: 'token', totalPriceCents: 1, totalPrice: 0.01 }))
+const mockGenerate = mock(() => Promise.resolve({ success: false, error: 'mock error' }))
+const mockNotifyStatus = mock(() => Promise.resolve(undefined))
+const mockGetUploadedFilesByIdsForAccount = mock(() => Promise.resolve([]))
+const mockCancelRecord = mock(() => Promise.resolve(undefined))
+const mockResetToPending = mock(() => Promise.resolve(undefined))
+const mockFindGenerationByDedupeKeyForAccount = mock(() => Promise.resolve(null))
+
+mock.module('@excuse/db', () => ({
+  createGenerationRecord: mockCreateRecord,
+  listGenerationRecords: mockListRecords,
+  getGenerationRecordById: mockGetRecordById,
+  deleteGenerationRecord: mockDeleteRecord,
+  markGenerationFailed: mockMarkFailed,
+  markGenerationProcessing: mockMarkProcessing,
+  markGenerationSucceeded: mockMarkSucceeded,
+  notifyGenerationStatus: mockNotifyStatus,
+  getUploadedFilesByIdsForAccount: mockGetUploadedFilesByIdsForAccount,
+  cancelGenerationRecord: mockCancelRecord,
+  resetGenerationToPending: mockResetToPending,
+  findGenerationByDedupeKeyForAccount: mockFindGenerationByDedupeKeyForAccount,
+}))
+
+mock.module('@excuse/provider', () => ({
+  DashScopeClient: class {
+    generate = mockGenerate
+    cancelTask = mock(() => Promise.resolve(undefined))
+  },
+  getModelById: (id: string) => {
+    const models: Record<string, any> = {
+      'qwen-max': {
+        id: 'qwen-max',
+        category: 'text',
+        type: 'generation',
+        pricing: { inputPriceCents: 240, outputPriceCents: 960, unit: 'token' },
+        parameters: [],
+        requestType: 'chat',
+        inputMapping: { prompt: { target: 'prompt' } },
+      },
+    }
+    return models[id]
+  },
+  AssetStorage: class {
+    downloadAndMap = mock(() => Promise.resolve(['https://saved.url/img.png']))
+  },
+}))
+
+mock.module('@excuse/billing', () => ({
+  calculateCost: mockCalculateCost,
+}))
+
+// eslint-disable-next-line import/first
+import { createGenerateRoutes } from '../src/routes/generate'
+
+// ─── 测试配置 ────────────────────────────────────────────
+
+const testConfig: ServerConfig = {
+  port: 0,
+  databaseUrl: '',
+  dashscopeApiKey: 'test-key',
+  dashscopeBaseUrl: 'https://test.local',
+  storageRoot: '/tmp/test-uploads',
+  frontendUrl: '',
+  workerPollIntervalMs: 0,
+  jwtSecret: 'test-retry-cancel-secret',
+  jwtExpiresIn: '1h',
+  oss: undefined,
+}
+
+function makeFailedRecord(overrides: Record<string, any> = {}) {
+  return {
+    id: 'rec-failed-001',
+    accountId: 'acc-001',
+    taskId: 'gen_old_task',
+    model: 'qwen-max',
+    category: 'text',
+    status: 'failed',
+    inputParams: { prompt: '你好' },
+    outputResult: null,
+    cost: null,
+    errorMessage: 'previous error',
+    retryCount: 0,
+    dedupeKey: 'qwen-max:{"prompt":"你好"}',
+    createdAt: new Date('2024-01-01'),
+    updatedAt: new Date('2024-01-01'),
+    ...overrides,
+  }
+}
+
+function makeProcessingRecord(overrides: Record<string, any> = {}) {
+  return {
+    id: 'rec-proc-001',
+    accountId: 'acc-001',
+    taskId: 'gen_proc_task',
+    model: 'qwen-max',
+    category: 'text',
+    status: 'processing',
+    inputParams: { prompt: 'test' },
+    outputResult: {},
+    cost: null,
+    errorMessage: null,
+    retryCount: 0,
+    dedupeKey: null,
+    createdAt: new Date('2024-01-01'),
+    updatedAt: new Date('2024-01-01'),
+    ...overrides,
+  }
+}
+
+async function getAuthToken(): Promise<string> {
+  const { Elysia } = await import('elysia')
+  const jwtApp = new Elysia()
+    .use((await import('@elysia/jwt')).jwt({ name: 'jwt', secret: testConfig.jwtSecret, exp: '1h' }))
+    .get('/sign', async ({ jwt }) => jwt.sign({ sub: 'acc-001' }))
+
+  const jwtClient = treaty(jwtApp)
+  const { data } = await jwtClient.sign.get()
+  return data as unknown as string
+}
+
+// ─── 测试 ────────────────────────────────────────────────
+
+describe('generate routes — retry & cancel', () => {
+  let client: ReturnType<typeof treaty>
+  let token: string
+
+  beforeAll(async () => {
+    token = await getAuthToken()
+  })
+
+  beforeEach(() => {
+    for (const m of [
+      mockCreateRecord,
+      mockListRecords,
+      mockGetRecordById,
+      mockDeleteRecord,
+      mockMarkFailed,
+      mockMarkProcessing,
+      mockMarkSucceeded,
+      mockCalculateCost,
+      mockGenerate,
+      mockNotifyStatus,
+      mockGetUploadedFilesByIdsForAccount,
+      mockCancelRecord,
+      mockResetToPending,
+      mockFindGenerationByDedupeKeyForAccount,
+    ]) {
+      m.mockClear()
+    }
+
+    const app = createGenerateRoutes(testConfig)
+    client = treaty(app)
+  })
+
+  // ═══════════════════════════════════════════════════
+  //  POST /api/records/:id/retry
+  // ═══════════════════════════════════════════════════
+
+  describe('POST /api/records/:id/retry', () => {
+    it('未登录时返回错误', async () => {
+      const { data } = await client.api.records({ id: 'rec-001' }).retry.post()
+
+      expect(data?.success === false || data === undefined).toBe(true)
+    })
+
+    it('记录不存在时返回错误', async () => {
+      mockGetRecordById.mockResolvedValue(null)
+
+      const { data } = await client.api.records({ id: 'nonexistent' }).retry.post(
+        null,
+        { headers: { Authorization: `Bearer ${token}` } },
+      )
+
+      expect(data?.success).toBe(false)
+      expect(data?.error).toContain('不存在')
+      expect(mockResetToPending).not.toHaveBeenCalled()
+    })
+
+    it('非失败记录返回错误（只能重试失败任务）', async () => {
+      mockGetRecordById.mockResolvedValue(makeFailedRecord({ status: 'succeeded' }))
+
+      const { data } = await client.api.records({ id: 'rec-001' }).retry.post(
+        null,
+        { headers: { Authorization: `Bearer ${token}` } },
+      )
+
+      expect(data?.success).toBe(false)
+      expect(data?.error).toContain('失败')
+      expect(mockResetToPending).not.toHaveBeenCalled()
+    })
+
+    it('无权操作其他用户的记录', async () => {
+      mockGetRecordById.mockResolvedValue(makeFailedRecord({ accountId: 'other-user' }))
+
+      const { data } = await client.api.records({ id: 'rec-001' }).retry.post(
+        null,
+        { headers: { Authorization: `Bearer ${token}` } },
+      )
+
+      expect(data?.success).toBe(false)
+      expect(data?.error).toContain('无权')
+    })
+
+    it('重试失败任务 — 同步模型成功', async () => {
+      mockGetRecordById.mockResolvedValue(makeFailedRecord())
+      mockGenerate.mockResolvedValue({
+        success: true,
+        output: { text: '重试结果' },
+        usage: { inputTokens: 10, outputTokens: 20 },
+      })
+      mockCalculateCost.mockReturnValue({ unit: 'token', totalPriceCents: 1, totalPrice: 0.01 })
+
+      const { data } = await client.api.records({ id: 'rec-failed-001' }).retry.post(
+        null,
+        { headers: { Authorization: `Bearer ${token}` } },
+      )
+
+      expect(data?.success).toBe(true)
+      expect(mockResetToPending).toHaveBeenCalledWith('rec-failed-001')
+      expect(mockMarkSucceeded).toHaveBeenCalled()
+      expect(mockNotifyStatus).toHaveBeenCalled()
+    })
+
+    it('重试失败任务 — API 再次失败', async () => {
+      mockGetRecordById.mockResolvedValue(makeFailedRecord())
+      mockGenerate.mockResolvedValue({ success: false, error: 'API 仍然失败' })
+
+      const { data } = await client.api.records({ id: 'rec-failed-001' }).retry.post(
+        null,
+        { headers: { Authorization: `Bearer ${token}` } },
+      )
+
+      expect(data?.success).toBe(false)
+      expect(mockMarkFailed).toHaveBeenCalled()
+    })
+
+    it('重试时未知模型返回错误', async () => {
+      mockGetRecordById.mockResolvedValue(makeFailedRecord({ model: 'nonexistent-model' }))
+
+      const { data } = await client.api.records({ id: 'rec-001' }).retry.post(
+        null,
+        { headers: { Authorization: `Bearer ${token}` } },
+      )
+
+      expect(data?.success).toBe(false)
+      expect(data?.error).toContain('Unknown model')
+    })
+  })
+
+  // ═══════════════════════════════════════════════════
+  //  POST /api/records/:id/cancel
+  // ═══════════════════════════════════════════════════
+
+  describe('POST /api/records/:id/cancel', () => {
+    it('未登录时返回错误', async () => {
+      const { data } = await client.api.records({ id: 'rec-001' }).cancel.post()
+
+      expect(data?.success === false || data === undefined).toBe(true)
+    })
+
+    it('记录不存在时返回错误', async () => {
+      mockGetRecordById.mockResolvedValue(null)
+
+      const { data } = await client.api.records({ id: 'nonexistent' }).cancel.post(
+        null,
+        { headers: { Authorization: `Bearer ${token}` } },
+      )
+
+      expect(data?.success).toBe(false)
+      expect(data?.error).toContain('不存在')
+    })
+
+    it('无权操作其他用户的记录', async () => {
+      mockGetRecordById.mockResolvedValue(makeProcessingRecord({ accountId: 'other-user' }))
+
+      const { data } = await client.api.records({ id: 'rec-001' }).cancel.post(
+        null,
+        { headers: { Authorization: `Bearer ${token}` } },
+      )
+
+      expect(data?.success).toBe(false)
+      expect(data?.error).toContain('无权')
+    })
+
+    it('已完成任务不能取消', async () => {
+      mockGetRecordById.mockResolvedValue(makeProcessingRecord({ status: 'succeeded' }))
+
+      const { data } = await client.api.records({ id: 'rec-001' }).cancel.post(
+        null,
+        { headers: { Authorization: `Bearer ${token}` } },
+      )
+
+      expect(data?.success).toBe(false)
+      expect(data?.error).toContain('只能取消')
+      expect(mockCancelRecord).not.toHaveBeenCalled()
+    })
+
+    it('成功取消 processing 任务', async () => {
+      const record = makeProcessingRecord()
+      mockGetRecordById
+        .mockResolvedValueOnce(record)
+        .mockResolvedValueOnce({ ...record, status: 'failed', errorMessage: '用户取消' })
+
+      const { data } = await client.api.records({ id: 'rec-proc-001' }).cancel.post(
+        null,
+        { headers: { Authorization: `Bearer ${token}` } },
+      )
+
+      expect(data?.success).toBe(true)
+      expect(mockCancelRecord).toHaveBeenCalledWith('rec-proc-001')
+      expect(mockNotifyStatus).toHaveBeenCalled()
+    })
+
+    it('成功取消 pending 任务', async () => {
+      const record = makeProcessingRecord({ status: 'pending' })
+      mockGetRecordById
+        .mockResolvedValueOnce(record)
+        .mockResolvedValueOnce({ ...record, status: 'failed', errorMessage: '用户取消' })
+
+      const { data } = await client.api.records({ id: 'rec-proc-001' }).cancel.post(
+        null,
+        { headers: { Authorization: `Bearer ${token}` } },
+      )
+
+      expect(data?.success).toBe(true)
+      expect(mockCancelRecord).toHaveBeenCalledWith('rec-proc-001')
+    })
+  })
+})
