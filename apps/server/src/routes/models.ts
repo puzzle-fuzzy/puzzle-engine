@@ -13,9 +13,9 @@ export const modelsRoutes = new Elysia({ prefix: '/api/models' })
       pricing: {
         unit: m.pricing.unit,
         note: m.pricing.note,
-        inputPrice: m.pricing.inputPrice,
-        outputPrice: m.pricing.outputPrice,
-        inputPrice1080: m.pricing.inputPrice1080,
+        inputPriceCents: m.pricing.inputPriceCents,
+        outputPriceCents: m.pricing.outputPriceCents,
+        inputPrice1080Cents: m.pricing.inputPrice1080Cents,
       },
       parameters: m.parameters,
       // 前端需要 referenceMediaType 来判断是否显示参考图上传卡片（r2v 模型）

@@ -1,4 +1,5 @@
 import type { GenerationRecord, ModelConfig } from '@/api/client'
+import currency from 'currency.js'
 import { isImageOutput, isTextOutput, isVideoOutput } from '@excuse/shared'
 import {
   Copy,
@@ -179,10 +180,9 @@ export default function RecordCard({
                 </span>
               )}
             </div>
-            {record.cost.totalPrice != null && (
+            {record.cost.totalPriceCents != null && (
               <p className="font-medium text-foreground">
-                总计: ¥
-                {Number(record.cost.totalPrice).toFixed(4)}
+                总计: ¥{currency(record.cost.totalPriceCents, { fromCents: true, precision: 4 }).format()}
                 {record.cost.estimated && ' (预估)'}
               </p>
             )}

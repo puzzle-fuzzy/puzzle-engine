@@ -1,4 +1,5 @@
 import type { GenerationRecord } from '@/api/client'
+import currency from 'currency.js'
 import { isImageOutput, isTextOutput, isVideoOutput } from '@excuse/shared'
 import {
   Download,
@@ -193,10 +194,9 @@ export default function Assets() {
                 {' '}
                 {String(previewRecord.inputParams?.prompt || '').slice(0, 200)}
               </p>
-              {previewRecord.cost?.totalPrice != null && (
+              {previewRecord.cost?.totalPriceCents != null && (
                 <p className="text-xs text-muted-foreground">
-                  费用: ¥
-                  {Number(previewRecord.cost.totalPrice).toFixed(4)}
+                  费用: ¥{currency(previewRecord.cost.totalPriceCents, { fromCents: true, precision: 4 }).format()}
                 </p>
               )}
             </div>

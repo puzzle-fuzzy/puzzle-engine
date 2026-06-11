@@ -1,3 +1,4 @@
+import currency from 'currency.js'
 import type { GenerateResponse, GenerationRecord, ModelConfig, ModelParameter } from '@/api/client'
 import { isImageOutput, isTextOutput, isVideoOutput } from '@excuse/shared'
 import {
@@ -97,6 +98,11 @@ function isImageUrl(url: string) {
 /** 判断 URL 是否为视频 */
 function isVideoUrl(url: string) {
   return /\.(?:mp4|webm|mov|avi)(?:\?.*)?$/i.test(url) || url.includes('/video')
+}
+
+/** 将整数分格式化为人民币字符串 */
+function formatCents(cents: number, precision = 2): string {
+  return currency(cents, { fromCents: true, precision }).format()
 }
 
 export default function Workspace() {
@@ -575,10 +581,9 @@ export default function Workspace() {
                     {record.cost.quantity}
                   </span>
                 )}
-                {record.cost.unitPrice != null && (
+                {record.cost.unitPriceCents != null && (
                   <span>
-                    单价: ¥
-                    {Number(record.cost.unitPrice).toFixed(4)}
+                    单价: ¥{formatCents(record.cost.unitPriceCents, 4)}
                   </span>
                 )}
                 {record.cost.inputTokens != null && (
@@ -607,10 +612,9 @@ export default function Workspace() {
                   </span>
                 )}
               </div>
-              {record.cost.totalPrice != null && (
+              {record.cost.totalPriceCents != null && (
                 <p className="font-medium text-foreground">
-                  总计: ¥
-                  {Number(record.cost.totalPrice).toFixed(4)}
+                  总计: ¥{formatCents(record.cost.totalPriceCents, 4)}
                   {record.cost.estimated && ' (预估)'}
                 </p>
               )}

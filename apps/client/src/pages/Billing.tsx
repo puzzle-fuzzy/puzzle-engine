@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import { fetchBillingStatistics } from '@/api/client'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { formatCents } from '@/pages/workspace-utils'
 
 const CATEGORY_LABELS: Record<string, string> = {
   text: '文本生成',
@@ -40,10 +41,10 @@ export default function Billing() {
   }
 
   const overviewCards = [
-    { label: '总额', value: stats.total, icon: DollarSign },
-    { label: '今日', value: stats.today, icon: TrendingUp },
-    { label: '本周', value: stats.week, icon: CalendarDays },
-    { label: '本月', value: stats.month, icon: Calendar },
+    { label: '总额', valueCents: stats.totalCents, icon: DollarSign },
+    { label: '今日', valueCents: stats.todayCents, icon: TrendingUp },
+    { label: '本周', valueCents: stats.weekCents, icon: CalendarDays },
+    { label: '本月', valueCents: stats.monthCents, icon: Calendar },
   ]
 
   return (
@@ -56,14 +57,13 @@ export default function Billing() {
 
       {/* 概览卡片 */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        {overviewCards.map(({ label, value, icon: Icon }) => (
+        {overviewCards.map(({ label, valueCents, icon: Icon }) => (
           <Card key={label}>
             <CardContent className="flex items-center gap-3 p-4">
               <Icon className="size-5 text-muted-foreground" />
               <div>
                 <p className="text-2xl font-bold">
-                  ¥
-                  {value.toFixed(2)}
+                  ¥{formatCents(valueCents)}
                 </p>
                 <p className="text-xs text-muted-foreground">{label}</p>
               </div>
@@ -89,8 +89,7 @@ export default function Billing() {
                       <div className="flex items-center justify-between text-sm">
                         <span>{CATEGORY_LABELS[item.category] || item.category}</span>
                         <span className="text-muted-foreground">
-                          ¥
-                          {item.total.toFixed(4)}
+                          ¥{formatCents(item.totalCents, 4)}
                           {' '}
                           (
                           {item.percentage}
@@ -125,8 +124,7 @@ export default function Billing() {
                       <div className="flex items-center justify-between text-sm">
                         <span className="truncate">{item.model}</span>
                         <span className="text-muted-foreground">
-                          ¥
-                          {item.total.toFixed(4)}
+                          ¥{formatCents(item.totalCents, 4)}
                           {' '}
                           (
                           {item.percentage}
@@ -152,25 +150,24 @@ export default function Billing() {
           <CardTitle className="text-sm">30 天趋势</CardTitle>
         </CardHeader>
         <CardContent>
-          {stats.dailyTrend.every(d => d.total === 0)
+          {stats.dailyTrend.every(d => d.totalCents === 0)
             ? (
                 <p className="text-sm text-muted-foreground">暂无数据</p>
               )
             : (
                 <div className="flex items-end gap-1 h-32">
                   {stats.dailyTrend.map((item) => {
-                    const maxTotal = Math.max(...stats.dailyTrend.map(d => d.total), 0.01)
-                    const height = Math.max((item.total / maxTotal) * 100, 1)
+                    const maxCents = Math.max(...stats.dailyTrend.map(d => d.totalCents), 1)
+                    const height = Math.max((item.totalCents / maxCents) * 100, 1)
                     return (
                       <div
                         key={item.date}
                         className="group relative flex-1 rounded-t bg-primary/20 hover:bg-primary/40 transition-colors"
                         style={{ height: `${height}%` }}
-                        title={`${item.date}: ¥${item.total.toFixed(4)}`}
+                        title={`${item.date}: ¥${formatCents(item.totalCents, 4)}`}
                       >
                         <div className="absolute -top-6 left-1/2 -translate-x-1/2 hidden group-hover:block whitespace-nowrap rounded bg-black/80 px-1.5 py-0.5 text-[10px] text-white">
-                          ¥
-                          {item.total.toFixed(2)}
+                          ¥{formatCents(item.totalCents)}
                         </div>
                       </div>
                     )

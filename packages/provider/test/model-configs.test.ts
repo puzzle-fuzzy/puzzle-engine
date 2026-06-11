@@ -21,7 +21,7 @@ describe('getModelById', () => {
       expect(['text', 'image', 'video']).toContain(model.category)
       expect(['generation', 'understanding', 'editing']).toContain(model.type)
       expect(model.endpoint).toBeTruthy()
-      expect(model.pricing.inputPrice).toBeGreaterThan(0)
+      expect(model.pricing.inputPriceCents).toBeGreaterThan(0)
       expect(model.parameters).toBeInstanceOf(Array)
     }
   })
@@ -91,18 +91,18 @@ describe('模型配置完整性', () => {
     }
   })
 
-  it('文本模型定价包含 outputPrice', () => {
+  it('文本模型定价包含 outputPriceCents', () => {
     const textModels = getModelsByCategory('text')
     for (const model of textModels) {
-      expect(model.pricing.outputPrice, `${model.id} 文本模型缺少 outputPrice`).toBeDefined()
-      expect(model.pricing.outputPrice).toBeGreaterThan(0)
+      expect(model.pricing.outputPriceCents, `${model.id} 文本模型缺少 outputPriceCents`).toBeDefined()
+      expect(model.pricing.outputPriceCents).toBeGreaterThan(0)
     }
   })
 
-  it('视频模型定价包含 inputPrice1080', () => {
+  it('视频模型定价包含 inputPrice1080Cents', () => {
     const videoModels = getModelsByCategory('video')
     for (const model of videoModels) {
-      expect(model.pricing.inputPrice1080, `${model.id} 视频模型缺少 inputPrice1080`).toBeDefined()
+      expect(model.pricing.inputPrice1080Cents, `${model.id} 视频模型缺少 inputPrice1080Cents`).toBeDefined()
     }
   })
 

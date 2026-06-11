@@ -1,3 +1,4 @@
+import currency from 'currency.js'
 import {
   CheckCircle2,
   Clock,
@@ -71,4 +72,9 @@ export function isImageUrl(url: string) {
 /** 判断 URL 是否为视频 */
 export function isVideoUrl(url: string) {
   return /\.(?:mp4|webm|mov|avi)(?:\?.*)?$/i.test(url) || url.includes('/video')
+}
+
+/** 将整数分格式化为人民币字符串 */
+export function formatCents(cents: number, precision = 2): string {
+  return currency(cents, { fromCents: true, precision }).format()
 }

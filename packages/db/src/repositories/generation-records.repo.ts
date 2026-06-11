@@ -171,5 +171,5 @@ export async function getCostRecords(accountId?: string) {
     .from(generationRecords)
     .where(and(...conditions))
 
-  return records.filter(r => r.cost && typeof r.cost.totalPrice === 'number')
+  return records.filter(r => r.cost && (typeof r.cost.totalPriceCents === 'number' || typeof r.cost.totalPrice === 'number'))
 }
