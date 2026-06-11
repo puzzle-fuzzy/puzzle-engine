@@ -1,6 +1,6 @@
 import type { ProjectDTO } from '@excuse/shared'
 import { useCallback, useState } from 'react'
-import { updateCanvasCharacter, updateCanvasLocation, updateCanvasProject, updateCanvasShot, uploadFile } from '../../api/client'
+import { deleteCanvasCharacter, deleteCanvasLocation, deleteCanvasShot, updateCanvasCharacter, updateCanvasLocation, updateCanvasProject, updateCanvasShot, uploadFile } from '../../api/client'
 import { Button } from '../ui/button'
 import { Input } from '../ui/input'
 import { PromptEditor } from './PromptEditor'
@@ -261,6 +261,17 @@ export default function NodeDetailPanel({ selectedNode, project, onUpdate }: Nod
               />
             </div>
           )}
+
+          <Button
+            variant="destructive"
+            size="sm"
+            onClick={() => {
+              if (confirm(`确认删除镜头 ${shot.shotIndex}？此操作不可恢复。`))
+                deleteCanvasShot(shot.id).then(onUpdate)
+            }}
+          >
+            删除镜头
+          </Button>
         </>
       )}
 
@@ -311,6 +322,17 @@ export default function NodeDetailPanel({ selectedNode, project, onUpdate }: Nod
             onUpload={handleCharacterUpload}
             label="角色参考图"
           />
+
+          <Button
+            variant="destructive"
+            size="sm"
+            onClick={() => {
+              if (confirm(`确认删除角色「${character.name}」？关联的镜头将移除该角色引用。`))
+                deleteCanvasCharacter(character.id).then(onUpdate)
+            }}
+          >
+            删除角色
+          </Button>
         </>
       )}
 
@@ -349,6 +371,17 @@ export default function NodeDetailPanel({ selectedNode, project, onUpdate }: Nod
             onUpload={handleLocationUpload}
             label="场景参考图"
           />
+
+          <Button
+            variant="destructive"
+            size="sm"
+            onClick={() => {
+              if (confirm(`确认删除场景「${location.name}」？关联的镜头将移除该场景引用。`))
+                deleteCanvasLocation(location.id).then(onUpdate)
+            }}
+          >
+            删除场景
+          </Button>
         </>
       )}
 
