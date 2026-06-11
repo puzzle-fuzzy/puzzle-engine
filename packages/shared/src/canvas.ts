@@ -1,5 +1,7 @@
 import type {
   CanvasModelPreferences,
+  CanvasProjectStatus as CanvasProjectStatusFromDB,
+  CanvasShotStatus as CanvasShotStatusFromDB,
   CharacterProfile,
   ContinuityIssue,
   LocationProfile,
@@ -14,16 +16,13 @@ import type {
 export type { CanvasModelPreferences, CharacterProfile, ContinuityIssue, LocationProfile, NovelAnalysis }
 export type { ShotCamera, ShotContinuity, ShotEnvironment, ShotTimelineEntry }
 
-// ===== 画布流水线领域类型 =====
+// ===== 画布状态类型（从 DB pgEnum 推导，消除重复定义） =====
 
-/** 画布项目状态 */
-export type CanvasProjectStatus
-  = | 'draft' | 'analyzed' | 'characters_ready' | 'locations_ready'
-    | 'refs_ready' | 'refs_all_ready' | 'storyboard_ready' | 'continuity_checked'
-    | 'prompts_ready' | 'generating' | 'completed' | 'failed'
+/** 画布项目状态（从 pgEnum 推导，与数据库枚举保持同步） */
+export type CanvasProjectStatus = CanvasProjectStatusFromDB
 
-/** 画布镜头状态 */
-export type CanvasShotStatus = 'draft' | 'ready' | 'generating' | 'completed' | 'failed'
+/** 画布镜头状态（从 pgEnum 推导，与数据库枚举保持同步） */
+export type CanvasShotStatus = CanvasShotStatusFromDB
 
 // ===== LLM 输出类型 =====
 // NovelAnalysis / CharacterProfile / LocationProfile / ContinuityIssue 已从 @excuse/db 重导出
@@ -75,7 +74,7 @@ export interface LocationDTO {
   id: string
   projectId: string
   name: string
-  type: string
+  type: LocationProfile['type']
   profile: LocationProfile | null
   scenePrompt: string | null
   negativePrompt: string | null

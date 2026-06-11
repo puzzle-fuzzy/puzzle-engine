@@ -52,12 +52,18 @@ export function createGenerateRoutes(config: ServerConfig) {
         return { success: false, error: `Unknown model: ${model}` }
       }
 
+      // audio 模型不在 DB generation_category 枚举中，拒绝
+      if (modelConfig.category === 'audio') {
+        return { success: false, error: `Audio generation is not supported` }
+      }
+      const category = modelConfig.category as GenerationCategory
+
       // 去重：同一用户 + 同一 model + 相同参数短时间内不重复提交
       const dedupeKey = `${userId}:${model}:${JSON.stringify(parameters)}`
       const existing = await findGenerationByDedupeKeyForAccount(dedupeKey, userId)
       if (existing && (existing.status === 'pending' || existing.status === 'processing')) {
         const updated = await getGenerationRecordById(existing.id)
-        return { success: true, record: serializeRecord(updated!), duplicated: true }
+        return { success: true, record: serializeRecord(updated ?? existing), duplicated: true }
       }
 
       // 预估费用
@@ -71,7 +77,7 @@ export function createGenerateRoutes(config: ServerConfig) {
         accountId: userId,
         taskId,
         model,
-        category: modelConfig.category,
+        category,
         status: 'pending',
         inputParams: { ...parameters, referenceFileIds },
         cost: { ...estimatedCost, estimated: true },
@@ -99,7 +105,7 @@ export function createGenerateRoutes(config: ServerConfig) {
           accountId: userId,
           recordId: record.id,
           status: 'failed',
-          category: modelConfig.category,
+          category,
           model,
           taskId,
           errorMessage: result.error,
@@ -107,14 +113,14 @@ export function createGenerateRoutes(config: ServerConfig) {
 
         // 重新查询以获取更新后的记录
         const updated = await getGenerationRecordById(record.id)
-        return { success: false, record: serializeRecord(updated!) }
+        return { success: false, record: serializeRecord(updated ?? record) }
       }
 
       if (result.providerTaskId) {
         // 异步任务（视频生成）— 保存 providerTaskId，Worker 会轮询
         await markGenerationProcessing(record.id, {
           taskId: result.providerTaskId,
-          outputResult: result.output ?? ({} as OutputResult),
+          outputResult: (result.output ?? { type: 'processing', status: 'processing' }) as OutputResult,
         })
 
         // 通知 SSE 客户端状态变为 processing
@@ -122,21 +128,21 @@ export function createGenerateRoutes(config: ServerConfig) {
           accountId: userId,
           recordId: record.id,
           status: 'processing',
-          category: modelConfig.category,
+          category,
           model,
           taskId: result.providerTaskId,
         })
 
         const updated = await getGenerationRecordById(record.id)
-        return { success: true, record: serializeRecord(updated!) }
+        return { success: true, record: serializeRecord(updated ?? record) }
       }
 
       // 同步任务完成（文本/图片）— 下载并保存结果
-      let outputResult = result.output || {}
-      if (modelConfig.category === 'image' && 'urls' in outputResult) {
-        const urls = Array.isArray(outputResult.urls) ? outputResult.urls : []
+      let outputResult: OutputResult = result.output as OutputResult ?? { type: 'text', text: '' }
+      if (modelConfig.category === 'image' && result.output && 'urls' in result.output) {
+        const urls = Array.isArray(result.output.urls) ? result.output.urls : []
         const savedUrls = await storage.downloadAndMap(urls, taskId, 'img')
-        outputResult = { ...outputResult, savedUrls, urls }
+        outputResult = { type: 'image', savedUrls, urls }
       }
 
       // 计算实际费用
@@ -149,7 +155,7 @@ export function createGenerateRoutes(config: ServerConfig) {
         accountId: userId,
         recordId: record.id,
         status: 'succeeded',
-        category: modelConfig.category,
+        category,
         model,
         taskId,
         outputResult,
@@ -157,7 +163,7 @@ export function createGenerateRoutes(config: ServerConfig) {
       })
 
       const updated = await getGenerationRecordById(record.id)
-      return { success: true, record: serializeRecord(updated!) }
+      return { success: true, record: serializeRecord(updated ?? record) }
     }, {
       body: t.Object({
         model: t.String(),
@@ -172,11 +178,17 @@ export function createGenerateRoutes(config: ServerConfig) {
         return { success: false, error: '请先登录' }
       }
 
-      const category = typeof query.category === 'string'
-        ? query.category as GenerationCategory | undefined
+      const VALID_CATEGORIES = ['text', 'image', 'video'] as const
+      const VALID_STATUSES = ['pending', 'processing', 'succeeded', 'failed'] as const
+
+      const rawCategory = typeof query.category === 'string' ? query.category : undefined
+      const rawStatus = typeof query.status === 'string' ? query.status : undefined
+
+      const category = rawCategory && (VALID_CATEGORIES as readonly string[]).includes(rawCategory)
+        ? rawCategory as GenerationCategory
         : undefined
-      const status = typeof query.status === 'string'
-        ? query.status as GenerationStatus | undefined
+      const status = rawStatus && (VALID_STATUSES as readonly string[]).includes(rawStatus)
+        ? rawStatus as GenerationStatus
         : undefined
       const limit = query.limit ?? 50
       const offset = query.offset ?? 0
@@ -257,6 +269,11 @@ export function createGenerateRoutes(config: ServerConfig) {
       if (!modelConfig)
         return { success: false, error: `Unknown model: ${record.model}` }
 
+      if (modelConfig.category === 'audio') {
+        return { success: false, error: `Audio generation is not supported` }
+      }
+      const retryCategory = modelConfig.category as GenerationCategory
+
       const inputParams = record.inputParams
       const referenceFileIds = Array.isArray(inputParams.referenceFileIds)
         ? inputParams.referenceFileIds as string[]
@@ -285,38 +302,38 @@ export function createGenerateRoutes(config: ServerConfig) {
           accountId: userId,
           recordId: record.id,
           status: 'failed',
-          category: modelConfig.category,
+          category: retryCategory,
           model: record.model,
           taskId: newTaskId,
           errorMessage: result.error,
         })
         const updated = await getGenerationRecordById(record.id)
-        return { success: false, record: serializeRecord(updated!) }
+        return { success: false, record: serializeRecord(updated ?? record) }
       }
 
       if (result.providerTaskId) {
         await markGenerationProcessing(record.id, {
           taskId: result.providerTaskId,
-          outputResult: result.output ?? ({} as OutputResult),
+          outputResult: (result.output ?? { type: 'processing', status: 'processing' }) as OutputResult,
         })
         await notifyGenerationStatus({
           accountId: userId,
           recordId: record.id,
           status: 'processing',
-          category: modelConfig.category,
+          category: retryCategory,
           model: record.model,
           taskId: result.providerTaskId,
         })
         const updated = await getGenerationRecordById(record.id)
-        return { success: true, record: serializeRecord(updated!) }
+        return { success: true, record: serializeRecord(updated ?? record) }
       }
 
       // Sync task succeeded (text/image retry)
-      let outputResult = result.output || {} as OutputResult
-      if (modelConfig.category === 'image' && 'urls' in outputResult) {
-        const urls = Array.isArray(outputResult.urls) ? outputResult.urls : []
+      let outputResult: OutputResult = result.output as OutputResult ?? { type: 'text', text: '' }
+      if (modelConfig.category === 'image' && result.output && 'urls' in result.output) {
+        const urls = Array.isArray(result.output.urls) ? result.output.urls : []
         const savedUrls = await storage.downloadAndMap(urls, newTaskId, 'img')
-        outputResult = { ...outputResult, savedUrls, urls }
+        outputResult = { type: 'image', savedUrls, urls }
       }
       const actualCost = calculateCost(modelConfig, parameters, result.usage)
       await markGenerationSucceeded(record.id, outputResult, actualCost)
@@ -324,14 +341,14 @@ export function createGenerateRoutes(config: ServerConfig) {
         accountId: userId,
         recordId: record.id,
         status: 'succeeded',
-        category: modelConfig.category,
+        category: retryCategory,
         model: record.model,
         taskId: newTaskId,
         outputResult,
         cost: actualCost,
       })
       const updated = await getGenerationRecordById(record.id)
-      return { success: true, record: serializeRecord(updated!) }
+      return { success: true, record: serializeRecord(updated ?? record) }
     }, {
       params: t.Object({
         id: t.String(),
@@ -368,7 +385,7 @@ export function createGenerateRoutes(config: ServerConfig) {
       })
 
       const updated = await getGenerationRecordById(record.id)
-      return { success: true, record: serializeRecord(updated!) }
+      return { success: true, record: serializeRecord(updated ?? record) }
     }, {
       params: t.Object({
         id: t.String(),

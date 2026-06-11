@@ -130,29 +130,34 @@ export interface CostDetail {
 
 /** 文本输出 */
 export interface TextOutputResult {
+  type: 'text'
   text: string
 }
 
 /** 图片输出 */
 export interface ImageOutputResult {
+  type: 'image'
   savedUrls: string[]
   urls?: string[]
 }
 
 /** 视频输出 */
 export interface VideoOutputResult {
+  type: 'video'
   savedUrls: string[]
   originalUrl?: string
+  /** @deprecated 使用 originalUrl。保留以兼容 DashScope 旧数据 */
   video_url?: string
 }
 
 /** 处理中状态（异步任务尚未完成） */
 export interface ProcessingOutputResult {
+  type: 'processing'
   taskId?: string
   status?: string
 }
 
-/** outputResult 的所有可能形态 */
+/** outputResult 的所有可能形态（可辨识联合，通过 type 字段区分） */
 export type OutputResult
   = | TextOutputResult
     | ImageOutputResult

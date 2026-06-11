@@ -102,15 +102,16 @@ export function getDashScopeErrorMessage(code: string, fallback: string): string
  * 3. OpenAI 兼容 (无 code): { error: { message } }
  * 4. 异步任务失败: { output: { task_status: "FAILED", message } }
  */
-export function parseDashScopeError(response: Record<string, unknown> | null | undefined): string {
+export function parseDashScopeError(response: unknown): string {
   if (!response || typeof response !== 'object') {
     return '未知错误'
   }
 
-  const code = typeof response.code === 'string' ? response.code : undefined
-  const message = typeof response.message === 'string' ? response.message : undefined
-  const error = typeof response.error === 'object' && response.error !== null ? response.error as Record<string, unknown> : undefined
-  const output = typeof response.output === 'object' && response.output !== null ? response.output as Record<string, unknown> : undefined
+  const r = response as Record<string, unknown>
+  const code = typeof r.code === 'string' ? r.code : undefined
+  const message = typeof r.message === 'string' ? r.message : undefined
+  const error = typeof r.error === 'object' && r.error !== null ? r.error as Record<string, unknown> : undefined
+  const output = typeof r.output === 'object' && r.output !== null ? r.output as Record<string, unknown> : undefined
 
   // DashScope 原生格式: { code, message }
   if (code) {

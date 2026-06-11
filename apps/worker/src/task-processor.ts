@@ -28,7 +28,7 @@ export type TaskResult
  */
 export interface TaskProcessorDeps {
   queryTask: (taskId: string) => Promise<{
-    status: string
+    status: 'PENDING' | 'RUNNING' | 'SUCCEEDED' | 'FAILED' | 'UNKNOWN'
     output?: Record<string, unknown>
     errorMessage?: string
   }>
@@ -74,7 +74,7 @@ export function createTaskProcessor(config: WorkerConfig, deps?: Partial<TaskPro
     taskId: string | null
     model: string
     status: string
-    category: string
+    category: GenerationCategory
     createdAt: Date
     inputParams: Record<string, unknown> | null
     cost: CostDetail | null
@@ -96,7 +96,7 @@ export function createTaskProcessor(config: WorkerConfig, deps?: Partial<TaskPro
         accountId: record.accountId,
         recordId: record.id,
         status: 'failed' as GenerationStatus,
-        category: record.category as GenerationCategory,
+        category: record.category,
         model: record.model,
         taskId,
         errorMessage: 'Task timed out (>4h)',
@@ -127,6 +127,7 @@ export function createTaskProcessor(config: WorkerConfig, deps?: Partial<TaskPro
 
         const output = {
           ...(taskStatus.output || {}),
+          type: 'video' as const,
           savedUrls,
           originalUrl: videoUrl,
         }
@@ -137,7 +138,7 @@ export function createTaskProcessor(config: WorkerConfig, deps?: Partial<TaskPro
           accountId: record.accountId,
           recordId: record.id,
           status: 'succeeded' as GenerationStatus,
-          category: record.category as GenerationCategory,
+          category: record.category,
           model: record.model,
           taskId,
           outputResult: output as OutputResult,
@@ -167,7 +168,7 @@ export function createTaskProcessor(config: WorkerConfig, deps?: Partial<TaskPro
           accountId: record.accountId,
           recordId: record.id,
           status: 'failed' as GenerationStatus,
-          category: record.category as GenerationCategory,
+          category: record.category,
           model: record.model,
           taskId,
           errorMessage: errMsg,

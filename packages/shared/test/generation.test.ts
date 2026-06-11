@@ -34,8 +34,13 @@ describe('parseOutputResult', () => {
 
   it('parses text output', () => {
     const result = parseOutputResult({ text: '你好' })
-    expect(result).toEqual({ text: '你好' })
+    expect(result).toEqual({ type: 'text', text: '你好' })
     expect(isTextOutput(result)).toBe(true)
+  })
+
+  it('parses text output with explicit type field', () => {
+    const result = parseOutputResult({ type: 'text', text: '你好' })
+    expect(result).toEqual({ type: 'text', text: '你好' })
   })
 
   it('ignores text when value is not string', () => {
@@ -51,6 +56,7 @@ describe('parseOutputResult', () => {
       urls: ['https://orig/1.png'],
     })
     expect(result).toEqual({
+      type: 'image',
       savedUrls: ['https://saved/1.png'],
       urls: ['https://orig/1.png'],
     })
@@ -59,7 +65,7 @@ describe('parseOutputResult', () => {
 
   it('parses image output (savedUrls only, no urls)', () => {
     const result = parseOutputResult({ savedUrls: ['https://saved/1.png'] })
-    expect(result).toEqual({ savedUrls: ['https://saved/1.png'], urls: undefined })
+    expect(result).toEqual({ type: 'image', savedUrls: ['https://saved/1.png'], urls: undefined })
     expect(isImageOutput(result)).toBe(true)
   })
 
@@ -76,6 +82,7 @@ describe('parseOutputResult', () => {
       originalUrl: 'https://cdn/v.mp4',
     })
     expect(result).toEqual({
+      type: 'video',
       savedUrls: ['https://saved/v.mp4'],
       originalUrl: 'https://cdn/v.mp4',
     })
@@ -88,6 +95,7 @@ describe('parseOutputResult', () => {
       video_url: 'https://cdn/v.mp4',
     })
     expect(result).toEqual({
+      type: 'video',
       savedUrls: ['https://saved/v.mp4'],
       originalUrl: undefined,
     })
@@ -100,6 +108,7 @@ describe('parseOutputResult', () => {
       originalUrl: null,
     })
     expect(result).toEqual({
+      type: 'video',
       savedUrls: ['https://saved/v.mp4'],
       originalUrl: undefined,
     })
@@ -112,35 +121,43 @@ describe('parseOutputResult', () => {
       taskId: 'task-123',
       status: 'RUNNING',
     })
-    expect(result).toEqual({ taskId: 'task-123', status: 'RUNNING' })
+    expect(result).toEqual({ type: 'processing', taskId: 'task-123', status: 'RUNNING' })
     expect(isProcessingOutput(result)).toBe(true)
   })
 
   it('parses processing output with only taskId', () => {
     const result = parseOutputResult({ taskId: 'task-123' })
-    expect(result).toEqual({ taskId: 'task-123', status: undefined })
+    expect(result).toEqual({ type: 'processing', taskId: 'task-123', status: undefined })
   })
 
   it('parses processing output with only status', () => {
     const result = parseOutputResult({ status: 'PENDING' })
-    expect(result).toEqual({ taskId: undefined, status: 'PENDING' })
+    expect(result).toEqual({ type: 'processing', taskId: undefined, status: 'PENDING' })
   })
 
   it('normalizes non-string taskId/status to undefined', () => {
     const result = parseOutputResult({ taskId: 42, status: null })
-    expect(result).toEqual({ taskId: undefined, status: undefined })
+    expect(result).toEqual({ type: 'processing', taskId: undefined, status: undefined })
   })
 
   // ── Priority rules ──
 
   it('text takes priority over savedUrls', () => {
     const result = parseOutputResult({ text: 'hello', savedUrls: ['url'] })
-    expect(result).toEqual({ text: 'hello' })
+    expect(result).toEqual({ type: 'text', text: 'hello' })
   })
 
   it('savedUrls takes priority over taskId/status', () => {
     const result = parseOutputResult({ savedUrls: ['url'], taskId: 't1' })
     expect(result?.savedUrls).toEqual(['url'])
+  })
+
+  // ── Explicit type field ──
+
+  it('respects explicit type field for all variants', () => {
+    expect(parseOutputResult({ type: 'image', savedUrls: [] })).toEqual({ type: 'image', savedUrls: [], urls: undefined })
+    expect(parseOutputResult({ type: 'video', savedUrls: [], originalUrl: 'x' })).toEqual({ type: 'video', savedUrls: [], originalUrl: 'x' })
+    expect(parseOutputResult({ type: 'processing', taskId: 't1' })).toEqual({ type: 'processing', taskId: 't1', status: undefined })
   })
 })
 
@@ -291,29 +308,29 @@ describe('parseCostDetail', () => {
 
 describe('OutputResult type guards', () => {
   it('isTextOutput', () => {
-    expect(isTextOutput({ text: 'hi' })).toBe(true)
-    expect(isTextOutput({ savedUrls: ['url'] })).toBe(false)
+    expect(isTextOutput({ type: 'text', text: 'hi' })).toBe(true)
+    expect(isTextOutput({ type: 'image', savedUrls: ['url'] })).toBe(false)
     expect(isTextOutput(null)).toBe(false)
   })
 
   it('isImageOutput', () => {
-    expect(isImageOutput({ savedUrls: ['url'], urls: ['url2'] })).toBe(true)
-    expect(isImageOutput({ savedUrls: ['url'] })).toBe(true)
-    expect(isImageOutput({ savedUrls: ['url'], originalUrl: 'x' })).toBe(false) // video, not image
+    expect(isImageOutput({ type: 'image', savedUrls: ['url'], urls: ['url2'] })).toBe(true)
+    expect(isImageOutput({ type: 'image', savedUrls: ['url'] })).toBe(true)
+    expect(isImageOutput({ type: 'video', savedUrls: ['url'], originalUrl: 'x' })).toBe(false) // video, not image
     expect(isImageOutput(null)).toBe(false)
   })
 
   it('isVideoOutput', () => {
-    expect(isVideoOutput({ savedUrls: ['url'], originalUrl: 'x' })).toBe(true)
-    expect(isVideoOutput({ savedUrls: ['url'], video_url: 'x' })).toBe(true)
-    expect(isVideoOutput({ savedUrls: ['url'] })).toBe(false) // image, not video
+    expect(isVideoOutput({ type: 'video', savedUrls: ['url'], originalUrl: 'x' })).toBe(true)
+    expect(isVideoOutput({ type: 'video', savedUrls: ['url'], video_url: 'x' })).toBe(true)
+    expect(isVideoOutput({ type: 'image', savedUrls: ['url'] })).toBe(false) // image, not video
     expect(isVideoOutput(null)).toBe(false)
   })
 
   it('isProcessingOutput', () => {
-    expect(isProcessingOutput({ taskId: 't1', status: 'RUNNING' })).toBe(true)
-    expect(isProcessingOutput({ taskId: 't1' })).toBe(true)
-    expect(isProcessingOutput({ taskId: 't1', savedUrls: ['url'] })).toBe(false) // not processing (has savedUrls)
+    expect(isProcessingOutput({ type: 'processing', taskId: 't1', status: 'RUNNING' })).toBe(true)
+    expect(isProcessingOutput({ type: 'processing', taskId: 't1' })).toBe(true)
+    expect(isProcessingOutput({ type: 'image', savedUrls: ['url'], taskId: 't1' })).toBe(false) // not processing
     expect(isProcessingOutput(null)).toBe(false)
   })
 })

@@ -21,18 +21,18 @@ export type { ImageOutputResult, OutputResult, ProcessingOutputResult, TextOutpu
 
 // ===== SSE → GenerationRecord 运行时解析 =====
 
-/** 根据 category 获取对应输出类型的类型守卫辅助 */
-export function isTextOutput(o: OutputResult | null): o is TextOutputResult {
-  return o != null && 'text' in o
+/** 根据 type 辨识字段的类型守卫 */
+export function isTextOutput(o: OutputResult | null | undefined): o is TextOutputResult {
+  return o != null && o.type === 'text'
 }
-export function isImageOutput(o: OutputResult | null): o is ImageOutputResult {
-  return o != null && 'savedUrls' in o && !('originalUrl' in o || 'video_url' in o)
+export function isImageOutput(o: OutputResult | null | undefined): o is ImageOutputResult {
+  return o != null && o.type === 'image'
 }
-export function isVideoOutput(o: OutputResult | null): o is VideoOutputResult {
-  return o != null && 'savedUrls' in o && ('originalUrl' in o || 'video_url' in o)
+export function isVideoOutput(o: OutputResult | null | undefined): o is VideoOutputResult {
+  return o != null && o.type === 'video'
 }
-export function isProcessingOutput(o: OutputResult | null): o is ProcessingOutputResult {
-  return o != null && 'taskId' in o && !('savedUrls' in o)
+export function isProcessingOutput(o: OutputResult | null | undefined): o is ProcessingOutputResult {
+  return o != null && o.type === 'processing'
 }
 
 // ===== SSE → GenerationRecord 运行时解析 =====
@@ -42,15 +42,33 @@ export function parseOutputResult(data: unknown): OutputResult | null {
   if (data == null || typeof data !== 'object')
     return null
   const o = data as Record<string, unknown>
+
+  // 已有 type 辨识字段（新版）
+  if ('type' in o && typeof o.type === 'string') {
+    switch (o.type) {
+      case 'text':
+        return { type: 'text', text: typeof o.text === 'string' ? o.text : '' }
+      case 'image':
+        return { type: 'image', savedUrls: Array.isArray(o.savedUrls) ? o.savedUrls as string[] : [], urls: Array.isArray(o.urls) ? o.urls as string[] : undefined }
+      case 'video':
+        return { type: 'video', savedUrls: Array.isArray(o.savedUrls) ? o.savedUrls as string[] : [], originalUrl: typeof o.originalUrl === 'string' ? o.originalUrl : undefined }
+      case 'processing':
+        return { type: 'processing', taskId: typeof o.taskId === 'string' ? o.taskId : undefined, status: typeof o.status === 'string' ? o.status : undefined }
+      default:
+        break
+    }
+  }
+
+  // 兼容旧数据（无 type 字段）
   if ('text' in o && typeof o.text === 'string')
-    return { text: o.text }
+    return { type: 'text', text: o.text } satisfies TextOutputResult
   if ('savedUrls' in o && Array.isArray(o.savedUrls)) {
     if ('originalUrl' in o || 'video_url' in o)
-      return { savedUrls: o.savedUrls as string[], originalUrl: typeof o.originalUrl === 'string' ? o.originalUrl : undefined }
-    return { savedUrls: o.savedUrls as string[], urls: Array.isArray(o.urls) ? o.urls as string[] : undefined }
+      return { type: 'video', savedUrls: o.savedUrls as string[], originalUrl: typeof o.originalUrl === 'string' ? o.originalUrl : undefined } satisfies VideoOutputResult
+    return { type: 'image', savedUrls: o.savedUrls as string[], urls: Array.isArray(o.urls) ? o.urls as string[] : undefined } satisfies ImageOutputResult
   }
   if ('taskId' in o || 'status' in o)
-    return { taskId: typeof o.taskId === 'string' ? o.taskId : undefined, status: typeof o.status === 'string' ? o.status : undefined }
+    return { type: 'processing', taskId: typeof o.taskId === 'string' ? o.taskId : undefined, status: typeof o.status === 'string' ? o.status : undefined } satisfies ProcessingOutputResult
   return null
 }
 

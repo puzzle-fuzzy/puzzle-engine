@@ -193,7 +193,7 @@ export class DashScopeClient {
       const data = await response.json() as DashScopeChatResponse | DashScopeOpenaiChatResponse
 
       if (response.status !== 200) {
-        return { success: false, error: `模型 ${modelConfig.name}（${modelConfig.id}）: ${parseDashScopeError(data as unknown as Record<string, unknown>)}` }
+        return { success: false, error: `模型 ${modelConfig.name}（${modelConfig.id}）: ${parseDashScopeError(data)}` }
       }
 
       const isOpenaiFormat = modelConfig.requestType === 'openai-chat'
@@ -218,6 +218,7 @@ export class DashScopeClient {
       return {
         success: true,
         output: {
+          type: 'text',
           text,
           raw: data,
         },
@@ -228,7 +229,8 @@ export class DashScopeClient {
       }
     }
     catch (error) {
-      return { success: false, error: `网络错误：无法连接百炼 API（${(error as Error).message}）` }
+      const msg = error instanceof Error ? error.message : String(error)
+      return { success: false, error: `网络错误：无法连接百炼 API（${msg}）` }
     }
   }
 
@@ -253,7 +255,7 @@ export class DashScopeClient {
       const data = await response.json() as DashScopeImageResponse
 
       if (response.status !== 200) {
-        return { success: false, error: `模型 ${modelConfig.name}（${modelConfig.id}）: ${parseDashScopeError(data as unknown as Record<string, unknown>)}` }
+        return { success: false, error: `模型 ${modelConfig.name}（${modelConfig.id}）: ${parseDashScopeError(data)}` }
       }
 
       const output = data.output ?? {}
@@ -268,6 +270,7 @@ export class DashScopeClient {
       return {
         success: true,
         output: {
+          type: 'image',
           urls,
           raw: data,
         },
@@ -277,7 +280,8 @@ export class DashScopeClient {
       }
     }
     catch (error) {
-      return { success: false, error: `网络错误：无法连接百炼 API（${(error as Error).message}）` }
+      const msg = error instanceof Error ? error.message : String(error)
+      return { success: false, error: `网络错误：无法连接百炼 API（${msg}）` }
     }
   }
 
@@ -307,7 +311,7 @@ export class DashScopeClient {
       const data = await response.json() as DashScopeVideoSubmitResponse
 
       if (response.status !== 200) {
-        return { success: false, error: `模型 ${modelConfig.name}（${modelConfig.id}）: ${parseDashScopeError(data as unknown as Record<string, unknown>)}` }
+        return { success: false, error: `模型 ${modelConfig.name}（${modelConfig.id}）: ${parseDashScopeError(data)}` }
       }
 
       const taskId = data.output?.task_id ?? data.request_id
@@ -316,6 +320,7 @@ export class DashScopeClient {
         success: true,
         providerTaskId: taskId,
         output: {
+          type: 'processing',
           taskId,
           status: 'submitted',
           raw: data,
@@ -326,7 +331,8 @@ export class DashScopeClient {
       }
     }
     catch (error) {
-      return { success: false, error: `网络错误：无法连接百炼 API（${(error as Error).message}）` }
+      const msg = error instanceof Error ? error.message : String(error)
+      return { success: false, error: `网络错误：无法连接百炼 API（${msg}）` }
     }
   }
 
@@ -372,12 +378,16 @@ export class DashScopeClient {
 
       const data = await response.json() as DashScopeTaskQueryResponse
       const output = data.output ?? {}
-      const taskStatus = output.task_status ?? 'UNKNOWN'
+      const rawStatus = output.task_status ?? 'UNKNOWN'
+      const VALID_TASK_STATUSES = ['PENDING', 'RUNNING', 'SUCCEEDED', 'FAILED', 'UNKNOWN'] as const
+      const taskStatus: TaskStatus['status'] = (VALID_TASK_STATUSES as readonly string[]).includes(rawStatus)
+        ? rawStatus as TaskStatus['status']
+        : 'UNKNOWN'
 
       // 任务失败时用友好的中文消息
       const errorCode = output.code ?? data.code
       const errorMessage = taskStatus === 'FAILED'
-        ? parseDashScopeError(data as unknown as Record<string, unknown>)
+        ? parseDashScopeError(data)
         : output.message ?? data.message
 
       return {
@@ -394,10 +404,11 @@ export class DashScopeClient {
       }
     }
     catch (error) {
+      const msg = error instanceof Error ? error.message : String(error)
       return {
         taskId,
         status: 'UNKNOWN',
-        errorMessage: `网络错误：无法查询任务状态（${(error as Error).message}）`,
+        errorMessage: `网络错误：无法查询任务状态（${msg}）`,
       }
     }
   }

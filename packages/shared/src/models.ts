@@ -44,7 +44,7 @@ export type RequestType = 'chat' | 'openai-chat' | 'image' | 'video-t2v' | 'vide
 export interface ModelConfig {
   id: string
   name: string
-  category: 'text' | 'image' | 'video' | 'audio'
+  category: ModelCategory
   type: 'generation' | 'understanding' | 'editing'
   description: string
   endpoint: string

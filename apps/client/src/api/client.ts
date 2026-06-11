@@ -116,8 +116,8 @@ export async function fetchRecords(params?: {
   return unwrapEden<{ records: GenerationRecord[], total: number }>(
     await api.api.records.get({
       query: {
-        category: params?.category ?? '',
-        status: params?.status ?? '',
+        category: params?.category || undefined,
+        status: params?.status || undefined,
         limit: params?.limit ?? 50,
         offset: params?.offset ?? 0,
       },
