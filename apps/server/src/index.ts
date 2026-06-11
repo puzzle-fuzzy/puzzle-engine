@@ -61,8 +61,14 @@ export default app
 app.listen(config.port)
 
 // 启动 PostgreSQL LISTEN — 接收 Worker 的生成状态通知并推送到 SSE 客户端
-startSSEListener().catch((err) => {
-  logger.error({ err }, 'Failed to start SSE listener')
+startSSEListener().catch((err: any) => {
+  const code = err?.aggregateErrors?.[0]?.code || err?.code
+  if (code === 'ECONNREFUSED') {
+    logger.error('❌ PostgreSQL 未启动（连接被拒绝），请检查数据库服务')
+  }
+  else {
+    logger.error({ err }, 'Failed to start SSE listener')
+  }
 })
 
 logger.info(

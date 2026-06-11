@@ -142,8 +142,7 @@
 - 前端可通过 Swagger UI 浏览 API
 
 **我们要做的：**
-- [ ] 研究 Elysia 是否有 OpenAPI 生成能力（Elysia 内置 swagger plugin）
-- [ ] 启用 `@elysia/swagger` plugin，自动生成 `/api/docs/swagger`
+- [ ] 研究 Elysia 是否有 OpenAPI 生成能力（Elysia 有 @elysiajs/openapi）
 - [ ] 所有路由的 Zod/Elysia schema 自动映射为 OpenAPI 定义
 
 ### 4.3 软删除 + 去重保护

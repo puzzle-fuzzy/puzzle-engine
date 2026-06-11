@@ -13,9 +13,11 @@ interface NodeDetailPanelProps {
 export default function NodeDetailPanel({ selectedNode, project, onUpdate }: NodeDetailPanelProps) {
   const [saving, setSaving] = useState(false)
 
-  const shot = project.shots.find(s => s.id === selectedNode.id)
-  const character = project.characters.find(c => c.id === selectedNode.id)
-  const location = project.locations.find(l => l.id === selectedNode.id)
+  // Node IDs in ReactFlow use prefixes: char-xxx, loc-xxx, shot-xxx
+  const entityId = selectedNode.id.replace(/^(char-|loc-|shot-)/, '')
+  const shot = project.shots.find(s => s.id === entityId)
+  const character = project.characters.find(c => c.id === entityId)
+  const location = project.locations.find(l => l.id === entityId)
 
   const handleShotPromptUpdate = useCallback(async (prompt: string) => {
     if (!shot)

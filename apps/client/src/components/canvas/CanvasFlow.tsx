@@ -273,6 +273,14 @@ function CanvasFlowInner(props: {
       <Background />
       <Controls position="bottom-left" />
       <MiniMap position="bottom-right" nodeStrokeWidth={3} zoomable pannable />
+      {nodes.length <= 1 && (
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+          <div className="text-center text-muted-foreground space-y-2">
+            <p className="text-sm">暂无节点数据</p>
+            <p className="text-xs">点击下方「自动执行全部」开始生成流水线</p>
+          </div>
+        </div>
+      )}
     </ReactFlow>
   )
 }

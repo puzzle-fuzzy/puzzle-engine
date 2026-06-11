@@ -58,10 +58,14 @@ function formatTime(iso: string) {
   const diffHour = Math.floor(diffMs / 3600000)
   const diffDay = Math.floor(diffMs / 86400000)
   const dateStr = date.toLocaleDateString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
-  if (diffMin < 1) return `刚刚 ${dateStr}`
-  if (diffMin < 60) return `${diffMin} 分钟前 ${dateStr}`
-  if (diffHour < 24) return `${diffHour} 小时前 ${dateStr}`
-  if (diffDay < 7) return `${diffDay} 天前 ${dateStr}`
+  if (diffMin < 1)
+    return `刚刚 ${dateStr}`
+  if (diffMin < 60)
+    return `${diffMin} 分钟前 ${dateStr}`
+  if (diffHour < 24)
+    return `${diffHour} 小时前 ${dateStr}`
+  if (diffDay < 7)
+    return `${diffDay} 天前 ${dateStr}`
   return dateStr
 }
 
@@ -70,8 +74,10 @@ function formatDuration(startIso: string, endIso?: string | null) {
   const start = new Date(startIso).getTime()
   const end = endIso ? new Date(endIso).getTime() : Date.now()
   const diffSec = Math.round((end - start) / 1000)
-  if (diffSec < 60) return `${diffSec}秒`
-  if (diffSec < 3600) return `${Math.floor(diffSec / 60)}分${diffSec % 60}秒`
+  if (diffSec < 60)
+    return `${diffSec}秒`
+  if (diffSec < 3600)
+    return `${Math.floor(diffSec / 60)}分${diffSec % 60}秒`
   return `${Math.floor(diffSec / 3600)}时${Math.floor((diffSec % 3600) / 60)}分`
 }
 
@@ -85,12 +91,12 @@ function isUrl(v: unknown): v is string {
 
 /** 判断 URL 是否为图片 */
 function isImageUrl(url: string) {
-  return /\.(jpg|jpeg|png|gif|webp|bmp|svg)(\?.*)?$/i.test(url) || url.includes('/image')
+  return /\.(?:jpg|jpeg|png|gif|webp|bmp|svg)(?:\?.*)?$/i.test(url) || url.includes('/image')
 }
 
 /** 判断 URL 是否为视频 */
 function isVideoUrl(url: string) {
-  return /\.(mp4|webm|mov|avi)(\?.*)?$/i.test(url) || url.includes('/video')
+  return /\.(?:mp4|webm|mov|avi)(?:\?.*)?$/i.test(url) || url.includes('/video')
 }
 
 export default function Workspace() {
@@ -103,7 +109,7 @@ export default function Workspace() {
   const [uploadingRefs, setUploadingRefs] = useState(false)
   const [referenceFiles, setReferenceFiles] = useState<{ id: string, url: string, name: string }[]>([])
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
-  const [expandedPrompts, setExpandedPrompts] = useState<Set<string>>(new Set())
+  const [expandedPrompts, setExpandedPrompts] = useState<Set<string>>(() => new Set())
   const [copiedId, setCopiedId] = useState<string | null>(null)
   // 每个媒体参数的上传状态：paramName → { uploading, uploadedUrl, uploadedName }
   const [mediaUploadState, setMediaUploadState] = useState<Record<string, {
@@ -483,7 +489,8 @@ export default function Workspace() {
   function togglePrompt(id: string) {
     setExpandedPrompts((prev) => {
       const next = new Set(prev)
-      if (next.has(id)) next.delete(id)
+      if (next.has(id))
+        next.delete(id)
       else next.add(id)
       return next
     })
@@ -492,7 +499,7 @@ export default function Workspace() {
   function copyPrompt(id: string, text: string) {
     navigator.clipboard.writeText(text)
     setCopiedId(id)
-    setTimeout(() => setCopiedId(null), 1500)
+    setTimeout(setCopiedId, 1500, null)
   }
 
   return (
@@ -721,19 +728,70 @@ export default function Workspace() {
                         <div className="mt-2 flex flex-wrap gap-1">
                           {visibleParams.map(([key, val]) => (
                             <Badge key={key} variant="outline" className="text-[10px]">
-                              {key}: {String(val).slice(0, 30)}
+                              {key}
+                              :
+                              {String(val).slice(0, 30)}
                             </Badge>
                           ))}
                         </div>
                       )}
 
                       {/* 费用 */}
-                      {record.cost?.totalPrice != null && (
-                        <p className="mt-1 text-xs text-muted-foreground">
-                          费用: ¥
-                          {Number(record.cost.totalPrice).toFixed(4)}
-                          {(record.cost as any).estimated && ' (预估)'}
-                        </p>
+                      {record.cost && (
+                        <div className="mt-1.5 text-xs text-muted-foreground space-y-0.5">
+                          <div className="flex flex-wrap gap-x-3 gap-y-0.5">
+                            {record.cost.unit && (
+                              <span>
+                                计费:
+                                {record.cost.unit}
+                              </span>
+                            )}
+                            {record.cost.quantity != null && (
+                              <span>
+                                数量:
+                                {record.cost.quantity}
+                              </span>
+                            )}
+                            {record.cost.unitPrice != null && (
+                              <span>
+                                单价: ¥
+                                {Number(record.cost.unitPrice).toFixed(4)}
+                              </span>
+                            )}
+                            {record.cost.inputTokens != null && (
+                              <span>
+                                输入 Tokens:
+                                {record.cost.inputTokens}
+                              </span>
+                            )}
+                            {record.cost.outputTokens != null && (
+                              <span>
+                                输出 Tokens:
+                                {record.cost.outputTokens}
+                              </span>
+                            )}
+                            {record.cost.resolution && (
+                              <span>
+                                分辨率:
+                                {record.cost.resolution}
+                              </span>
+                            )}
+                            {record.cost.duration != null && (
+                              <span>
+                                时长:
+                                {record.cost.duration}
+                                s
+                              </span>
+                            )}
+                          </div>
+                          {record.cost.totalPrice != null && (
+                            <p className="font-medium text-foreground">
+                              总计: ¥
+                              {Number(record.cost.totalPrice).toFixed(4)}
+                              {(record.cost as any).estimated && ' (预估)'}
+                            </p>
+                          )}
+                        </div>
                       )}
 
                       {/* 参考素材 */}
@@ -761,7 +819,9 @@ export default function Workspace() {
                               }
                               return (
                                 <Badge key={key} variant="outline" className="text-[10px]">
-                                  {key}: {u.slice(0, 30)}
+                                  {key}
+                                  :
+                                  {u.slice(0, 30)}
                                 </Badge>
                               )
                             })}

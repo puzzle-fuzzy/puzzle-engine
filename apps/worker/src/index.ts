@@ -47,7 +47,13 @@ async function main() {
         }
       }
     }
-    catch (error) {
+    catch (error: any) {
+      const code = error?.cause?.code || error?.code
+      if (code === 'ECONNREFUSED') {
+        logger.error('❌ PostgreSQL 未启动（连接被拒绝），请检查数据库服务')
+        running = false
+        break
+      }
       logger.error({ err: error }, 'Worker poll error')
     }
 
