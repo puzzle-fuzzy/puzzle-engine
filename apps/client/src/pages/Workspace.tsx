@@ -1,5 +1,4 @@
-import type { SSEGenerationStatusEvent } from '@excuse/shared'
-import type { GenerateResponse, GenerationRecord, ModelConfig, ModelParameter, ProjectDTO } from '@/api/client'
+import type { GenerateResponse, GenerationRecord, ModelConfig, ModelParameter } from '@/api/client'
 import { isImageOutput, isTextOutput, isVideoOutput } from '@excuse/shared'
 import {
   CheckCircle2,
@@ -18,17 +17,13 @@ import {
   X,
   XCircle,
 } from 'lucide-react'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
   deleteRecord,
   fetchModels,
-  fetchRecords,
   generate,
-  listCanvasProjects,
-
   uploadFile,
 } from '@/api/client'
-import { sseClient } from '@/api/sse'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -36,6 +31,7 @@ import { Input } from '@/components/ui/input'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Select } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
+import { useGenerationStore } from '@/stores/generation'
 
 const CATEGORY_CONFIG = {
   text: { label: '文本生成', color: 'bg-blue-500', icon: FileText, activeColor: 'bg-blue-500 text-white' },
@@ -107,7 +103,6 @@ export default function Workspace() {
   const [selectedCategory, setSelectedCategory] = useState<Category>('image')
   const [selectedModelId, setSelectedModelId] = useState<string>('')
   const [parameters, setParameters] = useState<Record<string, unknown>>({})
-  const [records, setRecords] = useState<GenerationRecord[]>([])
   const [loading, setLoading] = useState(false)
   const [uploadingRefs, setUploadingRefs] = useState(false)
   const [referenceFiles, setReferenceFiles] = useState<{ id: string, url: string, name: string }[]>([])
@@ -115,13 +110,21 @@ export default function Workspace() {
   const [expandedPrompts, setExpandedPrompts] = useState<Set<string>>(() => new Set())
   const [copiedId, setCopiedId] = useState<string | null>(null)
   const [groupByProject, setGroupByProject] = useState(false)
-  const [projectMap, setProjectMap] = useState<Map<string, ProjectDTO>>(() => new Map())
   // 每个媒体参数的上传状态：paramName → { uploading, uploadedUrl, uploadedName }
   const [mediaUploadState, setMediaUploadState] = useState<Record<string, {
     uploading: boolean
     uploadedUrl?: string
     uploadedName?: string
   }>>({})
+
+  // 从 Zustand store 获取 records / projectMap
+  const records = useGenerationStore(s => s.records)
+  const projectMap = useGenerationStore(s => s.projectMap)
+  const addRecord = useGenerationStore(s => s.addRecord)
+  const removeRecord = useGenerationStore(s => s.removeRecord)
+  const fetchRecords = useGenerationStore(s => s.fetchRecords)
+  const fetchProjects = useGenerationStore(s => s.fetchProjects)
+  const subscribeSSE = useGenerationStore(s => s.subscribeSSE)
 
   // 加载模型列表
   useEffect(() => {
@@ -130,16 +133,13 @@ export default function Workspace() {
     })
   }, [])
 
-  // 加载 Canvas 项目列表（用于分组显示项目名称）
+  // 加载 Canvas 项目列表 + 生成记录 + SSE 订阅
   useEffect(() => {
-    listCanvasProjects().then((data) => {
-      const map = new Map<string, ProjectDTO>()
-      for (const p of data.data) {
-        map.set(p.id, p)
-      }
-      setProjectMap(map)
-    }).catch(() => {})
-  }, [])
+    fetchProjects()
+    fetchRecords()
+    const unsubscribe = subscribeSSE()
+    return unsubscribe
+  }, [fetchProjects, fetchRecords, subscribeSSE])
 
   // 按类别筛选模型
   const categoryModels = models.filter(m => m.category === selectedCategory)
@@ -152,44 +152,6 @@ export default function Workspace() {
       setParameters({})
     }
   }, [selectedCategory, categoryModels, selectedModelId])
-
-  // 加载生成记录
-  const loadRecords = useCallback(async () => {
-    try {
-      const data = await fetchRecords({ limit: 100 })
-      setRecords(data.records)
-    }
-    catch {}
-  }, [])
-
-  // 初始加载生成记录（仅挂载时拉一次）
-  useEffect(() => {
-    loadRecords()
-  }, [loadRecords])
-
-  // SSE 实时更新 — 订阅后端推送的生成状态变更
-  useEffect(() => {
-    const unsubscribe = sseClient.on('generation_status', (event: SSEGenerationStatusEvent) => {
-      setRecords((prev) => {
-        const existingIndex = prev.findIndex(r => r.id === event.id)
-        if (existingIndex >= 0) {
-          const next = [...prev]
-          next[existingIndex] = {
-            ...next[existingIndex],
-            status: event.status,
-            ...(event.outputResult && { outputResult: event.outputResult }),
-            ...(event.errorMessage && { errorMessage: event.errorMessage }),
-            ...(event.cost && { cost: event.cost }),
-          }
-          return next
-        }
-        loadRecords()
-        return prev
-      })
-    })
-
-    return unsubscribe
-  }, [loadRecords])
 
   // 获取参数默认值
   function getParamDefault(param: ModelParameter): unknown {
@@ -230,7 +192,7 @@ export default function Workspace() {
         referenceFileIds: referenceFileIds.length > 0 ? referenceFileIds : undefined,
       })
       if (result.success && result.record) {
-        setRecords(prev => [result.record!, ...prev])
+        addRecord(result.record)
       }
     }
     catch (error) {
@@ -250,7 +212,7 @@ export default function Workspace() {
         parameters: record.inputParams,
       })
       if (result.success && result.record) {
-        setRecords(prev => [result.record!, ...prev])
+        addRecord(result.record)
       }
     }
     catch {}
@@ -266,7 +228,7 @@ export default function Workspace() {
       return
     try {
       await deleteRecord(id)
-      setRecords(prev => prev.filter(r => r.id !== id))
+      removeRecord(id)
     }
     catch {}
   }
