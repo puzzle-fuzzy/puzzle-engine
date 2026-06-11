@@ -64,6 +64,16 @@ mock.module('@excuse/provider', () => ({
         requestType: 'image',
         inputMapping: { prompt: { target: 'prompt' } },
       },
+      'wan2.1-i2v-t2v-720p': {
+        id: 'wan2.1-i2v-t2v-720p',
+        category: 'video',
+        type: 'generation',
+        pricing: { inputPrice: 0.5, unit: 'video' },
+        parameters: [],
+        requestType: 'video-t2v',
+        inputMapping: { prompt: { target: 'prompt' } },
+        async: true,
+      },
     }
     return models[id]
   },
@@ -227,8 +237,6 @@ describe('generate routes', () => {
     it('缺少 prompt 参数时由模型验证层拒绝', async () => {
       mockCreateRecord.mockResolvedValue(makeRecord())
       mockGetRecordById.mockResolvedValue(makeRecord({ status: 'failed' }))
-      // getModelById('qwen-max') 返回的模型参数中有 prompt required，
-      // 路由层会检测到缺少必填参数
       mockGenerate.mockResolvedValue({
         success: false,
         error: 'prompt is required',
@@ -240,9 +248,32 @@ describe('generate routes', () => {
         { headers: { Authorization: `Bearer ${token}` } },
       )
 
-      // 缺少必填参数应返回失败
       expect(data?.success).toBe(false)
       expect(data?.record?.status).toBe('failed')
+    })
+
+    it('异步视频模型返回 providerTaskId，标记为 processing', async () => {
+      mockCreateRecord.mockResolvedValue(makeRecord({ category: 'video', model: 'wan2.1-i2v-t2v-720p' }))
+      mockGetRecordById.mockResolvedValue(makeRecord({ status: 'processing', category: 'video' }))
+      mockGenerate.mockResolvedValue({
+        success: true,
+        providerTaskId: 'dashscope-task-123',
+        output: {},
+      })
+      mockCalculateCost.mockReturnValue({ unit: 'video', totalPrice: 0 })
+
+      const { data } = await client.api.generate.post(
+        { model: 'wan2.1-i2v-t2v-720p', parameters: { prompt: '一段视频' } },
+        { headers: { Authorization: `Bearer ${token}` } },
+      )
+
+      expect(data?.success).toBe(true)
+      expect(data?.record?.status).toBe('processing')
+      expect(mockMarkProcessing).toHaveBeenCalledWith(
+        'rec-001',
+        expect.objectContaining({ taskId: 'dashscope-task-123' }),
+      )
+      expect(mockNotifyStatus).toHaveBeenCalled()
     })
   })
 
