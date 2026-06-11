@@ -3,6 +3,7 @@ import { Route, Routes } from 'react-router'
 import { getAuthToken } from './api/client'
 import { sseClient } from './api/sse'
 import { ProtectedRoute } from './auth/ProtectedRoute'
+import { Toaster } from './components/ui/sonner'
 import Assets from './pages/Assets'
 import Billing from './pages/Billing'
 import Canvas from './pages/Canvas'
@@ -21,7 +22,9 @@ function App() {
   }, [])
 
   return (
-    <Routes>
+    <>
+      <Toaster richColors position="top-center" />
+      <Routes>
       <Route path="/login" element={<Login />} />
       <Route path="/register" element={<Register />} />
       <Route element={<Layout />}>
@@ -34,6 +37,7 @@ function App() {
         </Route>
       </Route>
     </Routes>
+    </>
   )
 }
 

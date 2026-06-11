@@ -10,6 +10,7 @@ import {
   X,
 } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
+import { toast } from 'sonner'
 import { fetchRecords } from '@/api/client'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -33,7 +34,9 @@ export default function Assets() {
       const data = await fetchRecords({ limit: 200 })
       setRecords(data.records.filter(r => r.status === 'succeeded'))
     }
-    catch {}
+    catch (err) {
+      toast.error('加载资产列表失败')
+    }
   }, [])
 
   useEffect(() => {

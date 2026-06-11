@@ -18,6 +18,7 @@ import {
   XCircle,
 } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
+import { toast } from 'sonner'
 import {
   deleteRecord,
   fetchModels,
@@ -215,7 +216,9 @@ export default function Workspace() {
         addRecord(result.record)
       }
     }
-    catch {}
+    catch {
+      toast.error('生成请求失败')
+    }
     finally {
       setLoading(false)
     }
@@ -230,7 +233,9 @@ export default function Workspace() {
       await deleteRecord(id)
       removeRecord(id)
     }
-    catch {}
+    catch {
+      toast.error('生成请求失败')
+    }
   }
 
   // 参考图上传（r2v 模型）

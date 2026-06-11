@@ -1,6 +1,7 @@
 import type { BillingStatistics } from '@/api/client'
 import { Calendar, CalendarDays, DollarSign, TrendingUp } from 'lucide-react'
 import { useEffect, useState } from 'react'
+import { toast } from 'sonner'
 import { fetchBillingStatistics } from '@/api/client'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 
@@ -25,7 +26,7 @@ export default function Billing() {
     fetchBillingStatistics().then((data) => {
       if (data.success)
         setStats(data.statistics)
-    }).catch(() => {})
+    }).catch(() => { toast.error('加载费用统计失败') })
   }, [])
 
   if (!stats) {
