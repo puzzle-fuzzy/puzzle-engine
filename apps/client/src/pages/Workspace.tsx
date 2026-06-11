@@ -1,5 +1,6 @@
 import type { SSEGenerationStatusEvent } from '@excuse/shared'
 import type { GenerateResponse, GenerationRecord, ModelConfig, ModelParameter, ProjectDTO } from '@/api/client'
+import { isImageOutput, isTextOutput, isVideoOutput } from '@excuse/shared'
 import {
   CheckCircle2,
   Clock,
@@ -643,7 +644,7 @@ export default function Workspace() {
                 <p className="font-medium text-foreground">
                   总计: ¥
                   {Number(record.cost.totalPrice).toFixed(4)}
-                  {(record.cost as any).estimated && ' (预估)'}
+                  {record.cost.estimated && ' (预估)'}
                 </p>
               )}
             </div>
@@ -687,9 +688,9 @@ export default function Workspace() {
           {/* 输出预览 */}
           {record.outputResult && (
             <div className="mt-2">
-              {record.category === 'image' && (record.outputResult as any).savedUrls && (
+              {isImageOutput(record.outputResult) && (
                 <div className="flex gap-2 flex-wrap">
-                  {((record.outputResult as any).savedUrls as string[]).map((url: string) => (
+                  {record.outputResult.savedUrls.map(url => (
                     <img
                       key={url}
                       src={url}
@@ -700,19 +701,20 @@ export default function Workspace() {
                   ))}
                 </div>
               )}
-              {record.category === 'text' && (record.outputResult as any).text && (
+              {isTextOutput(record.outputResult) && (
                 <pre className="max-h-60 overflow-auto whitespace-pre-wrap rounded-lg bg-muted p-2 text-xs">
-                  {String((record.outputResult as any).text)}
+                  {record.outputResult.text}
                 </pre>
               )}
-              {record.category === 'video' && (record.outputResult as any).savedUrls && (
+              {isVideoOutput(record.outputResult) && (
                 <div className="flex gap-2">
-                  {((record.outputResult as any).savedUrls as string[]).map((url: string) => (
+                  {record.outputResult.savedUrls.map(url => (
                     <video
                       key={url}
                       src={url}
                       className="w-full max-w-xs rounded-lg border aspect-video object-cover"
                       controls
+                      loop
                     />
                   ))}
                 </div>
@@ -729,12 +731,12 @@ export default function Workspace() {
           <div className="mt-2 flex gap-2">
             {record.status === 'succeeded'
               && record.outputResult
-              && (record.outputResult as any).savedUrls?.length > 0
-              && ((record.outputResult as any).savedUrls as string[]).map((url: string, i: number) => (
+              && (isImageOutput(record.outputResult) || isVideoOutput(record.outputResult))
+              && (isImageOutput(record.outputResult) ? record.outputResult.savedUrls : record.outputResult.savedUrls).map((url, i) => (
                 <Button key={url} variant="outline" size="sm" asChild>
                   <a href={url} download>
                     <Download className="size-3" />
-                    {((record.outputResult as any).savedUrls as string[]).length > 1 ? `下载 ${i + 1}` : '下载'}
+                    {(isImageOutput(record.outputResult) ? record.outputResult.savedUrls : record.outputResult.savedUrls).length > 1 ? `下载 ${i + 1}` : '下载'}
                   </a>
                 </Button>
               ))}

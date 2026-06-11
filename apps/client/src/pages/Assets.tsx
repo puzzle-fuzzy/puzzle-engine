@@ -1,4 +1,5 @@
 import type { GenerationRecord } from '@/api/client'
+import { isImageOutput, isTextOutput, isVideoOutput } from '@excuse/shared'
 import {
   Download,
   FileText,
@@ -175,9 +176,9 @@ export default function Assets() {
                 className="max-h-[70vh] rounded-lg"
               />
             )}
-            {previewRecord.category === 'text' && (previewRecord.outputResult as any)?.text && (
+            {previewRecord.category === 'text' && isTextOutput(previewRecord.outputResult) && (
               <div className="max-h-[70vh] overflow-auto rounded-lg bg-muted p-4">
-                <p className="text-sm whitespace-pre-wrap">{String((previewRecord.outputResult as any).text)}</p>
+                <p className="text-sm whitespace-pre-wrap">{previewRecord.outputResult.text}</p>
               </div>
             )}
 
@@ -217,10 +218,12 @@ function getAssetUrls(record: GenerationRecord): string[] {
   const output = record.outputResult
   if (!output)
     return []
-  const saved = (output as any).savedUrls as string[] | undefined
-  if (saved?.length)
-    return saved
-  const urls = (output as any).urls as string[] | undefined
+  if (isImageOutput(output) && output.savedUrls.length > 0)
+    return output.savedUrls
+  if (isVideoOutput(output) && output.savedUrls.length > 0)
+    return output.savedUrls
+  if (isImageOutput(output) && output.urls?.length)
+    return output.urls
   if (urls?.length)
     return urls
   return []
