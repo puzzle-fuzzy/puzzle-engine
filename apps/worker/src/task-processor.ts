@@ -79,8 +79,9 @@ export function createTaskProcessor(config: WorkerConfig, deps?: Partial<TaskPro
     inputParams: Record<string, unknown> | null
     cost: Record<string, unknown> | null
   }): Promise<TaskResult> {
-    const canvasMeta = (record.inputParams as Record<string, unknown>)?.source === 'canvas'
-      ? { projectId: String((record.inputParams as Record<string, unknown>).projectId), shotId: String((record.inputParams as Record<string, unknown>).shotId) }
+    const inputParams = record.inputParams ?? {}
+    const canvasMeta = inputParams.source === 'canvas'
+      ? { projectId: String(inputParams.projectId), shotId: String(inputParams.shotId) }
       : undefined
     const taskId = record.taskId
     if (!taskId) {
@@ -115,9 +116,9 @@ export function createTaskProcessor(config: WorkerConfig, deps?: Partial<TaskPro
           : []
 
         const modelConfig = getModelById(record.model)
-        const inputParams = (record.inputParams as Record<string, unknown>) || {}
         // 从 DashScope 返回结果中提取实际视频时长
-        const actualVideoDuration = extractVideoDuration(taskStatus.output) || (inputParams.duration as number) || 5
+        const inputDuration = inputParams.duration
+        const actualVideoDuration = extractVideoDuration(taskStatus.output) || (typeof inputDuration === 'number' ? inputDuration : 5)
         const actualCost = modelConfig
           ? calculateCost(modelConfig, inputParams, {
               videoDuration: actualVideoDuration,
@@ -207,14 +208,15 @@ export function createTaskProcessor(config: WorkerConfig, deps?: Partial<TaskPro
 export function extractVideoUrl(output: Record<string, unknown> | undefined): string | undefined {
   if (!output)
     return undefined
-  // HappyHorse / 万相 2.7：output.video_url
-  const videoUrl = (output as any).video_url
-  if (videoUrl)
+  const videoUrl = output.video_url
+  if (typeof videoUrl === 'string')
     return videoUrl
-  // 图片异步任务：output.results[0].url
-  const results = (output as any).results
+  const results = output.results
   if (Array.isArray(results) && results.length > 0) {
-    return results[0].url || results[0].b64_image
+    const first = results[0] as Record<string, unknown>
+    const url = first.url || first.b64_image
+    if (typeof url === 'string')
+      return url
   }
   return undefined
 }
@@ -222,7 +224,7 @@ export function extractVideoUrl(output: Record<string, unknown> | undefined): st
 export function extractVideoDuration(output: Record<string, unknown> | undefined): number | undefined {
   if (!output)
     return undefined
-  const duration = (output as any).video_duration ?? (output as any).duration
+  const duration = output.video_duration ?? output.duration
   if (typeof duration === 'number')
     return duration
   return undefined

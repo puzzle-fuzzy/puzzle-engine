@@ -433,7 +433,7 @@ export default function Workspace() {
     const projectGroups = new Map<string, GenerationRecord[]>()
     const standalone: GenerationRecord[] = []
     for (const r of records) {
-      const p = r.inputParams as Record<string, unknown>
+      const p = r.inputParams
       if (p?.source === 'canvas' && p.projectId) {
         const pid = String(p.projectId)
         const arr = projectGroups.get(pid) || []
