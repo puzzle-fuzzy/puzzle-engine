@@ -76,7 +76,8 @@ export function buildLocationPrompt(
 2. 必须固定建筑风格、色彩方案、光线方向、背景元素。
 3. 必须给出 cameraRules.axisDirection（轴线方向）。
 4. scenePrompt 必须是一段能直接拼进视频生成 prompt 的英文描述。
-5. negativePrompt 必须包含：禁止场景变化、禁止光线突变、禁止时代错乱。
+5. **scenePrompt 只描述场景本身（建筑、地面、灯光、氛围、天气、背景元素），绝对不能包含任何人物、角色、动物。场景图是空场景，人物由角色图单独提供。**
+6. negativePrompt 必须包含：禁止场景变化、禁止光线突变、禁止时代错乱、禁止出现人物。
 
 输出格式：
 {
@@ -87,8 +88,8 @@ export function buildLocationPrompt(
   "atmosphere": "氛围描述",
   "visualRules": { "colorPalette": ["色1","色2","色3"], "lighting": "光线", "architecture": "建筑风格", "floor": "地面", "backgroundElements": ["元素"] },
   "cameraRules": { "axisDirection": "轴线方向", "allowedAngles": ["允许角度"], "forbiddenAngles": ["禁止角度"] },
-  "scenePrompt": "英文描述",
-  "negativePrompt": "英文负面约束"
+  "scenePrompt": "英文描述（仅场景，不含人物）",
+  "negativePrompt": "英文负面约束（必须包含 no people, no characters）"
 }`,
     prompt: `小说文本：
 ${storyText.slice(0, 3000)}

@@ -308,7 +308,7 @@ export async function generateLocationRefs(projectId: string, config: { dashscop
 
     try {
       const result = await client.generateImage(imageModel, {
-        prompt: `${loc.scenePrompt}, establishing shot, wide angle, cinematic lighting`,
+        prompt: `${loc.scenePrompt}, establishing shot, wide angle, cinematic lighting, no people, no characters, empty scene, uninhabited`,
         size: '1024*1024',
         n: 1,
       })
@@ -519,6 +519,7 @@ export async function generateVideos(projectId: string, config: { dashscopeApiKe
   const accountId = detail.project.accountId
   const client = createClient(config)
   const characterMap = new Map(detail.characters.map(c => [c.id, c]))
+  const locationMap = new Map(detail.locations.map(l => [l.id, l]))
 
   await updateCanvasProject(projectId, { status: 'generating' })
 
@@ -531,10 +532,16 @@ export async function generateVideos(projectId: string, config: { dashscopeApiKe
     notifyNode(accountId, projectId, 'shot', shot.id, 'running')
 
     try {
-      const referenceUrls = shot.characterIdsJson
+      // Collect reference images from characters AND location for visual consistency
+      const charRefUrls = shot.characterIdsJson
         .map(id => characterMap.get(id)?.referenceImageUrl)
         .filter(Boolean) as string[]
+      const locRefUrl = shot.locationId
+        ? locationMap.get(shot.locationId)?.referenceImageUrl ?? null
+        : null
+      const referenceUrls = [...charRefUrls, ...(locRefUrl ? [locRefUrl] : [])]
 
+      // Use r2v (reference-to-video) when any reference images are available
       const model = referenceUrls.length > 0 ? 'happyhorse-1.0-r2v' : 'happyhorse-1.0-t2v'
       const modelConfig = getModelById(model)
       const fallbackId = modelConfig?.fallbackModel
