@@ -1,4 +1,4 @@
-import type { CostDetail, GenerationCategory, GenerationNotifyPayload, GenerationStatus, OutputResult } from '@excuse/shared'
+import type { CostDetail, GenerationCategory, GenerationNotifyPayload, GenerationStatus, OutputResult, VideoOutputResult } from '@excuse/shared'
 import type { WorkerConfig } from './config'
 import { calculateCost } from '@excuse/billing'
 import {
@@ -125,14 +125,14 @@ export function createTaskProcessor(config: WorkerConfig, deps?: Partial<TaskPro
             })
           : record.cost
 
-        const output = {
-          ...(taskStatus.output || {}),
-          type: 'video' as const,
+        // 构造类型安全的 VideoOutputResult — 不展开 raw output，只提取必要字段
+        const output: VideoOutputResult = {
+          type: 'video',
           savedUrls,
           originalUrl: videoUrl,
         }
 
-        await succeed(record.id, output as OutputResult, actualCost ?? undefined)
+        await succeed(record.id, output, actualCost ?? undefined)
 
         await notify({
           accountId: record.accountId,
@@ -141,7 +141,7 @@ export function createTaskProcessor(config: WorkerConfig, deps?: Partial<TaskPro
           category: record.category,
           model: record.model,
           taskId,
-          outputResult: output as OutputResult,
+          outputResult: output,
           cost: actualCost ?? undefined,
           canvasMeta,
         })
