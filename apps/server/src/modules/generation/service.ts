@@ -1,0 +1,204 @@
+import type { GenerationCategory, GenerationRecordRow, OutputResult } from '@excuse/db'
+import type { AssetStorage, DashScopeClient } from '@excuse/provider'
+import type { CostDetail, ModelConfig } from '@excuse/shared'
+import { calculateCost } from '@excuse/billing'
+import {
+  cancelGenerationRecord,
+  findGenerationByDedupeKeyForAccount,
+  getGenerationRecordById,
+  getUploadedFilesByIdsForAccount,
+  markGenerationFailed,
+  markGenerationProcessing,
+  markGenerationSucceeded,
+  notifyGenerationStatus,
+} from '@excuse/db'
+import { extractImageUrls, parseProviderOutput } from './output-parser'
+
+// ===== 接口定义 =====
+
+/** 生成任务依赖的外部服务（由 route 注入） */
+export interface GenerationDependencies {
+  client: DashScopeClient
+  storage: AssetStorage
+}
+
+/** executeGeneration 的业务上下文 — route 在完成校验和 DB 创建/重置后构造 */
+export interface GenerationContext {
+  recordId: string
+  accountId: string
+  taskId: string
+  modelConfig: ModelConfig
+  category: GenerationCategory
+  parameters: Record<string, unknown>
+  referenceUrls?: string[]
+  /** 存入 DB inputParams 的完整参数（包含 referenceFileIds） */
+  inputParams: Record<string, unknown>
+  dedupeKey?: string
+  estimatedCost: CostDetail
+}
+
+/** 去重检查结果 */
+export type DedupeResult
+  = | { duplicated: true, record: GenerationRecordRow }
+    | { duplicated: false }
+
+/** 参考文件归属校验结果 */
+export type ReferenceResult
+  = | { ok: true, urls: string[] }
+    | { ok: false, error: string }
+
+/** executeGeneration 返回 — route 映射为 HTTP 响应 */
+export type GenerationResult
+  = | { success: true, record: GenerationRecordRow }
+    | { success: false, record: GenerationRecordRow }
+
+// ===== 业务函数 =====
+
+/**
+ * 去重检查 — 同一用户 + 同一 model + 相同参数，且任务仍在进行中时不重复提交
+ *
+ * "进行中"包括：pending、submitting、processing、saving_output
+ * 已 succeeded/failed/cancelled 的记录不触发去重拦截
+ */
+export async function checkDedupe(dedupeKey: string, accountId: string): Promise<DedupeResult> {
+  const IN_PROGRESS_STATUSES = ['pending', 'submitting', 'processing', 'saving_output'] as const
+  const existing = await findGenerationByDedupeKeyForAccount(dedupeKey, accountId)
+
+  if (existing && IN_PROGRESS_STATUSES.includes(existing.status as typeof IN_PROGRESS_STATUSES[number])) {
+    return { duplicated: true, record: existing }
+  }
+
+  return { duplicated: false }
+}
+
+/**
+ * 参考文件归属校验 — 只允许当前用户的文件作为 reference
+ *
+ * 校验在创建/重置 DB 记录之前（P1.9 约束）：
+ *   校验失败不应留下脏记录/脏状态
+ */
+export async function resolveReferenceUrls(referenceFileIds: string[], accountId: string): Promise<ReferenceResult> {
+  const files = await getUploadedFilesByIdsForAccount(referenceFileIds, accountId)
+
+  if (files.length !== referenceFileIds.length) {
+    return { ok: false, error: '部分参考文件不存在或不属于当前用户' }
+  }
+
+  return { ok: true, urls: files.map(f => f.publicUrl) }
+}
+
+/**
+ * 核心生成执行 — provider 调用 + 三分支处理 + DB 状态变更 + SSE + 图片下载 + 计费
+ *
+ * 三个分支：
+ *   1. provider 失败 → markGenerationFailed + SSE → 返回 { success: false }
+ *   2. provider 返回 providerTaskId（异步视频）→ markGenerationProcessing + SSE → 返回 { success: true }
+ *   3. 同步完成（文本/图片）→ 图片下载 + 计算实际费用 + markGenerationSucceeded + SSE → 返回 { success: true }
+ *
+ * 此函数不处理 HTTP 逻辑（认证、权限、4xx），只处理业务流程。
+ * 调用方（route）负责所有校验并传入 GenerationContext。
+ */
+export async function executeGeneration(
+  ctx: GenerationContext,
+  deps: GenerationDependencies,
+): Promise<GenerationResult> {
+  const { recordId, accountId, taskId, modelConfig, category, parameters, referenceUrls } = ctx
+  const { client, storage } = deps
+  const model = modelConfig.id
+
+  const result = await client.generate(model, parameters, referenceUrls)
+
+  // === 分支 1: provider 调用失败 ===
+  if (!result.success) {
+    await markGenerationFailed(recordId, result.error!)
+    await notifyGenerationStatus({
+      accountId,
+      recordId,
+      status: 'failed',
+      category,
+      model,
+      taskId,
+      errorMessage: result.error,
+    })
+    const updated = await getGenerationRecordById(recordId)
+    return { success: false, record: updated! }
+  }
+
+  // === 分支 2: 异步任务（视频生成）— 保存 providerTaskId，Worker 会轮询 ===
+  if (result.providerTaskId) {
+    await markGenerationProcessing(recordId, {
+      taskId: result.providerTaskId,
+      outputResult: parseProviderOutput(result.output),
+    })
+    await notifyGenerationStatus({
+      accountId,
+      recordId,
+      status: 'processing',
+      category,
+      model,
+      taskId: result.providerTaskId,
+    })
+    const updated = await getGenerationRecordById(recordId)
+    return { success: true, record: updated! }
+  }
+
+  // === 分支 3: 同步任务完成（文本/图片）— 下载并保存结果 ===
+  let outputResult: OutputResult = parseProviderOutput(result.output)
+  const imageUrls = extractImageUrls(result.output)
+  if (category === 'image' && imageUrls.length > 0) {
+    const savedUrls = await storage.downloadAndMap(imageUrls, taskId, 'img')
+    outputResult = { type: 'image', savedUrls, urls: imageUrls }
+  }
+
+  // 计算实际费用（基于 provider 返回的 usage）
+  const actualCost = calculateCost(modelConfig, parameters, result.usage)
+
+  await markGenerationSucceeded(recordId, outputResult, actualCost)
+  await notifyGenerationStatus({
+    accountId,
+    recordId,
+    status: 'succeeded',
+    category,
+    model,
+    taskId,
+    outputResult,
+    cost: actualCost,
+  })
+
+  const updated = await getGenerationRecordById(recordId)
+  return { success: true, record: updated! }
+}
+
+/**
+ * 取消进行中的生成任务 — provider 取消(best-effort) + DB 取消 + SSE 通知
+ *
+ * provider 取消是 best-effort：即使 provider 侧取消失败，DB 和 SSE 仍标记为已取消。
+ * 可取消状态：pending、submitting、processing、saving_output
+ */
+export async function cancelGeneration(
+  recordId: string,
+  accountId: string,
+  record: GenerationRecordRow,
+  deps: GenerationDependencies,
+): Promise<GenerationRecordRow> {
+  const { client } = deps
+
+  // 尝试在 provider 侧取消（best-effort）
+  if (record.taskId) {
+    await client.cancelTask(record.taskId)
+  }
+
+  await cancelGenerationRecord(recordId)
+  await notifyGenerationStatus({
+    accountId,
+    recordId,
+    status: 'cancelled',
+    category: record.category,
+    model: record.model,
+    taskId: record.taskId,
+    errorMessage: '用户取消',
+  })
+
+  const updated = await getGenerationRecordById(recordId)
+  return updated!
+}

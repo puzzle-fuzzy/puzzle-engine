@@ -1,23 +1,16 @@
-import type { GenerationCategory, GenerationRecordRow, GenerationStatus, OutputResult } from '@excuse/db'
+import type { GenerationCategory, GenerationRecordRow, GenerationStatus } from '@excuse/db'
 import type { ServerConfig } from '../config'
 import { calculateCost } from '@excuse/billing'
-import { extractImageUrls, parseProviderOutput } from '../modules/generation/output-parser'
 import {
-  cancelGenerationRecord,
   createGenerationRecord,
   deleteGenerationRecord,
-  findGenerationByDedupeKeyForAccount,
   getGenerationRecordById,
-  getUploadedFilesByIdsForAccount,
   listGenerationRecords,
-  markGenerationFailed,
-  markGenerationProcessing,
-  markGenerationSucceeded,
-  notifyGenerationStatus,
   resetGenerationToPending,
 } from '@excuse/db'
 import { AssetStorage, DashScopeClient, getModelById, validateModelParameters } from '@excuse/provider'
 import { Elysia, t } from 'elysia'
+import * as svc from '../modules/generation/service'
 import { createAuthPlugin } from '../plugins/auth'
 import { forbidden, notFound, unauthorized, validationError } from '../utils/errors'
 
@@ -46,6 +39,7 @@ export function createGenerateRoutes(config: ServerConfig) {
     storageRoot: config.storageRoot,
     oss: config.oss,
   })
+  const deps: svc.GenerationDependencies = { client, storage }
 
   /** 从 DB 行序列化为前端兼容的 GenerationRecord（Date→string） */
   function serializeRecord(record: GenerationRecordRow) {
@@ -65,13 +59,12 @@ export function createGenerateRoutes(config: ServerConfig) {
       }
       const { model, parameters, referenceFileIds } = body
 
+      // 模型校验 — 只允许模型配置中声明过的参数进入 provider
       const modelConfig = getModelById(model)
       if (!modelConfig) {
         return validationError(set, `Unknown model: ${model}`)
       }
 
-      // 参数校验 — 只允许模型配置中声明过的参数进入 provider
-      // 校验失败返回 422 + 字段级错误，可被前端逐项展示
       const validation = validateModelParameters(modelConfig, parameters)
       if (!validation.valid) {
         const detail = validation.errors.map(e => `${e.field}: ${e.message}`).join('; ')
@@ -80,31 +73,26 @@ export function createGenerateRoutes(config: ServerConfig) {
 
       const category = modelConfig.category
 
-      // 解析参考图 URL（仅允许当前用户的文件）— 必须在创建 DB 记录之前校验
-      // 否则校验失败时会留下 pending 状态的脏记录
+      // 参考文件归属校验 — 必须在创建 DB 记录之前（P1.9 约束）
       let referenceUrls: string[] | undefined
       if (referenceFileIds?.length) {
-        const files = await getUploadedFilesByIdsForAccount(referenceFileIds, userId)
-        if (files.length !== referenceFileIds.length) {
-          return forbidden(set, '部分参考文件不存在或不属于当前用户')
+        const refResult = await svc.resolveReferenceUrls(referenceFileIds, userId)
+        if (!refResult.ok) {
+          return forbidden(set, refResult.error)
         }
-        referenceUrls = files.map(f => f.publicUrl)
+        referenceUrls = refResult.urls
       }
 
       // 去重：同一用户 + 同一 model + 相同参数，且任务仍在进行中时不重复提交
-      // "进行中" 包括：pending、submitting、processing、saving_output
       const dedupeKey = `${userId}:${model}:${JSON.stringify(parameters)}`
-      const IN_PROGRESS_STATUSES = ['pending', 'submitting', 'processing', 'saving_output'] as const
-      const existing = await findGenerationByDedupeKeyForAccount(dedupeKey, userId)
-      if (existing && IN_PROGRESS_STATUSES.includes(existing.status as typeof IN_PROGRESS_STATUSES[number])) {
-        const updated = await getGenerationRecordById(existing.id)
-        return { success: true, record: serializeRecord(updated ?? existing), duplicated: true }
+      const dedupeResult = await svc.checkDedupe(dedupeKey, userId)
+      if (dedupeResult.duplicated) {
+        const updated = await getGenerationRecordById(dedupeResult.record.id)
+        return { success: true, record: serializeRecord(updated ?? dedupeResult.record), duplicated: true }
       }
 
       // 预估费用
       const estimatedCost = calculateCost(modelConfig, parameters)
-
-      // 生成唯一 taskId
       const taskId = `gen_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
 
       // 创建数据库记录 — 此时所有前置校验已完成，不会有脏记录风险
@@ -119,77 +107,21 @@ export function createGenerateRoutes(config: ServerConfig) {
         dedupeKey,
       })
 
-      const result = await client.generate(model, parameters, referenceUrls)
-
-      if (!result.success) {
-        // API 调用失败，更新记录
-        await markGenerationFailed(record.id, result.error!)
-
-        // 通知 SSE 客户端
-        await notifyGenerationStatus({
-          accountId: userId,
-          recordId: record.id,
-          status: 'failed',
-          category,
-          model,
-          taskId,
-          errorMessage: result.error,
-        })
-
-        // 重新查询以获取更新后的记录
-        const updated = await getGenerationRecordById(record.id)
-        // Provider 失败不是 HTTP 错误 — 业务层面的失败，返回 200 + record
-        return { success: false, record: serializeRecord(updated ?? record) }
-      }
-
-      if (result.providerTaskId) {
-        // 异步任务（视频生成）— 保存 providerTaskId，Worker 会轮询
-        await markGenerationProcessing(record.id, {
-          taskId: result.providerTaskId,
-          outputResult: parseProviderOutput(result.output),
-        })
-
-        // 通知 SSE 客户端状态变为 processing
-        await notifyGenerationStatus({
-          accountId: userId,
-          recordId: record.id,
-          status: 'processing',
-          category,
-          model,
-          taskId: result.providerTaskId,
-        })
-
-        const updated = await getGenerationRecordById(record.id)
-        return { success: true, record: serializeRecord(updated ?? record) }
-      }
-
-      // 同步任务完成（文本/图片）— 下载并保存结果
-      let outputResult: OutputResult = parseProviderOutput(result.output)
-      const imageUrls = extractImageUrls(result.output)
-      if (modelConfig.category === 'image' && imageUrls.length > 0) {
-        const savedUrls = await storage.downloadAndMap(imageUrls, taskId, 'img')
-        outputResult = { type: 'image', savedUrls, urls: imageUrls }
-      }
-
-      // 计算实际费用
-      const actualCost = calculateCost(modelConfig, parameters, result.usage)
-
-      await markGenerationSucceeded(record.id, outputResult, actualCost)
-
-      // 通知 SSE 客户端同步任务完成
-      await notifyGenerationStatus({
-        accountId: userId,
+      // 调用 service 执行核心业务流程（provider 调用 + 三分支处理 + DB + SSE）
+      const result = await svc.executeGeneration({
         recordId: record.id,
-        status: 'succeeded',
-        category,
-        model,
+        accountId: userId,
         taskId,
-        outputResult,
-        cost: actualCost,
-      })
+        modelConfig,
+        category,
+        parameters,
+        referenceUrls,
+        inputParams: { ...parameters, referenceFileIds },
+        dedupeKey,
+        estimatedCost,
+      }, deps)
 
-      const updated = await getGenerationRecordById(record.id)
-      return { success: true, record: serializeRecord(updated ?? record) }
+      return { success: result.success, record: serializeRecord(result.record) }
     }, {
       body: t.Object({
         model: t.String(),
@@ -291,99 +223,55 @@ export function createGenerateRoutes(config: ServerConfig) {
       if (record.status !== 'failed' && record.status !== 'cancelled')
         return validationError(set, '只能重试失败或已取消的任务')
 
-      // Re-submit to DashScope with the same parameters
       const modelConfig = getModelById(record.model)
       if (!modelConfig)
         return validationError(set, `Unknown model: ${record.model}`)
 
-      const retryCategory = modelConfig.category
-
+      // 参考文件归属校验 — 必须在 resetGenerationToPending 之前（P1.9 约束）
       const inputParams = record.inputParams
       const referenceFileIds = Array.isArray(inputParams.referenceFileIds)
         ? inputParams.referenceFileIds as string[]
         : undefined
 
-      // 参考文件归属校验 — 必须在 resetGenerationToPending 之前完成
-      // 否则校验失败时记录状态已被改写，产生脏状态
       let referenceUrls: string[] | undefined
       if (referenceFileIds?.length) {
-        const files = await getUploadedFilesByIdsForAccount(referenceFileIds, userId)
-        if (files.length !== referenceFileIds.length) {
-          return forbidden(set, '部分参考文件不存在或不属于当前用户')
+        const refResult = await svc.resolveReferenceUrls(referenceFileIds, userId)
+        if (!refResult.ok) {
+          return forbidden(set, refResult.error)
         }
-        referenceUrls = files.map(f => f.publicUrl)
+        referenceUrls = refResult.urls
       }
 
       const parameters = { ...inputParams }
       delete (parameters as Record<string, unknown>).referenceFileIds
-
       const newTaskId = `gen_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
 
       // 所有校验通过后才重置状态 — 防止校验失败产生脏状态
       await resetGenerationToPending(record.id)
 
-      const result = await client.generate(record.model, parameters, referenceUrls)
+      const estimatedCost = calculateCost(modelConfig, parameters)
 
-      if (!result.success) {
-        await markGenerationFailed(record.id, result.error!)
-        await notifyGenerationStatus({
-          accountId: userId,
-          recordId: record.id,
-          status: 'failed',
-          category: retryCategory,
-          model: record.model,
-          taskId: newTaskId,
-          errorMessage: result.error,
-        })
-        const updated = await getGenerationRecordById(record.id)
-        return { success: false, record: serializeRecord(updated ?? record) }
-      }
-
-      if (result.providerTaskId) {
-        await markGenerationProcessing(record.id, {
-          taskId: result.providerTaskId,
-          outputResult: parseProviderOutput(result.output),
-        })
-        await notifyGenerationStatus({
-          accountId: userId,
-          recordId: record.id,
-          status: 'processing',
-          category: retryCategory,
-          model: record.model,
-          taskId: result.providerTaskId,
-        })
-        const updated = await getGenerationRecordById(record.id)
-        return { success: true, record: serializeRecord(updated ?? record) }
-      }
-
-      // Sync task succeeded (text/image retry)
-      let outputResult: OutputResult = parseProviderOutput(result.output)
-      const retryImageUrls = extractImageUrls(result.output)
-      if (modelConfig.category === 'image' && retryImageUrls.length > 0) {
-        const savedUrls = await storage.downloadAndMap(retryImageUrls, newTaskId, 'img')
-        outputResult = { type: 'image', savedUrls, urls: retryImageUrls }
-      }
-      const actualCost = calculateCost(modelConfig, parameters, result.usage)
-      await markGenerationSucceeded(record.id, outputResult, actualCost)
-      await notifyGenerationStatus({
-        accountId: userId,
+      // 调用 service 执行核心业务流程（与 POST /generate 共享同一逻辑）
+      const result = await svc.executeGeneration({
         recordId: record.id,
-        status: 'succeeded',
-        category: retryCategory,
-        model: record.model,
+        accountId: userId,
         taskId: newTaskId,
-        outputResult,
-        cost: actualCost,
-      })
-      const updated = await getGenerationRecordById(record.id)
-      return { success: true, record: serializeRecord(updated ?? record) }
+        modelConfig,
+        category: modelConfig.category,
+        parameters,
+        referenceUrls,
+        inputParams,
+        estimatedCost,
+      }, deps)
+
+      return { success: result.success, record: serializeRecord(result.record) }
     }, {
       params: t.Object({
         id: t.String(),
       }),
     })
 
-    // 取消进行中的任务 — 同时通知 provider 取消（best-effort）+ 更新 DB + SSE 推送
+    // 取消进行中的任务 — provider 取消(best-effort) + DB 取消 + SSE 推送
     .post('/records/:id/cancel', async ({ params, userId, set }) => {
       if (!userId)
         return unauthorized(set)
@@ -394,30 +282,13 @@ export function createGenerateRoutes(config: ServerConfig) {
       if (record.accountId !== userId)
         return forbidden(set, '无权操作该记录')
       // 可取消的状态：pending、submitting、processing、saving_output
-      // 这些都是"进行中"状态，取消后标记为 cancelled（不再与 failed 混淆）
       const CANCELLABLE_STATUSES = ['pending', 'submitting', 'processing', 'saving_output'] as const
       if (!CANCELLABLE_STATUSES.includes(record.status as typeof CANCELLABLE_STATUSES[number])) {
-        return validationError(set, '只能取消进行中的任务（当前状态: ' + record.status + '）')
+        return validationError(set, `只能取消进行中的任务（当前状态: ${record.status}）`)
       }
 
-      // 尝试在 provider 侧取消（best-effort：即使 provider 取消失败，DB 和 SSE 仍标记为已取消）
-      if (record.taskId) {
-        await client.cancelTask(record.taskId)
-      }
-
-      await cancelGenerationRecord(record.id)
-      await notifyGenerationStatus({
-        accountId: userId,
-        recordId: record.id,
-        status: 'cancelled',
-        category: record.category,
-        model: record.model,
-        taskId: record.taskId,
-        errorMessage: '用户取消',
-      })
-
-      const updated = await getGenerationRecordById(record.id)
-      return { success: true, record: serializeRecord(updated ?? record) }
+      const updatedRecord = await svc.cancelGeneration(record.id, userId, record, deps)
+      return { success: true, record: serializeRecord(updatedRecord) }
     }, {
       params: t.Object({
         id: t.String(),
