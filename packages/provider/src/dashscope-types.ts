@@ -1,0 +1,97 @@
+// ===== DashScope API 响应类型定义 =====
+// 根据 DashScope 官方文档和实际 API 返回结构定义
+// 用于替换 dashscope-client.ts 中的 `as any` 类型断言
+
+// ── Usage（计费用量）──
+// DashScope 原生格式和 OpenAI 兼容格式使用不同的字段名，
+// 统一为一个 interface 以避免 union narrowing 问题
+
+export interface DashScopeUsage {
+  input_tokens?: number
+  output_tokens?: number
+  image_count?: number
+  prompt_tokens?: number // OpenAI 兼容格式
+  completion_tokens?: number // OpenAI 兼容格式
+}
+
+// ── Chat / Text 响应 ──
+
+/** DashScope 原生文本响应 */
+export interface DashScopeChatResponse {
+  output: {
+    choices?: Array<{
+      message: {
+        content?: Array<{ text: string }> | string
+      }
+    }>
+    text?: string
+  }
+  usage?: DashScopeUsage
+  request_id?: string
+  code?: string
+  message?: string
+}
+
+/** OpenAI 兼容格式响应 */
+export interface DashScopeOpenaiChatResponse {
+  choices?: Array<{
+    message: {
+      content?: string
+    }
+  }>
+  usage?: DashScopeUsage
+  request_id?: string
+  code?: string
+  message?: string
+}
+
+// ── Image 响应 ──
+
+export interface DashScopeImageResponse {
+  output: {
+    choices?: Array<{
+      message: {
+        content?: Array<{ image?: string }>
+      }
+    }>
+  }
+  usage?: DashScopeUsage
+  request_id?: string
+  code?: string
+  message?: string
+}
+
+// ── Video 异步任务 ──
+
+/** 视频任务提交响应 */
+export interface DashScopeVideoSubmitResponse {
+  output?: {
+    task_id?: string
+  }
+  request_id?: string
+  code?: string
+  message?: string
+}
+
+/** 异步任务查询响应 */
+export interface DashScopeTaskQueryResponse {
+  output: {
+    task_status?: string
+    video_url?: string
+    results?: Array<Record<string, unknown>>
+    code?: string
+    message?: string
+  }
+  usage?: DashScopeUsage
+  code?: string
+  message?: string
+  request_id?: string
+}
+
+// ── 通用错误响应 ──
+
+export interface DashScopeErrorResponse {
+  code?: string
+  message?: string
+  request_id?: string
+}

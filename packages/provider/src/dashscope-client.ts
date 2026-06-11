@@ -1,5 +1,13 @@
 import type { InputMapping, ModelConfig } from '@excuse/shared'
 import type { DashScopeConfig, ProviderResult, TaskStatus } from './types'
+import type {
+  DashScopeChatResponse,
+  DashScopeImageResponse,
+  DashScopeOpenaiChatResponse,
+  DashScopeTaskQueryResponse,
+  DashScopeUsage,
+  DashScopeVideoSubmitResponse,
+} from './dashscope-types'
 import { parseDashScopeError } from './dashscope-errors'
 import { getModelById } from './model-configs'
 
@@ -182,26 +190,28 @@ export class DashScopeClient {
         body: JSON.stringify(body),
       })
 
-      const data = await response.json() as Record<string, unknown>
+      const data = await response.json() as DashScopeChatResponse | DashScopeOpenaiChatResponse
 
       if (response.status !== 200) {
-        return { success: false, error: `模型 ${modelConfig.name}（${modelConfig.id}）: ${parseDashScopeError(data)}` }
+        return { success: false, error: `模型 ${modelConfig.name}（${modelConfig.id}）: ${parseDashScopeError(data as Record<string, unknown>)}` }
       }
 
-      const usage = (data as any).usage || {}
-
-      // OpenAI 兼容格式: data.choices[0].message.content
-      // DashScope 原生格式: data.output.choices[0].message.content[0].text
       const isOpenaiFormat = modelConfig.requestType === 'openai-chat'
-      const text = isOpenaiFormat
-        ? ((data as any).choices?.[0]?.message?.content || '')
-        : (() => {
-            const output = (data as any).output || {}
-            return output.choices?.[0]?.message?.content?.[0]?.text
-              || output.text
-              || output.choices?.[0]?.message?.content
-              || ''
-          })()
+      const usage: DashScopeUsage = isOpenaiFormat
+        ? (data as DashScopeOpenaiChatResponse).usage ?? {}
+        : (data as DashScopeChatResponse).usage ?? {}
+
+      let text: string
+      if (isOpenaiFormat) {
+        text = (data as DashScopeOpenaiChatResponse).choices?.[0]?.message?.content ?? ''
+      } else {
+        const output = (data as DashScopeChatResponse).output
+        const content = output.choices?.[0]?.message?.content
+        text = Array.isArray(content)
+          ? content[0]?.text ?? ''
+          : typeof content === 'string' ? content : ''
+        if (!text && output.text) text = output.text
+      }
 
       return {
         success: true,
@@ -238,19 +248,19 @@ export class DashScopeClient {
         body: JSON.stringify(body),
       })
 
-      const data = await response.json() as Record<string, unknown>
+      const data = await response.json() as DashScopeImageResponse
 
       if (response.status !== 200) {
-        return { success: false, error: `模型 ${modelConfig.name}（${modelConfig.id}）: ${parseDashScopeError(data)}` }
+        return { success: false, error: `模型 ${modelConfig.name}（${modelConfig.id}）: ${parseDashScopeError(data as Record<string, unknown>)}` }
       }
 
-      const output = (data as any).output || {}
-      const usage = (data as any).usage || {}
+      const output = data.output ?? {}
+      const usage: DashScopeUsage = data.usage ?? {}
 
       // 百炼同步图像 API 返回格式：output.choices[].message.content[].image
-      const choices = output.choices || []
-      const urls = choices.flatMap((c: any) =>
-        (c.message?.content || []).map((item: any) => item.image).filter(Boolean),
+      const choices = output.choices ?? []
+      const urls = choices.flatMap(c =>
+        (c.message?.content ?? []).map(item => item.image).filter(Boolean),
       )
 
       return {
@@ -280,7 +290,7 @@ export class DashScopeClient {
     }
 
     const body = this.buildRequestBody(modelConfig, params, referenceUrls)
-    const duration = (params.duration as number) || 0
+    const duration = typeof params.duration === 'number' ? params.duration : 0
 
     try {
       const response = await fetch(modelConfig.endpoint, {
@@ -292,13 +302,13 @@ export class DashScopeClient {
         body: JSON.stringify(body),
       })
 
-      const data = await response.json() as Record<string, unknown>
+      const data = await response.json() as DashScopeVideoSubmitResponse
 
       if (response.status !== 200) {
         return { success: false, error: `模型 ${modelConfig.name}（${modelConfig.id}）: ${parseDashScopeError(data)}` }
       }
 
-      const taskId = (data as any).output?.task_id || (data as any).request_id
+      const taskId = data.output?.task_id ?? data.request_id
 
       return {
         success: true,
@@ -358,15 +368,15 @@ export class DashScopeClient {
         headers: this.headers,
       })
 
-      const data = await response.json() as Record<string, unknown>
-      const output = (data as any).output || {}
-      const taskStatus = output.task_status || 'UNKNOWN'
+      const data = await response.json() as DashScopeTaskQueryResponse
+      const output = data.output ?? {}
+      const taskStatus = output.task_status ?? 'UNKNOWN'
 
       // 任务失败时用友好的中文消息
-      const errorCode = output.code || (data as any).code
+      const errorCode = output.code ?? data.code
       const errorMessage = taskStatus === 'FAILED'
         ? parseDashScopeError(data)
-        : output.message || (data as any).message
+        : output.message ?? data.message
 
       return {
         taskId,
@@ -376,7 +386,7 @@ export class DashScopeClient {
         output: output.video_url || output.results
           ? { results: output.results, video_url: output.video_url }
           : undefined,
-        usage: (data as any).usage,
+        usage: data.usage,
         errorCode,
         errorMessage,
       }

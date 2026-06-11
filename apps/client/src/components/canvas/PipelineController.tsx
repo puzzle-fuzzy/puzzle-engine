@@ -349,7 +349,7 @@ export default function PipelineController({
 
           {error && (
             <div className="flex items-center gap-2">
-              <span className="text-xs text-red-600 max-w-[200px] truncate" title={error}>
+              <span className="text-xs text-red-600 max-w-50 truncate" title={error}>
                 {error}
               </span>
               <button
@@ -397,7 +397,7 @@ function ModelSelect({ label, models, value, onChange, disabled }: {
         value={value}
         onChange={e => onChange(e.target.value)}
         disabled={disabled}
-        className="text-xs px-1.5 py-0.5 rounded border border-border bg-background text-foreground max-w-[180px]"
+        className="text-xs px-1.5 py-0.5 rounded border border-border bg-background text-foreground max-w-45"
       >
         <option value="">默认</option>
         {models.map(m => (

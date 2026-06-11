@@ -98,7 +98,7 @@ export default function CanvasEditor() {
 
         {/* Side panel for selected node */}
         {selectedNode && (
-          <div className="absolute right-4 top-4 bottom-4 w-[360px] bg-background border rounded-lg shadow-lg overflow-auto">
+          <div className="absolute right-4 top-4 bottom-4 w-90 bg-background border rounded-lg shadow-lg overflow-auto">
             <div className="sticky top-0 bg-background border-b px-4 py-2 flex items-center justify-between">
               <span className="text-sm font-medium">
                 节点详情

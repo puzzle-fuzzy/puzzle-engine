@@ -10,8 +10,8 @@ export default function ContinuityCheckNode({ data }: NodeProps) {
   const warnings = issues.filter(i => i.severity === 'warning')
 
   return (
-    <div className="rounded-lg border-2 border-rose-400 bg-rose-50 shadow-md w-[340px]">
-      <Handle type="target" position={Position.Top} className="!bg-rose-400" />
+    <div className="rounded-lg border-2 border-rose-400 bg-rose-50 shadow-md w-85">
+      <Handle type="target" position={Position.Top} className="bg-rose-400!" />
       <div className="bg-rose-400 text-white px-3 py-2 font-semibold text-sm">
         连续性检查
       </div>
@@ -36,7 +36,7 @@ export default function ContinuityCheckNode({ data }: NodeProps) {
               <p className="text-xs text-green-600">无连续性问题</p>
             )
           : (
-              <div className="space-y-2 max-h-[300px] overflow-auto">
+              <div className="space-y-2 max-h-75 overflow-auto">
                 {issues.map((issue: ContinuityIssue) => (
                   <div
                     key={`${issue.severity}-${issue.message}`}
@@ -75,12 +75,12 @@ export default function ContinuityCheckNode({ data }: NodeProps) {
         {/* Dev mode */}
         <details className="mt-2">
           <summary className="text-xs text-muted-foreground cursor-pointer">完整 JSON</summary>
-          <pre className="text-[10px] bg-white rounded p-2 mt-1 max-h-[300px] overflow-auto whitespace-pre-wrap">
+          <pre className="text-[10px] bg-white rounded p-2 mt-1 max-h-75 overflow-auto whitespace-pre-wrap">
             {JSON.stringify(issues, null, 2)}
           </pre>
         </details>
       </div>
-      <Handle type="source" position={Position.Bottom} className="!bg-rose-400" />
+      <Handle type="source" position={Position.Bottom} className="bg-rose-400!" />
     </div>
   )
 }

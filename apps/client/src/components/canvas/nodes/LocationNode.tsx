@@ -34,7 +34,7 @@ export default function LocationNode({ data }: NodeProps) {
             <img
               src={location.referenceImageUrl}
               alt={location.name}
-              className="w-full h-[140px] object-cover rounded border"
+              className="w-full h-35 object-cover rounded border"
             />
           </div>
         )}
@@ -97,7 +97,7 @@ export default function LocationNode({ data }: NodeProps) {
         {location.scenePrompt && (
           <div>
             <span className="text-muted-foreground text-xs">Scene Prompt：</span>
-            <p className="text-xs bg-white rounded p-2 mt-0.5 max-h-[80px] overflow-auto">
+            <p className="text-xs bg-white rounded p-2 mt-0.5 max-h-20 overflow-auto">
               {location.scenePrompt}
             </p>
           </div>
@@ -107,7 +107,7 @@ export default function LocationNode({ data }: NodeProps) {
         {location.negativePrompt && (
           <div>
             <span className="text-muted-foreground text-xs">Negative Prompt：</span>
-            <p className="text-xs bg-white rounded p-2 mt-0.5 max-h-[60px] overflow-auto text-red-600">
+            <p className="text-xs bg-white rounded p-2 mt-0.5 max-h-15 overflow-auto text-red-600">
               {location.negativePrompt}
             </p>
           </div>
@@ -116,12 +116,12 @@ export default function LocationNode({ data }: NodeProps) {
         {/* Dev mode */}
         <details className="mt-2">
           <summary className="text-xs text-muted-foreground cursor-pointer">完整 Profile JSON</summary>
-          <pre className="text-[10px] bg-white rounded p-2 mt-1 max-h-[300px] overflow-auto whitespace-pre-wrap">
+          <pre className="text-[10px] bg-white rounded p-2 mt-1 max-h-75 overflow-auto whitespace-pre-wrap">
             {JSON.stringify(profile, null, 2)}
           </pre>
         </details>
       </div>
-      <Handle type="source" position={Position.Bottom} className="!bg-amber-400" />
+      <Handle type="source" position={Position.Bottom} className="bg-amber-400!" />
     </div>
   )
 }

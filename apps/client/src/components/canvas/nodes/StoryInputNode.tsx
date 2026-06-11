@@ -5,7 +5,7 @@ export default function StoryInputNode({ data }: NodeProps) {
   const project = (data as { project: { storyText: string, title: string | null } }).project
 
   return (
-    <div className="rounded-lg border-2 border-blue-400 bg-blue-50 shadow-md w-[340px]">
+    <div className="rounded-lg border-2 border-blue-400 bg-blue-50 shadow-md w-85">
       <div className="bg-blue-400 text-white px-3 py-2 rounded-t-md font-semibold text-sm">
         故事输入
       </div>
@@ -18,7 +18,7 @@ export default function StoryInputNode({ data }: NodeProps) {
         )}
         <div>
           <span className="text-muted-foreground">故事文本：</span>
-          <p className="mt-1 text-xs bg-white rounded p-2 max-h-[120px] overflow-auto whitespace-pre-wrap">
+          <p className="mt-1 text-xs bg-white rounded p-2 max-h-30 overflow-auto whitespace-pre-wrap">
             {project.storyText.slice(0, 500)}
             {project.storyText.length > 500 ? '...' : ''}
           </p>
@@ -30,7 +30,7 @@ export default function StoryInputNode({ data }: NodeProps) {
           字符
         </div>
       </div>
-      <Handle type="source" position={Position.Bottom} className="!bg-blue-400" />
+      <Handle type="source" position={Position.Bottom} className="bg-blue-400!" />
     </div>
   )
 }

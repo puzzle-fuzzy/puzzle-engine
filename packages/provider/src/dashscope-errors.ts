@@ -102,27 +102,32 @@ export function getDashScopeErrorMessage(code: string, fallback: string): string
  * 3. OpenAI 兼容 (无 code): { error: { message } }
  * 4. 异步任务失败: { output: { task_status: "FAILED", message } }
  */
-export function parseDashScopeError(response: any): string {
-  // DashScope 原生格式
-  if (response?.code) {
-    return getDashScopeErrorMessage(response.code, response.message || '未知错误')
+export function parseDashScopeError(response: Record<string, unknown>): string {
+  const code = typeof response.code === 'string' ? response.code : undefined
+  const message = typeof response.message === 'string' ? response.message : undefined
+  const error = typeof response.error === 'object' && response.error !== null ? response.error as Record<string, unknown> : undefined
+  const output = typeof response.output === 'object' && response.output !== null ? response.output as Record<string, unknown> : undefined
+
+  // DashScope 原生格式: { code, message }
+  if (code) {
+    return getDashScopeErrorMessage(code, message ?? '未知错误')
   }
 
-  // OpenAI 兼容格式（带 code）
-  if (response?.error?.code) {
-    return getDashScopeErrorMessage(response.error.code, response.error.message || '未知错误')
+  // OpenAI 兼容格式（带 code）: { error: { code, message } }
+  if (error && typeof error.code === 'string') {
+    return getDashScopeErrorMessage(error.code, typeof error.message === 'string' ? error.message : '未知错误')
   }
 
   // OpenAI 兼容格式（仅 message）
-  if (response?.error?.message) {
-    return response.error.message
+  if (error && typeof error.message === 'string') {
+    return error.message
   }
 
-  // 异步任务失败格式
-  if (response?.output?.message) {
+  // 异步任务失败格式: { output: { task_status: "FAILED", message } }
+  if (output && typeof output.message === 'string') {
     return getDashScopeErrorMessage(
-      response.output.code || response.output.task_status || '',
-      response.output.message,
+      (typeof output.code === 'string' ? output.code : '') || (typeof output.task_status === 'string' ? output.task_status : ''),
+      output.message,
     )
   }
 

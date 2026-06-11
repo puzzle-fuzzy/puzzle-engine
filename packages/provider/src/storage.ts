@@ -165,7 +165,7 @@ export class AssetStorage {
     }
     catch (err) {
       // File may not exist locally if OSS-only, ignore ENOENT
-      const code = (err as any)?.code
+      const code = (err as NodeJS.ErrnoException)?.code
       if (code !== 'ENOENT')
         logger.warn({ err, storagePath }, 'Failed to delete local file')
     }
