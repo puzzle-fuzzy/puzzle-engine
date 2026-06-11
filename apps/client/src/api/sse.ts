@@ -1,5 +1,6 @@
 import type { SSEGenerationStatusEvent, SSENotificationEvent, SSEPipelineNodeEvent } from '@excuse/shared'
 import { fetchEventSource } from '@microsoft/fetch-event-source'
+import { parseSSEGenerationStatusEvent, parseSSENotificationEvent, parseSSEPipelineNodeEvent } from '@excuse/shared'
 import { getAuthToken } from './client'
 
 /**
@@ -149,29 +150,48 @@ class SSEClient {
   // ===== 事件解析 =====
 
   private handleMessage(event: string, data: string) {
+    let parsed: unknown
     try {
-      switch (event) {
-        case 'generation_status':
-          this.emit('generation_status', JSON.parse(data) as SSEGenerationStatusEvent)
-          break
-        case 'pipeline_node_update':
-          this.emit('pipeline_node_update', JSON.parse(data) as SSEPipelineNodeEvent)
-          break
-        case 'notification':
-          this.emit('notification', JSON.parse(data) as SSENotificationEvent)
-          break
-        case 'heartbeat':
-          // 服务端 30s 心跳，无需业务处理；连接本身保活由 fetch-event-source 管理
-          break
-        case 'connected':
-          console.info('[SSE] Connected:', data)
-          break
-        default:
-          console.debug('[SSE] Ignored event:', event)
-      }
+      parsed = JSON.parse(data)
     }
-    catch (err) {
-      console.error(`[SSE] Failed to parse ${event} event:`, err)
+    catch {
+      console.error(`[SSE] Invalid JSON for ${event} event`)
+      return
+    }
+
+    switch (event) {
+      case 'generation_status': {
+        const evt = parseSSEGenerationStatusEvent(parsed)
+        if (evt)
+          this.emit('generation_status', evt)
+        else
+          console.warn('[SSE] Discarded malformed generation_status event:', parsed)
+        break
+      }
+      case 'pipeline_node_update': {
+        const evt = parseSSEPipelineNodeEvent(parsed)
+        if (evt)
+          this.emit('pipeline_node_update', evt)
+        else
+          console.warn('[SSE] Discarded malformed pipeline_node_update event:', parsed)
+        break
+      }
+      case 'notification': {
+        const evt = parseSSENotificationEvent(parsed)
+        if (evt)
+          this.emit('notification', evt)
+        else
+          console.warn('[SSE] Discarded malformed notification event:', parsed)
+        break
+      }
+      case 'heartbeat':
+        // 服务端 30s 心跳，无需业务处理；连接本身保活由 fetch-event-source 管理
+        break
+      case 'connected':
+        console.info('[SSE] Connected:', data)
+        break
+      default:
+        console.debug('[SSE] Ignored event:', event)
     }
   }
 
