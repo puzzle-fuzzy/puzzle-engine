@@ -1,6 +1,8 @@
 import type { ProjectDTO } from '@excuse/shared'
 import { useCallback, useState } from 'react'
-import { updateCanvasCharacter, updateCanvasLocation, updateCanvasShot, uploadFile } from '../../api/client'
+import { updateCanvasCharacter, updateCanvasLocation, updateCanvasProject, updateCanvasShot, uploadFile } from '../../api/client'
+import { Button } from '../ui/button'
+import { Input } from '../ui/input'
 import { PromptEditor } from './PromptEditor'
 import { ReferenceUploadZone } from './ReferenceUploadZone'
 
@@ -53,13 +55,48 @@ export default function NodeDetailPanel({ selectedNode, project, onUpdate }: Nod
     return res.file.publicUrl
   }, [location, onUpdate])
 
+  const isProjectNode = selectedNode.type === 'storyInput' || selectedNode.type === 'analysis'
+  const [editTitle, setEditTitle] = useState(project.title ?? '')
+  const [editStoryText, setEditStoryText] = useState(project.storyText)
+  const [editSaving, setEditSaving] = useState(false)
+
+  const handleProjectUpdate = useCallback(async () => {
+    // Only send fields that actually changed
+    const patch: { title?: string, storyText?: string } = {}
+    const titleChanged = editTitle !== (project.title ?? '')
+    const storyTextChanged = editStoryText !== project.storyText
+    if (titleChanged)
+      patch.title = editTitle
+    if (storyTextChanged)
+      patch.storyText = editStoryText
+    if (!titleChanged && !storyTextChanged)
+      return
+
+    setEditSaving(true)
+    try {
+      await updateCanvasProject(project.id, patch)
+      onUpdate()
+    }
+    catch (err) {
+      console.error('Failed to update project:', err)
+    }
+    finally {
+      setEditSaving(false)
+    }
+  }, [project, editTitle, editStoryText, onUpdate])
+
+  const hasChanges = editTitle !== (project.title ?? '') || editStoryText !== project.storyText
+  const storyTextInvalid = editStoryText !== project.storyText && editStoryText.length < 10
+
   const nodeTitle = shot
     ? `镜头 ${shot.shotIndex}`
     : character
       ? `角色: ${character.name}`
       : location
         ? `场景: ${location.name}`
-        : selectedNode.type
+        : isProjectNode
+          ? '项目信息'
+          : selectedNode.type
 
   return (
     <div className="p-4 space-y-4 text-sm">
@@ -169,9 +206,44 @@ export default function NodeDetailPanel({ selectedNode, project, onUpdate }: Nod
         </>
       )}
 
-      {!shot && !character && !location && (
+      {!shot && !character && !location && isProjectNode && (
+        <div className="space-y-3">
+          <div className="space-y-1">
+            <label className="text-xs font-medium text-muted-foreground">项目标题</label>
+            <Input
+              value={editTitle}
+              onChange={(e) => setEditTitle(e.target.value)}
+              placeholder="输入项目标题"
+            />
+          </div>
+          <div className="space-y-1">
+            <label className="text-xs font-medium text-muted-foreground">
+              故事文本
+              <span className="ml-1 text-muted-foreground/60">
+                ({editStoryText.length} 字符)
+              </span>
+            </label>
+            <textarea
+              value={editStoryText}
+              onChange={(e) => setEditStoryText(e.target.value)}
+              className="flex min-h-30 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              placeholder="在此粘贴故事文本..."
+              rows={6}
+            />
+          </div>
+          <Button
+            size="sm"
+            onClick={handleProjectUpdate}
+            disabled={editSaving || !hasChanges || storyTextInvalid}
+          >
+            {editSaving ? '保存中...' : '保存修改'}
+          </Button>
+        </div>
+      )}
+
+      {!shot && !character && !location && !isProjectNode && (
         <p className="text-xs text-muted-foreground">
-          选中角色、场景或镜头节点可查看和编辑详细信息。
+          选中故事输入、分析、角色、场景或镜头节点可查看和编辑详细信息。
         </p>
       )}
     </div>

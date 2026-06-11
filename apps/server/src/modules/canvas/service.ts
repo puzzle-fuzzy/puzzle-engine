@@ -61,6 +61,25 @@ export async function createProject(accountId: string, input: { title?: string, 
   return mapProjectDetail(project, [], [], [], null)
 }
 
+export async function updateProjectProperties(projectId: string, input: { title?: string, storyText?: string }) {
+  const project = await getCanvasProjectById(projectId)
+  if (!project)
+    throw new Error('项目不存在')
+
+  const values: Partial<Pick<typeof project, 'title' | 'storyText'>> = {}
+  if (input.title !== undefined)
+    values.title = input.title
+  if (input.storyText !== undefined)
+    values.storyText = input.storyText
+
+  const updated = await updateCanvasProject(projectId, values)
+  if (!updated)
+    throw new Error('更新失败')
+
+  const detail = await getCanvasProjectDetail(projectId)
+  return mapProjectDetail(updated, detail?.characters ?? [], detail?.locations ?? [], detail?.shots ?? [], detail?.latestContinuity ?? null)
+}
+
 /**
  * 回填历史数据：将 canvas_shots 中停留在 'generating' 的镜头
  * 从 generation_records 同步真实状态和视频 URL。

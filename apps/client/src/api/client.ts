@@ -187,6 +187,13 @@ export async function deleteCanvasProject(projectId: string): Promise<{ success:
   )
 }
 
+/** 更新项目标题/故事文本 */
+export async function updateCanvasProject(projectId: string, patch: { title?: string, storyText?: string }): Promise<{ success: boolean, data: ProjectDTO }> {
+  return unwrapEden<{ success: boolean, data: ProjectDTO }>(
+    await api.api.canvas.projects({ projectId }).patch(patch),
+  )
+}
+
 export async function analyzeCanvasProject(projectId: string): Promise<{ success: boolean }> {
   return unwrapEden<{ success: boolean }>(
     await api.api.canvas.projects({ projectId }).analyze.post(),

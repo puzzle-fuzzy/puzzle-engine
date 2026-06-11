@@ -84,6 +84,22 @@ export function createCanvasRoutes(config: ServerConfig) {
       return { success: true }
     })
 
+    // 更新项目标题/故事文本
+    .patch('/projects/:projectId', async ({ params: { projectId }, body, userId }) => {
+      if (!userId)
+        return { success: false, error: '请先登录' }
+      const { title, storyText } = body as { title?: string, storyText?: string }
+      if (title === undefined && storyText === undefined)
+        return { success: false, error: '至少提供一个字段' }
+      const project = await svc.updateProjectProperties(projectId, { title, storyText })
+      return { success: true, data: project }
+    }, {
+      body: t.Object({
+        title: t.Optional(t.String({ maxLength: 500 })),
+        storyText: t.Optional(t.String({ minLength: 10 })),
+      }),
+    })
+
     // ===== 流水线步骤 =====
     // 所有流水线接口采用 fire-and-forget 模式：
     // 立即返回，后台执行，通过 SSE 推送进度和阶段完成事件
