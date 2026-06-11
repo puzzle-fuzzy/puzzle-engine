@@ -409,6 +409,7 @@ export async function generateLocationRefs(projectId: string, config: { dashscop
     }
   }
 
+  await updateCanvasProject(projectId, { status: 'refs_all_ready' })
   return getProjectDetail(projectId)
 }
 

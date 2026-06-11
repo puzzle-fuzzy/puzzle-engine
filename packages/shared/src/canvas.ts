@@ -10,7 +10,7 @@ export interface CanvasModelPreferences {
 /** 画布项目状态 */
 export type CanvasProjectStatus
   = | 'draft' | 'analyzed' | 'characters_ready' | 'locations_ready'
-    | 'refs_ready' | 'storyboard_ready' | 'continuity_checked'
+    | 'refs_ready' | 'refs_all_ready' | 'storyboard_ready' | 'continuity_checked'
     | 'prompts_ready' | 'generating' | 'completed' | 'failed'
 
 /** 画布镜头状态 */

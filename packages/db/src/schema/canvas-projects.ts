@@ -7,6 +7,7 @@ export const canvasProjectStatusEnum = pgEnum('canvas_project_status', [
   'characters_ready',
   'locations_ready',
   'refs_ready',
+  'refs_all_ready',
   'storyboard_ready',
   'continuity_checked',
   'prompts_ready',
