@@ -9,6 +9,7 @@
   "module": "src/index.ts",
   "scripts": {
     "test": "bun test",
+    "test:db": "bun scripts/test-db.ts",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "bun --env-file ../../.env run src/migrate.ts",
     "db:push": "bun --env-file ../../.env run drizzle-kit push",

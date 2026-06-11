@@ -32,6 +32,7 @@
     "test:isolate": "bun test --isolate",
     "test:client": "bun run --cwd apps/client test",
     "test:all": "bun run test && bun run test:client",
+    "test:db": "bun run --cwd packages/db test:db",
     "test:coverage": "bun run test --coverage && bun run test:client -- --coverage"
   },
   "peerDependencies": {
