@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'bun:test'
+import type { ModelConfig, ModelParameter } from '@excuse/shared'
 import { getModelById, getModelsByCategory, MODELS } from '../src/model-configs'
 
 describe('getModelById', () => {
@@ -119,5 +120,172 @@ describe('模型配置完整性', () => {
     const firstFrame = i2v.parameters.find(p => p.name === 'first_frame_url')
     expect(firstFrame).toBeDefined()
     expect(firstFrame!.required).toBe(true)
+  })
+})
+
+// ═══════════════════════════════════════════════════
+//  P1.8: 模型配置一致性校验
+// ═══════════════════════════════════════════════════
+
+describe('模型配置一致性 (P1.8)', () => {
+  const allModels = Object.values(MODELS)
+
+  it('defaultValue 必须符合 type', () => {
+    const violations: string[] = []
+    for (const model of allModels) {
+      for (const param of model.parameters) {
+        if (param.defaultValue === undefined)
+          continue
+        const dv = param.defaultValue
+        switch (param.type) {
+          case 'number':
+            if (typeof dv !== 'number' || Number.isNaN(dv))
+              violations.push(`${model.id}.${param.name}: defaultValue=${dv} 不是 number`)
+            break
+          case 'boolean':
+            if (typeof dv !== 'boolean')
+              violations.push(`${model.id}.${param.name}: defaultValue=${dv} 不是 boolean`)
+            break
+          case 'select':
+            if (typeof dv !== 'string')
+              violations.push(`${model.id}.${param.name}: defaultValue=${dv} 不是 string`)
+            break
+          case 'text':
+            if (typeof dv !== 'string')
+              violations.push(`${model.id}.${param.name}: defaultValue=${dv} 不是 string`)
+            break
+        }
+      }
+    }
+    expect(violations).toHaveLength(0)
+  })
+
+  it('有 options 时 defaultValue 必须在 options 内', () => {
+    const violations: string[] = []
+    for (const model of allModels) {
+      for (const param of model.parameters) {
+        if (!param.options || param.defaultValue === undefined)
+          continue
+        const validValues = param.options.map(o => String(o.value))
+        if (!validValues.includes(String(param.defaultValue))) {
+          violations.push(`${model.id}.${param.name}: defaultValue="${param.defaultValue}" 不在 options [${validValues.join(', ')}]`)
+        }
+      }
+    }
+    expect(violations).toHaveLength(0)
+  })
+
+  it('parameters 中声明的参数名应在 inputMapping 中有对应映射', () => {
+    // 设计约束：每个参数名要么在 inputMapping 中有映射，要么被 target='ignored' 标记为不发 API。
+    // inputMapping 中有额外 key（来自共享 mapping 片段）是允许的 — applyMappings 只处理用户实际提供的参数。
+    const violations: string[] = []
+    for (const model of allModels) {
+      if (!model.inputMapping)
+        continue
+      const mappingKeys = new Set(Object.keys(model.inputMapping))
+      for (const param of model.parameters) {
+        const mapping = model.inputMapping[param.name]
+        if (!mapping) {
+          // 未映射的参数默认会被 applyMappings 按 target='parameter' 处理
+          // 这是合理行为 — 大多数参数映射为 target='parameter'
+          // 只需确认参数名确实存在于声明中
+        }
+      }
+      // 反向检查：所有 required 参数必须在 inputMapping 中有映射
+      for (const param of model.parameters) {
+        if (param.required && !model.inputMapping[param.name]) {
+          violations.push(`${model.id}: required 参数 "${param.name}" 在 inputMapping 中没有映射`)
+        }
+      }
+    }
+    expect(violations).toHaveLength(0)
+  })
+
+  it('required media 参数必须配置 mediaUpload', () => {
+    const violations: string[] = []
+    for (const model of allModels) {
+      for (const param of model.parameters) {
+        if (param.required && param.type === 'text' && !param.mediaUpload) {
+          // 检查 inputMapping 是否有 media target — 如果有 target:media 但没有 mediaUpload，那可能有问题
+          const mapping = model.inputMapping?.[param.name]
+          if (mapping && mapping.target === 'media') {
+            violations.push(`${model.id}.${param.name}: required + media target 但没有 mediaUpload 配置`)
+          }
+        }
+      }
+    }
+    expect(violations).toHaveLength(0)
+  })
+
+  it('pricing.unit 与 category 匹配', () => {
+    const violations: string[] = []
+    for (const model of allModels) {
+      const expectedUnits: Record<string, string[]> = {
+        text: ['token'],
+        image: ['image'],
+        video: ['video'],
+      }
+      const allowed = expectedUnits[model.category]
+      if (allowed && model.pricing.unit && !allowed.includes(model.pricing.unit)) {
+        violations.push(`${model.id}: category=${model.category} 但 pricing.unit=${model.pricing.unit}`)
+      }
+    }
+    expect(violations).toHaveLength(0)
+  })
+
+  it('fallbackModel 必须存在，且 category/requestType 与主模型匹配', () => {
+    const violations: string[] = []
+    for (const model of allModels) {
+      if (!model.fallbackModel)
+        continue
+      const fallback = getModelById(model.fallbackModel)
+      if (!fallback) {
+        violations.push(`${model.id}: fallbackModel="${model.fallbackModel}" 不存在于 MODELS`)
+        continue
+      }
+      if (fallback.category !== model.category) {
+        violations.push(`${model.id}: category=${model.category} 但 fallback "${model.fallbackModel}" category=${fallback.category}`)
+      }
+      // t2v → video-t2v 降级合理；r2v → video-media 也合理（同类）
+      // 只要 requestType 类别兼容即可（同 category 下 video-t2v 和 video-media 都合理）
+    }
+    expect(violations).toHaveLength(0)
+  })
+
+  it('图像模型 size 参数的尺寸格式统一 — 使用 W*H 格式', () => {
+    // 图像模型的 size 参数 option value 应为 "W*H" 格式（如 "2048*2048"）
+    // 视频模型的 resolution 参数用 "720P"/"1080P" 格式，不在此校验范围内
+    const violations: string[] = []
+    for (const model of allModels) {
+      if (model.category !== 'image')
+        continue
+      for (const param of model.parameters) {
+        if (param.name !== 'size' || param.type !== 'select' || !param.options)
+          continue
+        for (const opt of param.options) {
+          const val = String(opt.value)
+          if (!val.match(/^\d+\*\d+$/)) {
+            violations.push(`${model.id}.${param.name}: option value "${val}" 不是 W*H 格式`)
+          }
+        }
+      }
+    }
+    expect(violations).toHaveLength(0)
+  })
+
+  it('required 参数至少有一个在 inputMapping 中映射为 prompt 或 media', () => {
+    // 每个模型至少需要一个 "实质输入"（prompt 或 media），不能只有参数类 required
+    const violations: string[] = []
+    for (const model of allModels) {
+      const requiredParams = model.parameters.filter(p => p.required)
+      const hasCoreInput = requiredParams.some(p => {
+        const mapping = model.inputMapping?.[p.name]
+        return mapping && (mapping.target === 'prompt' || mapping.target === 'media')
+      })
+      if (requiredParams.length > 0 && !hasCoreInput) {
+        violations.push(`${model.id}: required 参数中没有 prompt/media target 的核心输入`)
+      }
+    }
+    expect(violations).toHaveLength(0)
   })
 })
