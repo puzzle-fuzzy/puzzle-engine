@@ -319,6 +319,34 @@ export class DashScopeClient {
   }
 
   /**
+   * 视频生成 — 异步提交任务 + 自动 fallback
+   * 先尝试主模型，失败时自动尝试 modelConfig.fallbackModel
+   * 返回最终使用的 model、taskId 和成功状态
+   */
+  async submitVideoTaskWithFallback(
+    model: string,
+    params: Record<string, unknown>,
+    referenceUrls?: string[],
+  ): Promise<{ model: string, taskId: string | undefined, success: boolean, error?: string }> {
+    const result = await this.submitVideoTask(model, params, referenceUrls)
+
+    if (result.success && result.providerTaskId) {
+      return { model, taskId: result.providerTaskId, success: true }
+    }
+
+    const modelConfig = getModelById(model)
+    const fallbackId = modelConfig?.fallbackModel
+    if (fallbackId) {
+      const fallbackResult = await this.submitVideoTask(fallbackId, params)
+      if (fallbackResult.success && fallbackResult.providerTaskId) {
+        return { model: fallbackId, taskId: fallbackResult.providerTaskId, success: true }
+      }
+    }
+
+    return { model, taskId: undefined, success: false, error: result.error || '视频提交失败' }
+  }
+
+  /**
    * 查询异步任务状态
    */
   async queryTask(taskId: string): Promise<TaskStatus> {

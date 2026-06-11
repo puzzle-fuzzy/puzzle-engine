@@ -56,6 +56,17 @@ function getImageModel(prefs: CanvasModelPreferences | null | undefined): string
   return prefs?.imageModel || DEFAULT_IMAGE_MODEL
 }
 
+/**
+ * 选择视频模型：根据是否有参考图决定 r2v/t2v 变体。
+ * 优先使用 modelPreferences.videoModel 的基础名，再拼 -r2v/-t2v 后缀。
+ */
+function getVideoModel(prefs: CanvasModelPreferences | null | undefined, referenceUrls: string[]): string {
+  const base = prefs?.videoModel || 'happyhorse-1.0'
+  // r2v models exist only for happyhorse and wan2.7 — strip -r2v/-t2v suffix to get base
+  const strippedBase = base.replace(/-r2v$|-t2v$|-i2v$/, '')
+  return referenceUrls.length > 0 ? `${strippedBase}-r2v` : `${strippedBase}-t2v`
+}
+
 // ===== 项目 CRUD =====
 
 export async function createProject(accountId: string, input: { title?: string, storyText: string }) {
@@ -627,59 +638,39 @@ export async function generateVideos(projectId: string, config: { dashscopeApiKe
         : null
       const referenceUrls = [...charRefUrls, ...(locRefUrl ? [locRefUrl] : [])]
 
-      // Use r2v (reference-to-video) when any reference images are available
-      const model = referenceUrls.length > 0 ? 'happyhorse-1.0-r2v' : 'happyhorse-1.0-t2v'
-      const modelConfig = getModelById(model)
-      const fallbackId = modelConfig?.fallbackModel
-
-      const result = await client.submitVideoTask(model, {
+      const model = getVideoModel(detail.project.modelPreferencesJson, referenceUrls)
+      const videoParams = {
         prompt: shot.videoPrompt.slice(0, 2500),
         negative_prompt: shot.negativePrompt || '',
         resolution: '720P',
         duration: shot.duration,
-      }, referenceUrls.length > 0 ? referenceUrls : undefined)
+      }
 
-      let actualModel = model
-      let actualTaskId = result.providerTaskId
-      let actualSuccess = result.success
+      const submitResult = await client.submitVideoTaskWithFallback(
+        model,
+        videoParams,
+        referenceUrls.length > 0 ? referenceUrls : undefined,
+      )
 
-      if (!result.success || !result.providerTaskId) {
-        // Try declarative fallback model
-        if (fallbackId) {
-          const fallbackResult = await client.submitVideoTask(fallbackId, {
-            prompt: shot.videoPrompt.slice(0, 2500),
-            negative_prompt: shot.negativePrompt || '',
-            resolution: '720P',
-            duration: shot.duration,
-          })
-
-          if (fallbackResult.success && fallbackResult.providerTaskId) {
-            actualModel = fallbackId
-            actualTaskId = fallbackResult.providerTaskId
-            actualSuccess = true
-          }
-        }
-
-        if (!actualSuccess || !actualTaskId) {
-          await updateCanvasShot(shot.id, { status: 'failed', errorMessage: result.error || '视频提交失败' })
-          notifyNode(accountId, projectId, 'shot', shot.id, 'failed', undefined, result.error)
-          continue
-        }
+      if (!submitResult.success || !submitResult.taskId) {
+        await updateCanvasShot(shot.id, { status: 'failed', errorMessage: submitResult.error })
+        notifyNode(accountId, projectId, 'shot', shot.id, 'failed', undefined, submitResult.error)
+        continue
       }
 
       await updateCanvasShot(shot.id, {
-        videoTaskId: actualTaskId,
+        videoTaskId: submitResult.taskId,
         status: 'generating',
       })
       hasAnyVideo = true
 
-      const usedModelConfig = getModelById(actualModel)!
+      const usedModelConfig = getModelById(submitResult.model)!
       const inputParams = { source: 'canvas', projectId, shotId: shot.id, prompt: shot.videoPrompt, resolution: '720P', duration: shot.duration }
       const cost = calculateCost(usedModelConfig, inputParams)
       await createGenerationRecord({
         accountId,
-        taskId: actualTaskId!,
-        model: actualModel,
+        taskId: submitResult.taskId!,
+        model: submitResult.model,
         category: 'video',
         status: 'processing',
         inputParams,
@@ -810,53 +801,35 @@ export async function retryShotVideo(shotId: string, config: { dashscopeApiKey: 
     : null
   const referenceUrls = [...charRefUrls, ...(locRefUrl ? [locRefUrl] : [])]
 
-  const model = referenceUrls.length > 0 ? 'happyhorse-1.0-r2v' : 'happyhorse-1.0-t2v'
-  const modelConfig = getModelById(model)
-  const fallbackId = modelConfig?.fallbackModel
-
-  const result = await client.submitVideoTask(model, {
+  const model = getVideoModel(detail.project.modelPreferencesJson, referenceUrls)
+  const videoParams = {
     prompt: shot.videoPrompt!.slice(0, 2500),
     negative_prompt: shot.negativePrompt || '',
     resolution: '720P',
     duration: shot.duration,
-  }, referenceUrls.length > 0 ? referenceUrls : undefined)
-
-  let actualModel = model
-  let actualTaskId = result.providerTaskId
-  let actualSuccess = result.success
-
-  if (!result.success || !result.providerTaskId) {
-    if (fallbackId) {
-      const fallbackResult = await client.submitVideoTask(fallbackId, {
-        prompt: shot.videoPrompt!.slice(0, 2500),
-        negative_prompt: shot.negativePrompt || '',
-        resolution: '720P',
-        duration: shot.duration,
-      })
-
-      if (fallbackResult.success && fallbackResult.providerTaskId) {
-        actualModel = fallbackId
-        actualTaskId = fallbackResult.providerTaskId
-        actualSuccess = true
-      }
-    }
-
-    if (!actualSuccess || !actualTaskId) {
-      await updateCanvasShot(shot.id, { status: 'failed', errorMessage: result.error || '视频提交失败' })
-      notifyNode(detail.project.accountId, shot.projectId, 'shot', shot.id, 'failed', undefined, result.error)
-      throw new Error(result.error || '视频提交失败')
-    }
   }
 
-  await updateCanvasShot(shot.id, { videoTaskId: actualTaskId, status: 'generating' })
+  const submitResult = await client.submitVideoTaskWithFallback(
+    model,
+    videoParams,
+    referenceUrls.length > 0 ? referenceUrls : undefined,
+  )
 
-  const usedModelConfig = getModelById(actualModel)!
+  if (!submitResult.success || !submitResult.taskId) {
+    await updateCanvasShot(shot.id, { status: 'failed', errorMessage: submitResult.error })
+    notifyNode(detail.project.accountId, shot.projectId, 'shot', shot.id, 'failed', undefined, submitResult.error)
+    throw new Error(submitResult.error)
+  }
+
+  await updateCanvasShot(shot.id, { videoTaskId: submitResult.taskId, status: 'generating' })
+
+  const usedModelConfig = getModelById(submitResult.model)!
   const inputParams = { source: 'canvas', projectId: shot.projectId, shotId, prompt: shot.videoPrompt, resolution: '720P', duration: shot.duration }
   const cost = calculateCost(usedModelConfig, inputParams)
   await createGenerationRecord({
     accountId: detail.project.accountId,
-    taskId: actualTaskId,
-    model: actualModel,
+    taskId: submitResult.taskId,
+    model: submitResult.model,
     category: 'video',
     status: 'processing',
     inputParams,
