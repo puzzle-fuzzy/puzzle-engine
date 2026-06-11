@@ -131,7 +131,8 @@ describe('generation-records repository', () => {
     })
 
     it('should return empty array when no records match filter', async () => {
-      const results = await listGenerationRecords({ category: 'audio' })
+      // 'video' 是合法 category enum，但此测试只插入 text/image 记录
+      const results = await listGenerationRecords({ category: 'video' })
       expect(results).toHaveLength(0)
     })
   })

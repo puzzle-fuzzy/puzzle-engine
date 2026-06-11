@@ -11,13 +11,34 @@ import { accounts } from './accounts'
 export const generationCategoryEnum = pgEnum('generation_category', ['text', 'image', 'video'])
 
 /**
- * 生成任务状态枚举
- * - pending:    等待处理
- * - processing: 处理中
- * - succeeded:  生成成功
- * - failed:     生成失败
+ * 生成任务状态枚举 — 完整状态机
+ *
+ * 状态流转规则（只允许相邻状态转换）：
+ *   pending → submitting:  调用 DashScope API 前一刻，防止半完成状态
+ *   submitting → processing: API 返回 providerTaskId（异步视频）
+ *   submitting → succeeded:  API 直接返回结果（同步文本/图片）
+ *   submitting → failed:    API 调用失败或超时
+ *   processing → saving_output: Worker 收到视频完成通知，开始下载
+ *   saving_output → succeeded: 输出文件下载并存储成功
+ *   saving_output → failed:   输出文件下载/存储失败（不允许静默标记 succeeded）
+ *   pending → cancelled:      用户主动取消
+ *   processing → cancelled:   用户主动取消（best-effort 取消 provider 任务）
+ *   failed → pending:         用户 retry，重置为 pending 开始新一轮
+ *
+ * 恢复策略：
+ *   - submitting: Worker 扫描超过 5min 的 submitting 记录 → 标记 failed
+ *   - processing: Worker 正常轮询，如果长时间无进度 → 标记 failed
+ *   - saving_output: Worker 扫描超过 10min 的 saving_output → 重试下载或标记 failed
  */
-export const generationStatusEnum = pgEnum('generation_status', ['pending', 'processing', 'succeeded', 'failed'])
+export const generationStatusEnum = pgEnum('generation_status', [
+  'pending',
+  'submitting',
+  'processing',
+  'saving_output',
+  'succeeded',
+  'failed',
+  'cancelled',
+])
 
 /**
  * 生成记录表 — 记录每次 AI 模型调用的完整生命周期

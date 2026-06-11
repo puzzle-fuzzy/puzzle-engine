@@ -75,7 +75,7 @@ function str(o: Record<string, unknown>, key: string): string | undefined {
   return typeof v === 'string' ? v : undefined
 }
 
-const VALID_STATUSES: readonly string[] = ['pending', 'processing', 'succeeded', 'failed', 'cancelled']
+const VALID_STATUSES: readonly string[] = ['pending', 'submitting', 'processing', 'saving_output', 'succeeded', 'failed', 'cancelled']
 const VALID_CATEGORIES: readonly string[] = ['text', 'image', 'video']
 
 /**

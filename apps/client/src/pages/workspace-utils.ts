@@ -1,10 +1,13 @@
 import currency from 'currency.js'
 import {
+  AlertCircle,
   CheckCircle2,
   Clock,
   FileText,
   ImageIcon,
   Loader2,
+  Save,
+  Send,
   Video,
   XCircle,
 } from 'lucide-react'
@@ -19,9 +22,12 @@ export type Category = keyof typeof CATEGORY_CONFIG
 
 export const STATUS_CONFIG: Record<string, { label: string, color: string, icon: typeof Clock }> = {
   pending: { label: '等待中', color: 'bg-yellow-100 text-yellow-700', icon: Clock },
+  submitting: { label: '提交中', color: 'bg-orange-100 text-orange-700', icon: Send },
   processing: { label: '处理中', color: 'bg-blue-100 text-blue-700', icon: Loader2 },
+  saving_output: { label: '保存中', color: 'bg-indigo-100 text-indigo-700', icon: Save },
   succeeded: { label: '已完成', color: 'bg-green-100 text-green-700', icon: CheckCircle2 },
   failed: { label: '失败', color: 'bg-red-100 text-red-700', icon: XCircle },
+  cancelled: { label: '已取消', color: 'bg-gray-100 text-gray-700', icon: AlertCircle },
 }
 
 /** 格式化时间为相对时间 + 完整日期 */

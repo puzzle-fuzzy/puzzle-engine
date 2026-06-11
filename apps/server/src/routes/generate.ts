@@ -91,10 +91,12 @@ export function createGenerateRoutes(config: ServerConfig) {
         referenceUrls = files.map(f => f.publicUrl)
       }
 
-      // 去重：同一用户 + 同一 model + 相同参数短时间内不重复提交
+      // 去重：同一用户 + 同一 model + 相同参数，且任务仍在进行中时不重复提交
+      // "进行中" 包括：pending、submitting、processing、saving_output
       const dedupeKey = `${userId}:${model}:${JSON.stringify(parameters)}`
+      const IN_PROGRESS_STATUSES = ['pending', 'submitting', 'processing', 'saving_output'] as const
       const existing = await findGenerationByDedupeKeyForAccount(dedupeKey, userId)
-      if (existing && (existing.status === 'pending' || existing.status === 'processing')) {
+      if (existing && IN_PROGRESS_STATUSES.includes(existing.status as typeof IN_PROGRESS_STATUSES[number])) {
         const updated = await getGenerationRecordById(existing.id)
         return { success: true, record: serializeRecord(updated ?? existing), duplicated: true }
       }
@@ -203,7 +205,7 @@ export function createGenerateRoutes(config: ServerConfig) {
       }
 
       const VALID_CATEGORIES = ['text', 'image', 'video'] as const
-      const VALID_STATUSES = ['pending', 'processing', 'succeeded', 'failed'] as const
+      const VALID_STATUSES = ['pending', 'submitting', 'processing', 'saving_output', 'succeeded', 'failed', 'cancelled'] as const
 
       const rawCategory = typeof query.category === 'string' ? query.category : undefined
       const rawStatus = typeof query.status === 'string' ? query.status : undefined
@@ -285,8 +287,9 @@ export function createGenerateRoutes(config: ServerConfig) {
         return notFound(set, '记录不存在')
       if (record.accountId !== userId)
         return forbidden(set, '无权操作该记录')
-      if (record.status !== 'failed')
-        return validationError(set, '只能重试失败的任务')
+      // 只能重试 failed 或 cancelled 的任务
+      if (record.status !== 'failed' && record.status !== 'cancelled')
+        return validationError(set, '只能重试失败或已取消的任务')
 
       // Re-submit to DashScope with the same parameters
       const modelConfig = getModelById(record.model)
@@ -390,8 +393,12 @@ export function createGenerateRoutes(config: ServerConfig) {
         return notFound(set, '记录不存在')
       if (record.accountId !== userId)
         return forbidden(set, '无权操作该记录')
-      if (record.status !== 'pending' && record.status !== 'processing')
-        return validationError(set, '只能取消等待中或处理中的任务')
+      // 可取消的状态：pending、submitting、processing、saving_output
+      // 这些都是"进行中"状态，取消后标记为 cancelled（不再与 failed 混淆）
+      const CANCELLABLE_STATUSES = ['pending', 'submitting', 'processing', 'saving_output'] as const
+      if (!CANCELLABLE_STATUSES.includes(record.status as typeof CANCELLABLE_STATUSES[number])) {
+        return validationError(set, '只能取消进行中的任务（当前状态: ' + record.status + '）')
+      }
 
       // 尝试在 provider 侧取消（best-effort：即使 provider 取消失败，DB 和 SSE 仍标记为已取消）
       if (record.taskId) {
@@ -402,7 +409,7 @@ export function createGenerateRoutes(config: ServerConfig) {
       await notifyGenerationStatus({
         accountId: userId,
         recordId: record.id,
-        status: 'failed',
+        status: 'cancelled',
         category: record.category,
         model: record.model,
         taskId: record.taskId,

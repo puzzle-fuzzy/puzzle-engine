@@ -67,6 +67,19 @@ export async function markGenerationFailed(id: string, errorMessage: string) {
 }
 
 /**
+ * 标记生成记录为"正在提交" — 调用 DashScope API 前一刻
+ *
+ * 状态机约束：pending → submitting（只在调 provider 前设置）
+ * 用途：防止半完成状态 — 如果 submitting 超时，Worker 可扫描并标记 failed
+ */
+export async function markGenerationSubmitting(id: string) {
+  await getDb()
+    .update(generationRecords)
+    .set({ status: 'submitting', updatedAt: new Date() })
+    .where(eq(generationRecords.id, id))
+}
+
+/**
  * 标记生成记录为处理中
  */
 export async function markGenerationProcessing(
@@ -81,6 +94,20 @@ export async function markGenerationProcessing(
       ...(extra?.outputResult && { outputResult: extra.outputResult }),
       updatedAt: new Date(),
     })
+    .where(eq(generationRecords.id, id))
+}
+
+/**
+ * 标记生成记录为"正在保存输出" — Worker 开始下载/存储输出文件
+ *
+ * 状态机约束：processing → saving_output（只在开始下载前设置）
+ * 关键：保存输出文件失败时，不允许把记录静默标记为 succeeded
+ * 用途：Worker 可扫描超时的 saving_output 记录并重试下载或标记 failed
+ */
+export async function markGenerationSavingOutput(id: string) {
+  await getDb()
+    .update(generationRecords)
+    .set({ status: 'saving_output', updatedAt: new Date() })
     .where(eq(generationRecords.id, id))
 }
 
@@ -104,7 +131,11 @@ export async function markGenerationSucceeded(
 }
 
 /**
- * 轮询所有待处理的视频任务（Worker 专用），限制 50 条防止大量数据
+ * 轮询所有活跃/半完成的视频任务（Worker 专用）
+ *
+ * 包含 submitting 和 saving_output 状态：
+ *   - submitting: provider 已调用但尚未返回 taskId → Worker 可扫描超时记录并标记 failed
+ *   - saving_output: Worker 正在下载视频 → Worker 可扫描超时记录并恢复或标记 failed
  */
 export async function pollPendingVideoTasks() {
   return getDb()
@@ -112,7 +143,7 @@ export async function pollPendingVideoTasks() {
     .from(generationRecords)
     .where(
       and(
-        inArray(generationRecords.status, ['pending', 'processing']),
+        inArray(generationRecords.status, ['pending', 'submitting', 'processing', 'saving_output']),
         eq(generationRecords.category, 'video'),
       ),
     )
@@ -136,7 +167,7 @@ export async function resetGenerationToPending(id: string) {
 export async function cancelGenerationRecord(id: string) {
   await getDb()
     .update(generationRecords)
-    .set({ status: 'failed', errorMessage: '用户取消', updatedAt: new Date() })
+    .set({ status: 'cancelled', errorMessage: '用户取消', updatedAt: new Date() })
     .where(eq(generationRecords.id, id))
 }
 

@@ -50,7 +50,7 @@ export default function RecordCard({
   const mediaUrlParams = Object.entries(record.inputParams || {}).filter(
     ([, v]) => isUrl(v),
   )
-  const isPending = record.status === 'pending' || record.status === 'processing'
+  const isPending = record.status === 'pending' || record.status === 'submitting' || record.status === 'processing' || record.status === 'saving_output'
   const duration = formatDuration(record.createdAt, isPending ? null : record.updatedAt)
 
   // 获取下载用的 savedUrls（image 或 video 输出）
@@ -68,7 +68,7 @@ export default function RecordCard({
             <CatIcon className={`size-4 shrink-0 ${catCfg?.color?.replace('bg-', 'text-')}`} />
             <span className="text-sm font-medium truncate">{modelDisplayName}</span>
             <Badge variant="secondary" className={`text-[10px] shrink-0 ${statusCfg.color}`}>
-              <StatusIcon className={`mr-1 size-3 ${record.status === 'processing' ? 'animate-spin' : ''}`} />
+              <StatusIcon className={`mr-1 size-3 ${['submitting', 'processing', 'saving_output'].includes(record.status) ? 'animate-spin' : ''}`} />
               {statusCfg.label}
             </Badge>
           </div>

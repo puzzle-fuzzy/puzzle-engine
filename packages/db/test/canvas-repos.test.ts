@@ -91,7 +91,7 @@ describe('canvas repositories', () => {
       })
 
       expect(project.title).toBe('测试项目')
-      expect(project.analysisJson).toEqual({ summary: '摘要' })
+      expect(project.analysisJson).toEqual({ summary: '摘要', mainConflict: '冲突', timeline: [], characterNames: [], sceneNames: [] })
     })
 
     it('should list projects by account', async () => {

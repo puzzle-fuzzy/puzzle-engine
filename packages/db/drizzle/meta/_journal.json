@@ -50,6 +50,13 @@
       "when": 1781179234363,
       "tag": "0006_lumpy_gateway",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1781200247774,
+      "tag": "0007_perpetual_storm",
+      "breakpoints": true
     }
   ]
 }
