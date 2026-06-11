@@ -27,6 +27,7 @@
     "build:client": "bun run --cwd apps/client build",
     "build": "bun run build:server && bun run build:client",
     "test": "concurrently \"bun test --cwd apps/server\" \"bun test --cwd apps/worker\" \"bun test --cwd packages/billing\" \"bun test --cwd packages/provider\" \"bun test --cwd packages/shared\" --names \"SERVER,WORKER,BILLING,PROVIDER,SHARED\" --prefix-colors \"bgBlue.bold,bgYellow.bold,bgRed.bold,bgMagenta.bold,bgCyan.bold\"",
+    "test:isolate": "bun test --isolate",
     "test:client": "bun run --cwd apps/client test",
     "test:all": "bun run test && bun run test:client",
     "test:coverage": "bun run test --coverage && bun run test:client -- --coverage"

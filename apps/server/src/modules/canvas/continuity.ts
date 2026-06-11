@@ -7,7 +7,7 @@ export interface NormalizedShot {
   characterIds: string[]
   narrative: string
   duration: number
-  camera: { shotSize: string; angle: string; movement: string; lens: string }
+  camera: { shotSize: string, angle: string, movement: string, lens: string }
   continuity: {
     screenDirection: string
     characterFacing: Record<string, string>
@@ -16,8 +16,8 @@ export interface NormalizedShot {
     emotionStart: string
     emotionEnd: string
   }
-  timeline?: Array<{ time: string; action: string }>
-  environment?: { backgroundMotion?: string; lighting?: string; mood?: string; style?: string }
+  timeline?: Array<{ time: string, action: string }>
+  environment?: { backgroundMotion?: string, lighting?: string, mood?: string, style?: string }
 }
 
 export interface NormalizedCharacter {
@@ -109,7 +109,8 @@ export function validateShotContinuity(args: {
     const prev = shots[i - 1]
     const curr = shots[i]
 
-    if (prev.locationId !== curr.locationId) continue
+    if (prev.locationId !== curr.locationId)
+      continue
 
     const prevFacings = prev.continuity.characterFacing
     const currFacings = curr.continuity.characterFacing

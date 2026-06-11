@@ -22,6 +22,7 @@ export const canvasProjects = pgTable('canvas_projects', {
   storyText: text('story_text').notNull(),
   status: canvasProjectStatusEnum('status').notNull().default('draft'),
   analysisJson: jsonb('analysis_json').$type<Record<string, unknown>>(),
+  modelPreferencesJson: jsonb('model_preferences_json').$type<Record<string, string>>(),
   canvasLayout: jsonb('canvas_layout').$type<Record<string, unknown>>(),
   isDeleted: boolean('is_deleted').default(false).notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),

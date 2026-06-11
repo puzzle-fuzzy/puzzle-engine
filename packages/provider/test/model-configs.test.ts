@@ -59,10 +59,10 @@ describe('模型配置完整性', () => {
     }
   })
 
-  it('文本模型使用 chat requestType', () => {
+  it('文本模型使用 chat 或 openai-chat requestType', () => {
     const textModels = getModelsByCategory('text')
     for (const model of textModels) {
-      expect(model.requestType).toBe('chat')
+      expect(['chat', 'openai-chat']).toContain(model.requestType)
     }
   })
 

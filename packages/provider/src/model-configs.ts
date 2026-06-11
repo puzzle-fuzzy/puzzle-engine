@@ -132,6 +132,26 @@ export const MODELS: Record<string, ModelConfig> = {
     ],
   },
 
+  'qwen3.7-plus': {
+    id: 'qwen3.7-plus',
+    name: '千问 3.7 Plus',
+    category: 'text',
+    type: 'generation',
+    description: '最新千问推理模型，适合复杂分析和创作任务',
+    endpoint: 'https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions',
+    async: false,
+    pricing: { inputPrice: 1.6, outputPrice: 6.4, unit: 'token' },
+    requestType: 'openai-chat',
+    inputMapping: TEXT_MAPPING,
+    parameters: [
+      { name: 'prompt', type: 'text', required: true, description: '输入文本' },
+      { name: 'max_tokens', type: 'number', defaultValue: 1500, min: 1, max: 8000, description: '最大输出 Token 数' },
+      { name: 'temperature', type: 'number', defaultValue: 0.7, min: 0, max: 2, description: '随机性控制' },
+      { name: 'top_p', type: 'number', defaultValue: 0.9, min: 0, max: 1, description: '核采样参数' },
+      { name: 'seed', type: 'number', min: 0, max: 2147483647, description: '随机数种子' },
+    ],
+  },
+
   // ===== 文生图模型 =====
 
   'qwen-image-2.0-pro': {

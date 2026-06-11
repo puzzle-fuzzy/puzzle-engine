@@ -1,4 +1,6 @@
+import type { CanvasCharacterRow, CanvasContinuityRow, CanvasLocationRow, CanvasProjectRow, CanvasShotRow } from '@excuse/db'
 import type {
+  CanvasModelPreferences,
   CharacterDTO,
   CharacterProfile,
   ContinuityIssue,
@@ -7,7 +9,6 @@ import type {
   ProjectDTO,
   ShotDTO,
 } from '@excuse/shared'
-import type { CanvasCharacterRow, CanvasContinuityRow, CanvasLocationRow, CanvasProjectRow, CanvasShotRow, Serialize } from '@excuse/db'
 
 export function mapCharacter(row: CanvasCharacterRow): CharacterDTO {
   let profile: CharacterProfile | null = null
@@ -105,6 +106,7 @@ export function mapProjectDetail(
     storyText: project.storyText,
     status: project.status,
     analysis: project.analysisJson as unknown as ProjectDTO['analysis'] ?? null,
+    modelPreferences: (project.modelPreferencesJson ?? null) as unknown as CanvasModelPreferences | null,
     characters: characters.map(mapCharacter),
     locations: locations.map(mapLocation),
     shots: shots.map(mapShot),

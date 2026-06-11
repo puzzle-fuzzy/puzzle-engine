@@ -59,7 +59,8 @@ export default function Canvas() {
   }
 
   async function handleCreate() {
-    if (!storyText.trim()) return
+    if (!storyText.trim())
+      return
     setCreating(true)
     try {
       const res = await createCanvasProject({

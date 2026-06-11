@@ -105,10 +105,12 @@ describe('accounts repository', () => {
         password: 'hashed',
       })
 
-      // PostgreSQL varchar 是区分大小写的
       const lower = await getAccountByEmail('case@example.com')
-      // 取决于数据库排序规则，但默认 varchar 是区分大小写的
-      expect(lower === null || lower!.email === 'Case@Example.com').toBe(true)
+      expect(lower).toBeNull()
+
+      const exact = await getAccountByEmail('Case@Example.com')
+      expect(exact).not.toBeNull()
+      expect(exact!.email).toBe('Case@Example.com')
     })
   })
 
@@ -139,7 +141,6 @@ describe('accounts repository', () => {
 
   describe('getAccountById', () => {
     it('should return the account when found', async () => {
-      // accountId 来自 beginTestTransaction seed 的测试账户
       const found = await getAccountById(accountId)
 
       expect(found).not.toBeNull()

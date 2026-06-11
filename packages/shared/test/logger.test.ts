@@ -1,3 +1,4 @@
+import { Writable } from 'node:stream'
 import { afterEach, describe, expect, it } from 'bun:test'
 import { createLogger } from '../src/logger'
 
@@ -56,12 +57,38 @@ describe('createLogger', () => {
     expect(logger.level).toBe('error')
   })
 
-  it('脱敏配置：password/token/secret/apiKey 等字段被替换', () => {
-    // pino redact 在日志输出时生效，无法直接测试脱敏结果
-    // 但可以验证 logger 正常工作不报错
-    const logger = createLogger('test-redact')
-    expect(() => {
-      logger.info({ password: 'secret123', token: 'abc', apiKey: 'key123' }, 'test message')
-    }).not.toThrow()
+  it('脱敏配置：password/token/secret/apiKey 字段被替换为 [Redacted]', async () => {
+    const chunks: string[] = []
+    const stream = new Writable({ write(chunk, _enc, cb) {
+      chunks.push(chunk.toString())
+      cb()
+    } })
+
+    // 用 transport: undefined 走同步 JSON 序列化路径，绑定到我们的 stream
+    process.env.NODE_ENV = 'production'
+    delete process.env.LOG_LEVEL
+    const pino = await import('pino')
+    const logger = pino.pino(
+      {
+        name: 'test-redact',
+        level: 'info',
+        redact: {
+          paths: ['password', 'token', 'secret', 'apiKey'],
+          censor: '[Redacted]',
+        },
+      },
+      stream,
+    )
+
+    logger.info({ password: 'secret123', token: 'abc', apiKey: 'key123', safe: 'visible' }, 'test')
+
+    // pino 异步刷新
+    await new Promise<void>(resolve => stream.end(() => resolve()))
+
+    const parsed = JSON.parse(chunks.join(''))
+    expect(parsed.password).toBe('[Redacted]')
+    expect(parsed.token).toBe('[Redacted]')
+    expect(parsed.apiKey).toBe('[Redacted]')
+    expect(parsed.safe).toBe('visible')
   })
 })

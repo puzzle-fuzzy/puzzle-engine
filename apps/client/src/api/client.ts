@@ -200,76 +200,76 @@ export async function deleteCanvasProject(projectId: string): Promise<{ success:
   return data as unknown as { success: boolean }
 }
 
-/** 分析故事 */
-export async function analyzeCanvasProject(projectId: string): Promise<{ success: boolean, data: ProjectDTO }> {
+/** 分析故事 (fire-and-forget: 立即返回，SSE 推送进度) */
+export async function analyzeCanvasProject(projectId: string): Promise<{ success: boolean }> {
   const { data, error } = await api.api.canvas.projects({ projectId }).analyze.post()
   if (error)
     throw error
-  return data as unknown as { success: boolean, data: ProjectDTO }
+  return data as unknown as { success: boolean }
 }
 
 /** 生成角色 */
-export async function generateCanvasCharacters(projectId: string): Promise<{ success: boolean, data: ProjectDTO }> {
+export async function generateCanvasCharacters(projectId: string): Promise<{ success: boolean }> {
   const { data, error } = await api.api.canvas.projects({ projectId }).characters.post()
   if (error)
     throw error
-  return data as unknown as { success: boolean, data: ProjectDTO }
+  return data as unknown as { success: boolean }
 }
 
 /** 生成场景 */
-export async function generateCanvasLocations(projectId: string): Promise<{ success: boolean, data: ProjectDTO }> {
+export async function generateCanvasLocations(projectId: string): Promise<{ success: boolean }> {
   const { data, error } = await api.api.canvas.projects({ projectId }).locations.post()
   if (error)
     throw error
-  return data as unknown as { success: boolean, data: ProjectDTO }
+  return data as unknown as { success: boolean }
 }
 
 /** 生成角色参考图 */
-export async function generateCanvasCharacterRefs(projectId: string): Promise<{ success: boolean, data: ProjectDTO }> {
+export async function generateCanvasCharacterRefs(projectId: string): Promise<{ success: boolean }> {
   const { data, error } = await api.api.canvas.projects({ projectId })['character-refs'].post()
   if (error)
     throw error
-  return data as unknown as { success: boolean, data: ProjectDTO }
+  return data as unknown as { success: boolean }
 }
 
 /** 生成场景参考图 */
-export async function generateCanvasLocationRefs(projectId: string): Promise<{ success: boolean, data: ProjectDTO }> {
+export async function generateCanvasLocationRefs(projectId: string): Promise<{ success: boolean }> {
   const { data, error } = await api.api.canvas.projects({ projectId })['location-refs'].post()
   if (error)
     throw error
-  return data as unknown as { success: boolean, data: ProjectDTO }
+  return data as unknown as { success: boolean }
 }
 
 /** 生成分镜 */
-export async function generateCanvasStoryboard(projectId: string): Promise<{ success: boolean, data: ProjectDTO }> {
+export async function generateCanvasStoryboard(projectId: string): Promise<{ success: boolean }> {
   const { data, error } = await api.api.canvas.projects({ projectId }).storyboard.post()
   if (error)
     throw error
-  return data as unknown as { success: boolean, data: ProjectDTO }
+  return data as unknown as { success: boolean }
 }
 
 /** 连续性检查 */
-export async function checkCanvasContinuity(projectId: string): Promise<{ success: boolean, data: ProjectDTO }> {
+export async function checkCanvasContinuity(projectId: string): Promise<{ success: boolean }> {
   const { data, error } = await api.api.canvas.projects({ projectId }).continuity.post()
   if (error)
     throw error
-  return data as unknown as { success: boolean, data: ProjectDTO }
+  return data as unknown as { success: boolean }
 }
 
 /** 重建 Prompt */
-export async function rebuildCanvasPrompts(projectId: string): Promise<{ success: boolean, data: ProjectDTO }> {
+export async function rebuildCanvasPrompts(projectId: string): Promise<{ success: boolean }> {
   const { data, error } = await api.api.canvas.projects({ projectId })['rebuild-prompts'].post()
   if (error)
     throw error
-  return data as unknown as { success: boolean, data: ProjectDTO }
+  return data as unknown as { success: boolean }
 }
 
 /** 批量生成视频 */
-export async function generateCanvasVideos(projectId: string): Promise<{ success: boolean, data: ProjectDTO }> {
+export async function generateCanvasVideos(projectId: string): Promise<{ success: boolean }> {
   const { data, error } = await api.api.canvas.projects({ projectId })['generate-videos'].post()
   if (error)
     throw error
-  return data as unknown as { success: boolean, data: ProjectDTO }
+  return data as unknown as { success: boolean }
 }
 
 /** 保存画布布局 */
@@ -278,6 +278,17 @@ export async function saveCanvasLayout(projectId: string, layout: Record<string,
   if (error)
     throw error
   return data as unknown as { success: boolean }
+}
+
+/** 更新模型偏好 */
+export async function updateCanvasModelPreferences(
+  projectId: string,
+  prefs: { textModel?: string, imageModel?: string, videoModel?: string },
+): Promise<{ success: boolean, data: ProjectDTO }> {
+  const { data, error } = await api.api.canvas.projects({ projectId })['model-preferences'].patch(prefs)
+  if (error)
+    throw error
+  return data as unknown as { success: boolean, data: ProjectDTO }
 }
 
 /** 更新角色 */

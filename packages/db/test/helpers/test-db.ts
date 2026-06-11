@@ -34,7 +34,6 @@ let db: PostgresJsDatabase<typeof schema>
  * beforeAll 调用：连接测试库并运行迁移
  */
 export async function initTestDb() {
-  // max: 1 = 只有一个连接，BEGIN/ROLLBACK 一定在同一连接上
   const client = postgres(TEST_DATABASE_URL, { max: 1 })
   db = drizzle(client, { schema })
   await migrate(db, { migrationsFolder: MIGRATIONS_FOLDER })
@@ -44,7 +43,6 @@ export async function initTestDb() {
  * afterAll 调用：关闭连接
  */
 export async function teardownTestDb() {
-  // db 内部的 client 通过 drizzle 的 $client 访问
   const client = (db as any).$client
   if (client && typeof client.end === 'function') {
     await client.end()

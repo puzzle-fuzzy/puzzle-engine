@@ -265,4 +265,92 @@ describe('processTask', () => {
       expect(result.status).toBe('CANCELLING')
     }
   })
+
+  // ── Canvas pipeline: canvasMeta propagation ────────
+
+  it('should pass canvasMeta in succeeded notification for canvas-sourced records', async () => {
+    const notifications: Array<Record<string, unknown>> = []
+    const deps = createMockDeps({
+      queryTask: async () => ({
+        status: 'SUCCEEDED',
+        output: { video_url: 'https://cdn/video.mp4' },
+      }),
+      downloadAndMap: async urls => urls,
+      markGenerationSucceeded: async () => {},
+      notifyGenerationStatus: async (payload) => {
+        notifications.push(payload as unknown as Record<string, unknown>)
+      },
+    })
+
+    const { processTask } = createTestProcessor(deps)
+    await processTask(createRecord({
+      inputParams: {
+        source: 'canvas',
+        projectId: 'proj-123',
+        shotId: 'shot-456',
+        prompt: 'test',
+        duration: 5,
+      },
+    }))
+
+    expect(notifications).toHaveLength(1)
+    expect(notifications[0]!.canvasMeta).toEqual({
+      projectId: 'proj-123',
+      shotId: 'shot-456',
+    })
+  })
+
+  it('should pass canvasMeta in failed notification for canvas-sourced records', async () => {
+    const notifications: Array<Record<string, unknown>> = []
+    const deps = createMockDeps({
+      queryTask: async () => ({
+        status: 'FAILED',
+        errorMessage: 'Model error',
+      }),
+      markGenerationFailed: async () => {},
+      notifyGenerationStatus: async (payload) => {
+        notifications.push(payload as unknown as Record<string, unknown>)
+      },
+    })
+
+    const { processTask } = createTestProcessor(deps)
+    await processTask(createRecord({
+      inputParams: {
+        source: 'canvas',
+        projectId: 'proj-789',
+        shotId: 'shot-012',
+        prompt: 'test',
+        duration: 5,
+      },
+    }))
+
+    expect(notifications).toHaveLength(1)
+    expect(notifications[0]!.canvasMeta).toEqual({
+      projectId: 'proj-789',
+      shotId: 'shot-012',
+    })
+  })
+
+  it('should NOT include canvasMeta for non-canvas records', async () => {
+    const notifications: Array<Record<string, unknown>> = []
+    const deps = createMockDeps({
+      queryTask: async () => ({
+        status: 'SUCCEEDED',
+        output: { video_url: 'https://cdn/video.mp4' },
+      }),
+      downloadAndMap: async urls => urls,
+      markGenerationSucceeded: async () => {},
+      notifyGenerationStatus: async (payload) => {
+        notifications.push(payload as unknown as Record<string, unknown>)
+      },
+    })
+
+    const { processTask } = createTestProcessor(deps)
+    await processTask(createRecord({
+      inputParams: { prompt: 'test', duration: 5 },
+    }))
+
+    expect(notifications).toHaveLength(1)
+    expect(notifications[0]!.canvasMeta).toBeUndefined()
+  })
 })

@@ -39,7 +39,7 @@ export type InputMapping
  * - video-t2v: 文生视频 — input.prompt（纯文本）
  * - video-media: 图生/参考生/编辑视频 — input.media[]
  */
-export type RequestType = 'chat' | 'image' | 'video-t2v' | 'video-media'
+export type RequestType = 'chat' | 'openai-chat' | 'image' | 'video-t2v' | 'video-media'
 
 export interface ModelConfig {
   id: string

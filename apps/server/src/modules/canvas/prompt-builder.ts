@@ -2,14 +2,15 @@ import type { NormalizedCharacter, NormalizedLocation, NormalizedShot } from './
 
 export type { NormalizedCharacter, NormalizedLocation, NormalizedShot }
 
-function parseTimeRange(timeRange: string): { start: number; end: number } {
+function parseTimeRange(timeRange: string): { start: number, end: number } {
   const match = timeRange.match(/(\d+)s-(\d+)s/)
-  if (!match) return { start: 0, end: 5 }
+  if (!match)
+    return { start: 0, end: 5 }
   return { start: Number.parseInt(match[1]), end: Number.parseInt(match[2]) }
 }
 
-function expandTimelineToPerSecond(timeline: Array<{ time: string; action: string }>): Array<{ time: string; action: string }> {
-  const perSecond: Array<{ time: string; action: string }> = []
+function expandTimelineToPerSecond(timeline: Array<{ time: string, action: string }>): Array<{ time: string, action: string }> {
+  const perSecond: Array<{ time: string, action: string }> = []
 
   for (const entry of timeline) {
     const { start, end } = parseTimeRange(entry.time)
@@ -25,7 +26,7 @@ function expandTimelineToPerSecond(timeline: Array<{ time: string; action: strin
 }
 
 function buildTimelineSection(
-  timeline: Array<{ time: string; action: string }>,
+  timeline: Array<{ time: string, action: string }>,
   actionStart: string,
   actionEnd: string,
   duration: number,
@@ -75,9 +76,9 @@ export function buildShotVideoPrompt(args: {
   shot: NormalizedShot
   characters: NormalizedCharacter[]
   location: NormalizedLocation
-  timeline?: Array<{ time: string; action: string }>
-  environment?: { backgroundMotion?: string; lighting?: string; mood?: string; style?: string }
-}): { videoPrompt: string; negativePrompt: string } {
+  timeline?: Array<{ time: string, action: string }>
+  environment?: { backgroundMotion?: string, lighting?: string, mood?: string, style?: string }
+}): { videoPrompt: string, negativePrompt: string } {
   const { shot, characters, location, timeline, environment } = args
 
   const idToName = new Map(characters.map(c => [c.id, c.name]))

@@ -118,5 +118,18 @@ describe('billing routes', () => {
 
       expect(mockAggregateStatistics).toHaveBeenCalledWith(records)
     })
+
+    it('聚合函数抛出异常时返回错误', async () => {
+      mockGetCostRecords.mockResolvedValue([])
+      mockAggregateStatistics.mockImplementation(() => {
+        throw new Error('Aggregation failed')
+      })
+
+      // Elysia 会捕获未处理异常并返回 500
+      const { data, error } = await client.api.billing.statistics.get()
+
+      // 不应成功返回
+      expect(data?.success).not.toBe(true)
+    })
   })
 })

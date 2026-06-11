@@ -1,8 +1,9 @@
-import type { CanvasProjectStatus } from '@excuse/shared'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import type { CanvasModelPreferences, CanvasProjectStatus, ModelConfig, ProjectDTO } from '@excuse/shared'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   analyzeCanvasProject,
   checkCanvasContinuity,
+  fetchModels,
   generateCanvasCharacterRefs,
   generateCanvasCharacters,
   generateCanvasLocationRefs,
@@ -10,6 +11,7 @@ import {
   generateCanvasStoryboard,
   generateCanvasVideos,
   rebuildCanvasPrompts,
+  updateCanvasModelPreferences,
 } from '../../api/client'
 
 interface PipelinePhase {
@@ -32,7 +34,6 @@ const PHASES: PipelinePhase[] = [
   { key: 'videos', label: '生成视频', status: 'generating', run: id => generateCanvasVideos(id), pauseBefore: true },
 ]
 
-// Map project status → phase index that was just completed
 function getPhaseIndex(status: CanvasProjectStatus): number {
   const map: Record<string, number> = {
     draft: 0,
@@ -45,54 +46,77 @@ function getPhaseIndex(status: CanvasProjectStatus): number {
     prompts_ready: 8,
     generating: 9,
     completed: 9,
-    failed: -1,
+    failed: 0,
   }
   return map[status] ?? 0
+}
+
+interface PhaseDoneEvent {
+  key: string
+  status: 'completed' | 'failed'
+  error?: string
 }
 
 interface Props {
   projectId: string
   projectStatus: CanvasProjectStatus
-  onPhaseComplete: () => void
+  modelPreferences: CanvasModelPreferences | null
+  onPhaseComplete: (project?: ProjectDTO) => void
+  onPhaseChange?: (phaseKey: string | null) => void
+  phaseDone: PhaseDoneEvent | null
+  onPhaseDoneConsumed: () => void
 }
 
-export default function PipelineController({ projectId, projectStatus, onPhaseComplete }: Props) {
+export default function PipelineController({
+  projectId, projectStatus, modelPreferences, onPhaseComplete, onPhaseChange,
+  phaseDone, onPhaseDoneConsumed,
+}: Props) {
   const [autoMode, setAutoMode] = useState(false)
   const [running, setRunning] = useState(false)
   const [currentPhase, setCurrentPhase] = useState(-1)
   const [countdown, setCountdown] = useState(0)
   const [error, setError] = useState<string | null>(null)
+  const [models, setModels] = useState<ModelConfig[]>([])
+  const [prefs, setPrefs] = useState<CanvasModelPreferences>(modelPreferences ?? {})
   const autoRef = useRef(autoMode)
   autoRef.current = autoMode
 
+  // Sync prefs from parent when project reloads
+  useEffect(() => {
+    setPrefs(modelPreferences ?? {})
+  }, [modelPreferences])
+
+  // Load models once
+  useEffect(() => {
+    fetchModels()
+      .then(res => setModels(res.models))
+      .catch(() => {})
+  }, [])
+
+  const textModels = useMemo(() => models.filter(m => m.category === 'text'), [models])
+  const imageModels = useMemo(() => models.filter(m => m.category === 'image'), [models])
+
+  async function handleModelChange(key: keyof CanvasModelPreferences, value: string) {
+    const next = { ...prefs, [key]: value }
+    setPrefs(next)
+    try {
+      const res = await updateCanvasModelPreferences(projectId, next)
+      onPhaseComplete(res.data)
+    }
+    catch {
+      setPrefs(prefs)
+    }
+  }
+
   const startIdx = getPhaseIndex(projectStatus)
 
-  const runPhase = useCallback(async (idx: number) => {
-    const phase = PHASES[idx]
-    if (!phase)
-      return
-
-    setCurrentPhase(idx)
-    setRunning(true)
-    setError(null)
-
-    try {
-      await phase.run(projectId)
-      onPhaseComplete()
-    }
-    catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : String(err)
-      setError(`${phase.label} 失败: ${msg}`)
-      setRunning(false)
-      setCurrentPhase(-1)
-      return
-    }
-
-    // Move to next phase
-    const nextIdx = idx + 1
+  // Advance to next phase after current phase completes
+  const advanceAfterPhase = useCallback((completedIdx: number) => {
+    const nextIdx = completedIdx + 1
     if (nextIdx >= PHASES.length) {
       setRunning(false)
       setCurrentPhase(-1)
+      onPhaseChange?.(null)
       return
     }
 
@@ -100,59 +124,105 @@ export default function PipelineController({ projectId, projectStatus, onPhaseCo
     if (nextPhase.pauseBefore) {
       setRunning(false)
       setCurrentPhase(-1)
+      onPhaseChange?.(null)
       if (autoRef.current) {
-        // 3 second countdown
         setCountdown(3)
       }
     }
     else if (autoRef.current) {
-      runPhase(nextIdx)
+      triggerPhase(nextIdx)
     }
     else {
       setRunning(false)
       setCurrentPhase(-1)
+      onPhaseChange?.(null)
     }
-  }, [projectId, onPhaseComplete])
+  }, [onPhaseChange])
+
+  // Fire a phase API call (returns immediately in fire-and-forget mode)
+  const triggerPhase = useCallback(async (idx: number) => {
+    const phase = PHASES[idx]
+    if (!phase) return
+
+    setCurrentPhase(idx)
+    setRunning(true)
+    setError(null)
+    onPhaseChange?.(phase.key)
+
+    try {
+      await phase.run(projectId)
+      // API acknowledged (fire-and-forget: returns immediately)
+      // Actual completion is tracked via phaseDone SSE events
+    }
+    catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err)
+      setError(`${phase.label} 触发失败: ${msg}`)
+      setRunning(false)
+      setCurrentPhase(-1)
+      onPhaseChange?.(null)
+    }
+  }, [projectId, onPhaseChange])
+
+  // Handle phase completion from SSE events
+  useEffect(() => {
+    if (!phaseDone || !running || currentPhase < 0) return
+
+    const phase = PHASES[currentPhase]
+    if (!phase || phase.key !== phaseDone.key) return
+
+    onPhaseDoneConsumed()
+
+    // Reload project data before advancing
+    onPhaseComplete()
+
+    if (phaseDone.status === 'failed') {
+      setError(`${phase.label} 失败: ${phaseDone.error || '未知错误'}`)
+      setRunning(false)
+      setCurrentPhase(-1)
+      onPhaseChange?.(null)
+      return
+    }
+
+    // Phase completed successfully, advance
+    advanceAfterPhase(currentPhase)
+  }, [phaseDone, running, currentPhase, onPhaseDoneConsumed, onPhaseComplete, advanceAfterPhase])
 
   // Countdown timer for auto mode pauses
   useEffect(() => {
-    if (countdown <= 0)
-      return
+    if (countdown <= 0) return
     const timer = setTimeout(() => {
       const next = countdown - 1
       setCountdown(next)
       if (next === 0) {
-        // Resume from next phase after pause
-        const pauseIdx = PHASES.findIndex(p => p.pauseBefore)
-        // Find the phase after the current progress
         const resumeIdx = getPhaseIndex(projectStatus)
-        // The next runnable phase
-        let targetIdx = resumeIdx
-        for (let i = resumeIdx; i < PHASES.length; i++) {
-          if (PHASES[i].pauseBefore && i > 0 && !PHASES[i - 1].pauseBefore) {
-            // this is the first pause after where we are
-          }
-          targetIdx = i
-          break
-        }
-        runPhase(targetIdx)
+        triggerPhase(resumeIdx)
       }
     }, 1000)
     return () => clearTimeout(timer)
-  }, [countdown, projectStatus, runPhase])
+  }, [countdown, projectStatus, triggerPhase])
 
   function handleRunFrom(idx: number) {
-    if (running)
-      return
+    if (running) return
     setAutoMode(false)
-    runPhase(idx)
+    setError(null)
+    triggerPhase(idx)
   }
 
   function handleAutoRun() {
-    if (running)
-      return
+    if (running) return
     setAutoMode(true)
-    runPhase(startIdx)
+    setError(null)
+    triggerPhase(startIdx)
+  }
+
+  function handleSkipAndContinue() {
+    if (running) return
+    const nextIdx = startIdx + 1
+    if (nextIdx < PHASES.length) {
+      setAutoMode(false)
+      setError(null)
+      triggerPhase(nextIdx)
+    }
   }
 
   function handleCancelCountdown() {
@@ -160,8 +230,28 @@ export default function PipelineController({ projectId, projectStatus, onPhaseCo
     setAutoMode(false)
   }
 
+  const currentPhaseLabel = currentPhase >= 0 ? PHASES[currentPhase].label : null
+
   return (
     <div className="border-t bg-background/95 backdrop-blur-sm px-4 py-3">
+      {/* Model selectors */}
+      <div className="flex items-center gap-3 mb-2 text-xs">
+        <ModelSelect
+          label="文本模型"
+          models={textModels}
+          value={prefs.textModel || ''}
+          onChange={v => handleModelChange('textModel', v)}
+          disabled={running}
+        />
+        <ModelSelect
+          label="图像模型"
+          models={imageModels}
+          value={prefs.imageModel || ''}
+          onChange={v => handleModelChange('imageModel', v)}
+          disabled={running}
+        />
+      </div>
+
       {/* Phase progress bar */}
       <div className="flex items-center gap-1 mb-2">
         {PHASES.map((phase, idx) => {
@@ -229,13 +319,40 @@ export default function PipelineController({ projectId, projectStatus, onPhaseCo
             </div>
           )}
 
-          {error && (
-            <span className="text-xs text-red-600 max-w-[200px] truncate" title={error}>
-              {error}
+          {running && currentPhaseLabel && (
+            <span className="text-xs text-blue-600 font-medium animate-pulse">
+              正在{currentPhaseLabel}...
+            </span>
+          )}
+          {running && !currentPhaseLabel && (
+            <span className="text-xs text-muted-foreground">
+              执行中...
             </span>
           )}
 
-          {!running && countdown === 0 && (
+          {error && (
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-red-600 max-w-[200px] truncate" title={error}>
+                {error}
+              </span>
+              <button
+                onClick={() => handleRunFrom(startIdx)}
+                className="text-xs px-2 py-1 rounded border border-orange-300 text-orange-700 hover:bg-orange-50"
+              >
+                重试
+              </button>
+              {startIdx + 1 < PHASES.length && (
+                <button
+                  onClick={handleSkipAndContinue}
+                  className="text-xs px-2 py-1 rounded border border-blue-300 text-blue-700 hover:bg-blue-50"
+                >
+                  跳过继续
+                </button>
+              )}
+            </div>
+          )}
+
+          {!running && countdown === 0 && !error && (
             <button
               onClick={handleAutoRun}
               className="text-xs px-3 py-1.5 rounded bg-primary text-primary-foreground hover:bg-primary/90 font-medium"
@@ -243,14 +360,33 @@ export default function PipelineController({ projectId, projectStatus, onPhaseCo
               自动执行全部
             </button>
           )}
-
-          {running && (
-            <span className="text-xs text-muted-foreground">
-              执行中...
-            </span>
-          )}
         </div>
       </div>
     </div>
+  )
+}
+
+function ModelSelect({ label, models, value, onChange, disabled }: {
+  label: string
+  models: ModelConfig[]
+  value: string
+  onChange: (v: string) => void
+  disabled?: boolean
+}) {
+  return (
+    <label className="flex items-center gap-1.5 text-muted-foreground">
+      <span>{label}</span>
+      <select
+        value={value}
+        onChange={e => onChange(e.target.value)}
+        disabled={disabled}
+        className="text-xs px-1.5 py-0.5 rounded border border-border bg-background text-foreground max-w-[180px]"
+      >
+        <option value="">默认</option>
+        {models.map(m => (
+          <option key={m.id} value={m.id}>{m.name}</option>
+        ))}
+      </select>
+    </label>
   )
 }

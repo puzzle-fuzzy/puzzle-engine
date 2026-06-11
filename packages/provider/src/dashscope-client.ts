@@ -136,6 +136,15 @@ export class DashScopeClient {
         }
       }
 
+      case 'openai-chat': {
+        // OpenAI 兼容格式：messages + parameters 在顶层
+        return {
+          model: modelConfig.id,
+          messages: [{ role: 'user', content: input.prompt || '' }],
+          ...parameters,
+        }
+      }
+
       case 'video-media': {
         // 图生/参考生/编辑视频：input.prompt + input.media[] + input.negative_prompt + parameters
         if (media.length > 0) {
@@ -176,24 +185,33 @@ export class DashScopeClient {
       const data = await response.json() as Record<string, unknown>
 
       if (response.status !== 200) {
-        return { success: false, error: parseDashScopeError(data) }
+        return { success: false, error: `模型 ${modelConfig.name}（${modelConfig.id}）: ${parseDashScopeError(data)}` }
       }
 
-      const output = (data as any).output || {}
       const usage = (data as any).usage || {}
+
+      // OpenAI 兼容格式: data.choices[0].message.content
+      // DashScope 原生格式: data.output.choices[0].message.content[0].text
+      const isOpenaiFormat = modelConfig.requestType === 'openai-chat'
+      const text = isOpenaiFormat
+        ? ((data as any).choices?.[0]?.message?.content || '')
+        : (() => {
+            const output = (data as any).output || {}
+            return output.choices?.[0]?.message?.content?.[0]?.text
+              || output.text
+              || output.choices?.[0]?.message?.content
+              || ''
+          })()
 
       return {
         success: true,
         output: {
-          text: output.choices?.[0]?.message?.content?.[0]?.text
-            || output.text
-            || output.choices?.[0]?.message?.content
-            || '',
+          text,
           raw: data,
         },
         usage: {
-          inputTokens: usage.input_tokens || 0,
-          outputTokens: usage.output_tokens || 0,
+          inputTokens: usage.input_tokens ?? usage.prompt_tokens ?? 0,
+          outputTokens: usage.output_tokens ?? usage.completion_tokens ?? 0,
         },
       }
     }
@@ -223,7 +241,7 @@ export class DashScopeClient {
       const data = await response.json() as Record<string, unknown>
 
       if (response.status !== 200) {
-        return { success: false, error: parseDashScopeError(data) }
+        return { success: false, error: `模型 ${modelConfig.name}（${modelConfig.id}）: ${parseDashScopeError(data)}` }
       }
 
       const output = (data as any).output || {}
@@ -277,7 +295,7 @@ export class DashScopeClient {
       const data = await response.json() as Record<string, unknown>
 
       if (response.status !== 200) {
-        return { success: false, error: parseDashScopeError(data) }
+        return { success: false, error: `模型 ${modelConfig.name}（${modelConfig.id}）: ${parseDashScopeError(data)}` }
       }
 
       const taskId = (data as any).output?.task_id || (data as any).request_id

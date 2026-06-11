@@ -13,6 +13,8 @@ export default function CanvasEditor() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [selectedNode, setSelectedNode] = useState<{ id: string, type: string } | null>(null)
+  const [runningPhase, setRunningPhase] = useState<string | null>(null)
+  const [phaseDone, setPhaseDone] = useState<{ key: string, status: 'completed' | 'failed', error?: string } | null>(null)
 
   const loadProject = useCallback(async () => {
     if (!projectId)
@@ -38,7 +40,16 @@ export default function CanvasEditor() {
     const unsub = sseClient.on('pipeline_node_update', (event) => {
       if (event.projectId !== projectId)
         return
-      // Reload project data when any node updates
+
+      // Phase completion event from server (fire-and-forget pattern)
+      if (event.nodeType === 'phase') {
+        setPhaseDone({
+          key: event.nodeId,
+          status: event.status === 'completed' ? 'completed' : 'failed',
+          error: event.error,
+        })
+      }
+
       loadProject()
     })
     return unsub
@@ -66,12 +77,18 @@ export default function CanvasEditor() {
         <span className="text-xs px-2 py-0.5 rounded-full bg-muted">
           {project.status}
         </span>
+        {runningPhase && (
+          <span className="text-xs px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 animate-pulse">
+            正在执行: {runningPhase}
+          </span>
+        )}
       </div>
 
       {/* Canvas area */}
       <div className="flex-1 relative">
         <CanvasFlow
           project={project}
+          runningPhase={runningPhase}
           onNodeClick={(nodeId, nodeType) => {
             setSelectedNode(selectedNode?.id === nodeId ? null : { id: nodeId, type: nodeType })
           }}
@@ -104,7 +121,11 @@ export default function CanvasEditor() {
       <PipelineController
         projectId={project.id}
         projectStatus={project.status}
+        modelPreferences={project.modelPreferences}
         onPhaseComplete={loadProject}
+        onPhaseChange={setRunningPhase}
+        phaseDone={phaseDone}
+        onPhaseDoneConsumed={() => setPhaseDone(null)}
       />
     </div>
   )

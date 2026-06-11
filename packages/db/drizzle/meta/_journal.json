@@ -15,6 +15,13 @@
       "when": 1781143704957,
       "tag": "0001_light_mother_askani",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1781149794872,
+      "tag": "0002_add_model_preferences",
+      "breakpoints": true
     }
   ]
 }

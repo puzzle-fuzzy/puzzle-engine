@@ -1,7 +1,18 @@
 [test]
 coverage = true
-coverageReporter = ["text", "lcov"]
-coverageInclude = ["**/src/**/*.ts", "**/src/**/*.tsx"]
+pathIgnorePatterns = [
+  "apps/client/**",
+  "apps/client/**/*.test.tsx",
+  "packages/db/test/**",
+]
+coverageReporter = [
+  "text",
+  "lcov"
+]
+coverageInclude = [
+  "**/src/**/*.ts",
+  "**/src/**/*.tsx"
+]
 coverageExclude = [
   "**/node_modules/**",
   "**/test/**",

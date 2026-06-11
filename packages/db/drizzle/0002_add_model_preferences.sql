@@ -1,0 +1,1 @@
+ALTER TABLE "canvas_projects" ADD COLUMN "model_preferences_json" jsonb;

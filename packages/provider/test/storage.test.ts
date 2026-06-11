@@ -1,5 +1,4 @@
 import type { StorageConfig } from '../src/types'
-import { mkdir, writeFile } from 'node:fs/promises'
 import { beforeEach, describe, expect, it } from 'bun:test'
 import { AssetStorage } from '../src/storage'
 
@@ -108,19 +107,12 @@ describe('AssetStorage 实例方法', () => {
     })
 
     it('uploadGenerated 保存本地文件并返回本地 URL', async () => {
-      const buffer = Buffer.from('test-content')
-
-      // mock mkdir 和 writeFile
-      const _originalMkdir = mkdir
-      const _originalWriteFile = writeFile
-
-      const { mkdir: _rm } = await import('node:fs/promises')
-      // 用临时目录实际测试（/tmp 在所有系统上可写）
       const realStorage = new AssetStorage({
         storageRoot: '/tmp/excuse-test-storage',
         publicBasePath: '/api/uploads',
       })
 
+      const buffer = Buffer.from('test-content')
       const url = await realStorage.uploadGenerated(buffer, 'test/file.txt')
       expect(url).toBe('/api/uploads/test/file.txt')
     })

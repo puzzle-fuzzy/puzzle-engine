@@ -100,8 +100,28 @@ describe('parseDashScopeError', () => {
     expect(parseDashScopeError(undefined)).toBe('未知错误')
   })
 
-  it('null/undefined response 安全处理', () => {
-    expect(parseDashScopeError(null)).toBe('未知错误')
-    expect(parseDashScopeError(undefined as any)).toBe('未知错误')
+  it('解析认证类错误: Arrearage', () => {
+    const result = parseDashScopeError({ code: 'Arrearage', message: 'Account arrears' })
+    expect(result).toContain('欠费')
+  })
+
+  it('解析限流类错误: Throttling.RateQuota', () => {
+    const result = parseDashScopeError({ code: 'Throttling.RateQuota', message: 'Rate limit' })
+    expect(result).toContain('频率超限')
+  })
+
+  it('解析内容审核错误: DataInspectionFailed.Input', () => {
+    const result = parseDashScopeError({ code: 'DataInspectionFailed.Input', message: 'Sensitive' })
+    expect(result).toContain('输入内容')
+  })
+
+  it('解析参数错误: InvalidParameter', () => {
+    const result = parseDashScopeError({ code: 'InvalidParameter', message: 'Bad param' })
+    expect(result).toContain('参数有误')
+  })
+
+  it('解析服务端错误: InternalError', () => {
+    const result = parseDashScopeError({ code: 'InternalError', message: 'Server error' })
+    expect(result).toContain('内部错误')
   })
 })

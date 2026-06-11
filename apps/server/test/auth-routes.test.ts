@@ -153,8 +153,10 @@ describe('auth routes', () => {
         password: '12345', // < 6 chars
       })
 
-      // Elysia body validation 应返回错误
-      expect(data?.success !== true || error !== null).toBe(true)
+      // Elysia body validation 应返回 422 错误
+      expect(error).toBeDefined()
+      expect(error!.status).toBe(422)
+      expect(data).toBeNull()
     })
 
     it('should reject when email format is invalid (validation)', async () => {
@@ -164,7 +166,9 @@ describe('auth routes', () => {
         password: 'testpassword123',
       })
 
-      expect(data?.success !== true || error !== null).toBe(true)
+      expect(error).toBeDefined()
+      expect(error!.status).toBe(422)
+      expect(data).toBeNull()
     })
   })
 

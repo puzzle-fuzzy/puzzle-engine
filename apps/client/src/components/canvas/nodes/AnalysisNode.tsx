@@ -3,15 +3,23 @@ import type { NodeProps } from '@xyflow/react'
 import { Handle, Position } from '@xyflow/react'
 
 export default function AnalysisNode({ data }: NodeProps) {
-  const project = (data as { project: ProjectDTO }).project
+  const { project, isRunning } = data as { project: ProjectDTO, isRunning?: boolean }
   const analysis = project.analysis as NovelAnalysis | null
 
   return (
-    <div className="rounded-lg border-2 border-emerald-400 bg-emerald-50 shadow-md w-[340px]">
+    <div className={`rounded-lg border-2 bg-emerald-50 shadow-md w-[340px] relative ${isRunning ? 'border-yellow-400 ring-2 ring-yellow-200' : 'border-emerald-400'}`}>
       <Handle type="target" position={Position.Top} className="!bg-emerald-400" />
-      <div className="bg-emerald-400 text-white px-3 py-2 font-semibold text-sm">
-        故事分析
+      <div className="bg-emerald-400 text-white px-3 py-2 font-semibold text-sm flex items-center justify-between rounded-t-md">
+        <span>故事分析</span>
+        {isRunning && <span className="text-[10px] bg-yellow-100 text-yellow-700 rounded-full px-1.5 animate-pulse">生成中</span>}
       </div>
+      {isRunning && (
+        <div className="absolute inset-0 bg-white/30 flex items-center justify-center rounded-lg pointer-events-none">
+          <div className="bg-yellow-100 text-yellow-700 text-xs font-medium px-3 py-1.5 rounded-full shadow animate-pulse">
+            正在分析...
+          </div>
+        </div>
+      )}
       <div className="p-3 space-y-2 text-sm">
         {analysis ? (
           <>

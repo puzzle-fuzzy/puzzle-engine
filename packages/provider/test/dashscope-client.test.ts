@@ -1,5 +1,5 @@
 import type { DashScopeConfig } from '../src/types'
-import { beforeEach, describe, expect, it, mock } from 'bun:test'
+import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test'
 import { DashScopeClient } from '../src/dashscope-client'
 
 // ── 测试配置 ──────────────────────────────────────────────
@@ -48,6 +48,10 @@ describe('DashScopeClient', () => {
     restoreFetch = () => {}
   })
 
+  afterEach(() => {
+    restoreFetch()
+  })
+
   // 避免测试间互相影响，每个 it 结束后恢复 fetch
   function withMock(status: number, body: unknown) {
     restoreFetch = mockFetchResponse(status, body)
@@ -70,7 +74,6 @@ describe('DashScopeClient', () => {
       })
 
       const result = await client.chatCompletion('qwen-max', { prompt: '你好' })
-      restoreFetch()
 
       expect(result.success).toBe(true)
       expect(result.output!.text).toBe('你好世界')
@@ -92,7 +95,6 @@ describe('DashScopeClient', () => {
       })
 
       const result = await client.chatCompletion('qwen-max', { prompt: 'test' })
-      restoreFetch()
 
       expect(result.success).toBe(false)
       expect(result.error).toContain('请求参数有误')
@@ -102,14 +104,12 @@ describe('DashScopeClient', () => {
       withMockError(new Error('ECONNREFUSED'))
 
       const result = await client.chatCompletion('qwen-max', { prompt: 'test' })
-      restoreFetch()
 
       expect(result.success).toBe(false)
       expect(result.error).toContain('网络错误')
     })
 
     it('正确构建 chat 请求体（messages 格式）', async () => {
-      const originalFetch = globalThis.fetch
       let capturedBody: any = null
 
       globalThis.fetch = mockFetch((url: string, init: any) => {
@@ -121,7 +121,6 @@ describe('DashScopeClient', () => {
       })
 
       await client.chatCompletion('qwen-max', { prompt: '你好', temperature: 0.5 })
-      globalThis.fetch = originalFetch
 
       expect(capturedBody.model).toBe('qwen-max')
       expect(capturedBody.input.messages[0].role).toBe('user')
@@ -130,8 +129,33 @@ describe('DashScopeClient', () => {
       expect(capturedBody.parameters.result_format).toBe('message')
     })
 
+    it('正确构建 openai-chat 请求体（qwen3.7-plus）', async () => {
+      let capturedBody: any = null
+
+      globalThis.fetch = mockFetch((url: string, init: any) => {
+        capturedBody = JSON.parse(init.body)
+        return Promise.resolve(new Response(JSON.stringify({
+          choices: [{ message: { content: '分析结果', role: 'assistant' } }],
+          usage: { prompt_tokens: 10, completion_tokens: 20 },
+        }), { status: 200 }))
+      })
+
+      const result = await client.chatCompletion('qwen3.7-plus', { prompt: '你好', temperature: 0.7 })
+
+      expect(capturedBody.model).toBe('qwen3.7-plus')
+      expect(capturedBody.messages[0].role).toBe('user')
+      expect(capturedBody.messages[0].content).toBe('你好')
+      expect(capturedBody.temperature).toBe(0.7)
+      expect(capturedBody.input).toBeUndefined()
+      expect(capturedBody.parameters).toBeUndefined()
+
+      expect(result.success).toBe(true)
+      expect(result.output!.text).toBe('分析结果')
+      expect(result.usage!.inputTokens).toBe(10)
+      expect(result.usage!.outputTokens).toBe(20)
+    })
+
     it('设置正确的 Authorization header', async () => {
-      const originalFetch = globalThis.fetch
       let capturedHeaders: any = null
 
       globalThis.fetch = mockFetch((url: string, init: any) => {
@@ -143,7 +167,6 @@ describe('DashScopeClient', () => {
       })
 
       await client.chatCompletion('qwen-max', { prompt: 'test' })
-      globalThis.fetch = originalFetch
 
       expect(capturedHeaders.Authorization).toBe('Bearer test-api-key')
       expect(capturedHeaders['Content-Type']).toBe('application/json')
@@ -215,7 +238,6 @@ describe('DashScopeClient', () => {
     })
 
     it('包含 X-DashScope-Async header', async () => {
-      const originalFetch = globalThis.fetch
       let capturedHeaders: any = null
 
       globalThis.fetch = mockFetch((url: string, init: any) => {
@@ -226,7 +248,6 @@ describe('DashScopeClient', () => {
       })
 
       await client.submitVideoTask('happyhorse-1.0-t2v', { prompt: 'test' })
-      globalThis.fetch = originalFetch
 
       expect(capturedHeaders['X-DashScope-Async']).toBe('enable')
     })

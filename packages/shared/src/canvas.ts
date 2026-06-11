@@ -1,5 +1,12 @@
 // ===== 画布流水线领域类型 =====
 
+/** 用户可选择的模型类别偏好 */
+export interface CanvasModelPreferences {
+  textModel?: string
+  imageModel?: string
+  videoModel?: string
+}
+
 /** 画布项目状态 */
 export type CanvasProjectStatus
   = | 'draft' | 'analyzed' | 'characters_ready' | 'locations_ready'
@@ -163,6 +170,7 @@ export interface ProjectDTO {
   storyText: string
   status: CanvasProjectStatus
   analysis: NovelAnalysis | null
+  modelPreferences: CanvasModelPreferences | null
   characters: CharacterDTO[]
   locations: LocationDTO[]
   shots: ShotDTO[]

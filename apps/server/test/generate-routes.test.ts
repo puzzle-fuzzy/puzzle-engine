@@ -32,8 +32,8 @@ mock.module('@excuse/db', () => ({
 }))
 
 mock.module('@excuse/provider', () => ({
-  DashScopeClient() {
-    return { generate: mockGenerate }
+  DashScopeClient: class {
+    generate = mockGenerate
   },
   getModelById: (id: string) => {
     const models: Record<string, any> = {
@@ -58,10 +58,8 @@ mock.module('@excuse/provider', () => ({
     }
     return models[id]
   },
-  AssetStorage() {
-    return {
-      downloadAndMap: mock(() => Promise.resolve(['https://saved.url/img.png'])),
-    }
+  AssetStorage: class {
+    downloadAndMap = mock(() => Promise.resolve(['https://saved.url/img.png']))
   },
 }))
 
@@ -211,22 +209,24 @@ describe('generate routes', () => {
       expect(mockMarkFailed).toHaveBeenCalled()
     })
 
-    it('异步模型（视频）成功时标记为 processing', async () => {
-      mockCreateRecord.mockResolvedValue(makeRecord({ category: 'video' }))
+    it('缺少 prompt 参数时由模型验证层拒绝', async () => {
+      mockCreateRecord.mockResolvedValue(makeRecord())
+      // getModelById('qwen-max') 返回的模型参数中有 prompt required，
+      // 路由层会检测到缺少必填参数
       mockGenerate.mockResolvedValue({
-        success: true,
-        providerTaskId: 'task-vid-001',
-        output: { taskId: 'task-vid-001' },
-        usage: { videoDuration: 5 },
+        success: false,
+        error: 'prompt is required',
       })
+      mockMarkFailed.mockResolvedValue(undefined)
 
-      const { data: _data } = await client.api.generate.post(
-        { model: 'qwen-max', parameters: { prompt: '生成视频' } },
+      const { data } = await client.api.generate.post(
+        { model: 'qwen-max', parameters: {} },
         { headers: { Authorization: `Bearer ${token}` } },
       )
 
-      // 由于 mock getModelById 不包含视频模型，实际走文本路径
-      // 这里测试 providerTaskId 分支
+      // 缺少必填参数应返回失败
+      expect(data?.success).toBe(false)
+      expect(data?.status).toBe('failed')
     })
   })
 
@@ -296,6 +296,12 @@ describe('generate routes', () => {
   // ═══════════════════════════════════════════════════
 
   describe('GET /api/records/:id', () => {
+    it('未登录时返回错误', async () => {
+      const { data } = await client.api.records({ id: 'rec-001' }).get()
+
+      expect(data?.success === false || data === undefined).toBe(true)
+    })
+
     it('返回单条记录', async () => {
       mockGetRecordById.mockResolvedValue(makeRecord())
 

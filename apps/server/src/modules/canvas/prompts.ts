@@ -24,7 +24,7 @@ export function buildAnalysisPrompt(storyText: string) {
 
 export function buildCharacterPrompt(
   storyText: string,
-  analysis: { summary: string; mainConflict: string; timeline: string[] },
+  analysis: { summary: string, mainConflict: string, timeline: string[] },
   characterName: string,
 ) {
   return {
@@ -65,7 +65,7 @@ ${storyText.slice(0, 3000)}
 
 export function buildLocationPrompt(
   storyText: string,
-  analysis: { summary: string; mainConflict: string; timeline: string[] },
+  analysis: { summary: string, mainConflict: string, timeline: string[] },
   sceneName: string,
 ) {
   return {
@@ -103,9 +103,9 @@ ${storyText.slice(0, 3000)}
 
 export function buildStoryboardPrompt(
   storyText: string,
-  analysis: { summary: string; mainConflict: string; timeline: string[] },
-  characters: Array<{ id: string; name: string; identityPrompt: string }>,
-  locations: Array<{ id: string; name: string; scenePrompt: string }>,
+  analysis: { summary: string, mainConflict: string, timeline: string[] },
+  characters: Array<{ id: string, name: string, identityPrompt: string }>,
+  locations: Array<{ id: string, name: string, scenePrompt: string }>,
 ) {
   const characterList = characters
     .map(c => `  ID:${c.id} "${c.name}" — ${c.identityPrompt}`)

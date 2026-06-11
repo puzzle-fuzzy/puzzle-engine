@@ -19,7 +19,7 @@ const SHOT_STATUS_LABELS: Record<string, string> = {
 }
 
 export default function ShotNode({ data }: NodeProps) {
-  const { shot, project } = data as { shot: ShotDTO, project: ProjectDTO }
+  const { shot, project, isRunning } = data as { shot: ShotDTO, project: ProjectDTO, isRunning?: boolean }
 
   const camera = shot.camera as Record<string, string>
   const continuity = shot.continuity as Record<string, unknown>
@@ -34,17 +34,30 @@ export default function ShotNode({ data }: NodeProps) {
     : null
 
   return (
-    <div className="rounded-lg border-2 border-cyan-400 bg-cyan-50 shadow-md w-[340px]">
+    <div className={`rounded-lg border-2 bg-cyan-50 shadow-md w-[340px] relative ${isRunning ? 'border-yellow-400 ring-2 ring-yellow-200' : 'border-cyan-400'}`}>
       <Handle type="target" position={Position.Top} className="!bg-cyan-400" />
-      <div className="bg-cyan-400 text-white px-3 py-2 font-semibold text-sm flex items-center justify-between">
+      <div className="bg-cyan-400 text-white px-3 py-2 font-semibold text-sm flex items-center justify-between rounded-t-md">
         <span>
           镜头
           {shot.shotIndex + 1}
         </span>
-        <span className={`text-[10px] rounded-full px-2 py-0.5 ${SHOT_STATUS_COLORS[shot.status] || ''}`}>
-          {SHOT_STATUS_LABELS[shot.status] || shot.status}
-        </span>
+        {isRunning ? (
+          <span className="text-[10px] rounded-full px-2 py-0.5 bg-yellow-100 text-yellow-700 animate-pulse">
+            生成中...
+          </span>
+        ) : (
+          <span className={`text-[10px] rounded-full px-2 py-0.5 ${SHOT_STATUS_COLORS[shot.status] || ''}`}>
+            {SHOT_STATUS_LABELS[shot.status] || shot.status}
+          </span>
+        )}
       </div>
+      {isRunning && (
+        <div className="absolute inset-0 bg-white/30 flex items-center justify-center rounded-lg pointer-events-none">
+          <div className="bg-yellow-100 text-yellow-700 text-xs font-medium px-3 py-1.5 rounded-full shadow animate-pulse">
+            正在生成...
+          </div>
+        </div>
+      )}
       <div className="p-3 space-y-2 text-sm">
         {/* 基本信息 */}
         <div className="text-xs space-y-1">
@@ -94,7 +107,10 @@ export default function ShotNode({ data }: NodeProps) {
             <div className="text-xs bg-white rounded p-2 mt-0.5 max-h-[100px] overflow-auto space-y-0.5">
               {shot.timeline.map((entry, i) => (
                 <div key={i}>
-                  <span className="font-mono text-muted-foreground">{entry.time}:</span>
+                  <span className="font-mono text-muted-foreground">
+                    {entry.time}
+                    :
+                  </span>
                   {' '}
                   {entry.action}
                 </div>
@@ -134,9 +150,24 @@ export default function ShotNode({ data }: NodeProps) {
         {environment && (
           <div className="text-xs space-y-0.5">
             <span className="text-muted-foreground">环境：</span>
-            {environment.lighting && <div>灯光：{environment.lighting}</div>}
-            {environment.mood && <div>情绪：{environment.mood}</div>}
-            {environment.backgroundMotion && <div>背景运动：{environment.backgroundMotion}</div>}
+            {environment.lighting && (
+              <div>
+                灯光：
+                {environment.lighting}
+              </div>
+            )}
+            {environment.mood && (
+              <div>
+                情绪：
+                {environment.mood}
+              </div>
+            )}
+            {environment.backgroundMotion && (
+              <div>
+                背景运动：
+                {environment.backgroundMotion}
+              </div>
+            )}
           </div>
         )}
 

@@ -1,4 +1,4 @@
-import type { CharacterProfile, LocationProfile, NovelAnalysis, ShotDraft } from '@excuse/shared'
+import type { CanvasModelPreferences, CharacterProfile, LocationProfile, NovelAnalysis, ShotDraft } from '@excuse/shared'
 import type { NormalizedCharacter, NormalizedLocation, NormalizedShot } from './continuity'
 import { calculateCost } from '@excuse/billing'
 import {
@@ -34,6 +34,17 @@ function createClient(config: { dashscopeApiKey: string, dashscopeBaseUrl?: stri
 
 function notifyNode(accountId: string, projectId: string, nodeType: string, nodeId: string, status: 'running' | 'completed' | 'failed', data?: Record<string, unknown>, error?: string) {
   dispatchToUser(accountId, 'pipeline_node_update', { projectId, nodeType, nodeId, status, data, error })
+}
+
+const DEFAULT_TEXT_MODEL = 'qwen3.7-plus'
+const DEFAULT_IMAGE_MODEL = 'qwen-image-2.0-pro'
+
+function getTextModel(prefs: CanvasModelPreferences | null | undefined): string {
+  return prefs?.textModel || DEFAULT_TEXT_MODEL
+}
+
+function getImageModel(prefs: CanvasModelPreferences | null | undefined): string {
+  return prefs?.imageModel || DEFAULT_IMAGE_MODEL
 }
 
 // ===== 项目 CRUD =====
@@ -84,7 +95,8 @@ export async function analyzeProject(projectId: string, config: { dashscopeApiKe
     const client = createClient(config)
     const { system, prompt: userPrompt } = buildAnalysisPrompt(project.storyText)
 
-    const result = await client.chatCompletion('qwen-max', {
+    const textModel = getTextModel(project.modelPreferencesJson)
+    const result = await client.chatCompletion(textModel, {
       prompt: `${system}\n\n${userPrompt}`,
       max_tokens: 4096,
       temperature: 0.7,
@@ -123,6 +135,7 @@ export async function generateCharacters(projectId: string, config: { dashscopeA
   await deleteCanvasCharactersByProject(projectId, { excludeLocked: true })
 
   const client = createClient(config)
+  const textModel = getTextModel(project.modelPreferencesJson)
 
   const created = []
   for (const name of analysis.characterNames) {
@@ -130,7 +143,7 @@ export async function generateCharacters(projectId: string, config: { dashscopeA
 
     try {
       const { system, prompt: userPrompt } = buildCharacterPrompt(project.storyText, analysis, name)
-      const result = await client.chatCompletion('qwen-max', {
+      const result = await client.chatCompletion(textModel, {
         prompt: `${system}\n\n${userPrompt}`,
         max_tokens: 4096,
         temperature: 0.7,
@@ -175,13 +188,14 @@ export async function generateLocations(projectId: string, config: { dashscopeAp
   await deleteCanvasLocationsByProject(projectId, { excludeLocked: true })
 
   const client = createClient(config)
+  const textModel = getTextModel(project.modelPreferencesJson)
 
   for (const name of analysis.sceneNames) {
     notifyNode(accountId, projectId, 'location', name, 'running')
 
     try {
       const { system, prompt: userPrompt } = buildLocationPrompt(project.storyText, analysis, name)
-      const result = await client.chatCompletion('qwen-max', {
+      const result = await client.chatCompletion(textModel, {
         prompt: `${system}\n\n${userPrompt}`,
         max_tokens: 4096,
         temperature: 0.7,
@@ -221,6 +235,7 @@ export async function generateCharacterRefs(projectId: string, config: { dashsco
   const client = createClient(config)
   const storage = new AssetStorage({ storageRoot: config.storageRoot, oss: config.oss })
   const accountId = detail.project.accountId
+  const imageModel = getImageModel(detail.project.modelPreferencesJson)
 
   for (const char of detail.characters) {
     if (char.locked || char.identityPrompt)
@@ -229,7 +244,7 @@ export async function generateCharacterRefs(projectId: string, config: { dashsco
     notifyNode(accountId, projectId, 'character', char.id, 'running')
 
     try {
-      const portraitResult = await client.generateImage('qwen-image-2.0-pro', {
+      const portraitResult = await client.generateImage(imageModel, {
         prompt: `${char.identityPrompt}, portrait photo, neutral expression, solid background, front view, high quality`,
         size: '1024*1024',
         n: 1,
@@ -241,7 +256,7 @@ export async function generateCharacterRefs(projectId: string, config: { dashsco
         await updateCanvasCharacter(char.id, { referenceImageUrl: savedUrls[0] || urls[0] })
       }
 
-      const turnaroundResult = await client.generateImage('qwen-image-2.0-pro', {
+      const turnaroundResult = await client.generateImage(imageModel, {
         prompt: `${char.identityPrompt}, character turnaround sheet showing front view, side view, and back view, white background, character design sheet`,
         size: '1024*1024',
         n: 1,
@@ -272,6 +287,7 @@ export async function generateLocationRefs(projectId: string, config: { dashscop
   const client = createClient(config)
   const storage = new AssetStorage({ storageRoot: config.storageRoot, oss: config.oss })
   const accountId = detail.project.accountId
+  const imageModel = getImageModel(detail.project.modelPreferencesJson)
 
   for (const loc of detail.locations) {
     if (loc.locked || !loc.scenePrompt || loc.referenceImageUrl)
@@ -280,7 +296,7 @@ export async function generateLocationRefs(projectId: string, config: { dashscop
     notifyNode(accountId, projectId, 'location', loc.id, 'running')
 
     try {
-      const result = await client.generateImage('qwen-image-2.0-pro', {
+      const result = await client.generateImage(imageModel, {
         prompt: `${loc.scenePrompt}, establishing shot, wide angle, cinematic lighting`,
         size: '1024*1024',
         n: 1,
@@ -325,7 +341,8 @@ export async function generateStoryboard(projectId: string, config: { dashscopeA
       detail.locations.map(l => ({ id: l.id, name: l.name, scenePrompt: l.scenePrompt || '' })),
     )
 
-    const result = await client.chatCompletion('qwen-max', {
+    const textModel = getTextModel(project.modelPreferencesJson)
+    const result = await client.chatCompletion(textModel, {
       prompt: `${system}\n\n${userPrompt}`,
       max_tokens: 8192,
       temperature: 0.7,
@@ -571,6 +588,13 @@ export async function generateVideos(projectId: string, config: { dashscopeApiKe
 }
 
 // ===== 资源 PATCH =====
+
+export async function updateModelPreferences(projectId: string, prefs: CanvasModelPreferences) {
+  await updateCanvasProject(projectId, {
+    modelPreferencesJson: prefs as unknown as Record<string, string>,
+  })
+  return getProjectDetail(projectId)
+}
 
 export async function updateCharacterData(characterId: string, patch: { identityPrompt?: string, negativePrompt?: string, locked?: boolean }) {
   return updateCanvasCharacter(characterId, patch)
