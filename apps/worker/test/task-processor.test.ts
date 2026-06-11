@@ -8,6 +8,9 @@ mock.module('@excuse/db', () => ({
   markGenerationProcessing: async () => {},
   markGenerationSucceeded: async () => {},
   notifyGenerationStatus: async () => {},
+  updateCanvasProject: async () => {},
+  updateCanvasShot: async () => {},
+  listCanvasShotsByProject: async () => [],
 }))
 
 mock.module('@excuse/provider', () => ({
