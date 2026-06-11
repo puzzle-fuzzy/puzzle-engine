@@ -53,18 +53,39 @@ export type { GenerateResponse, GenerationRecord } from '@excuse/shared'
 export type { BillingStatistics } from '@excuse/shared'
 export type CostDetail = GenerationRecord['cost']
 
-// ===== Eden 响应解包工具 =====
+/**
+ * Eden 响应中的错误结构
+ * Eden 将非 2xx 响应包装为 { status, statusText, headers, ... } 等
+ */
+interface EdenError {
+  status?: number
+  statusText?: string
+  message?: string
+  value?: unknown
+}
 
 /**
- * 解包 Eden Treaty 响应：提取 data 或抛出 error
+ * 解包 Eden Treaty 响应：提取 data 或抛出结构化错误
  *
  * Eden 返回 { data, error }，data 类型是 Eden 从 Elysia 推导的，
  * 与 @excuse/shared 的类型有细微结构差异无法直接赋值。
  * 此函数将 data 转为 shared 包定义的类型 T，封装必要的转换。
+ *
+ * 错误处理策略：
+ *   - 401/403: 认证问题，触发登录态清理
+ *   - 422: 参数校验失败，展示具体字段错误
+ *   - 其他: 展示通用错误消息
  */
 function unwrapEden<T>(response: { data: unknown, error: unknown }): T {
-  if (response.error)
-    throw response.error
+  if (response.error) {
+    const edenErr = response.error as EdenError
+    const message = typeof edenErr.value === 'object' && edenErr.value !== null
+      ? ((edenErr.value as Record<string, unknown>).error as string) || edenErr.statusText || '请求失败'
+      : edenErr.message || edenErr.statusText || '请求失败'
+    const error = new Error(message) as Error & { status?: number }
+    error.status = edenErr.status
+    throw error
+  }
   return response.data as T
 }
 
