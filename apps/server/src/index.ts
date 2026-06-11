@@ -9,7 +9,7 @@ import { loadConfig } from './config'
 import { createAuthPlugin } from './plugins/auth'
 import { loggerPlugin } from './plugins/logger'
 import { createAuthRoutes } from './routes/auth'
-import { billingRoutes } from './routes/billing'
+import { createBillingRoutes } from './routes/billing'
 import { createCanvasRoutes } from './routes/canvas'
 import { createGenerateRoutes } from './routes/generate'
 import { healthRoutes } from './routes/health'
@@ -53,7 +53,7 @@ const app = new Elysia()
   .use(createGenerateRoutes(config))
   .use(createUploadRoutes(config))
   .use(createSSERoutes(config))
-  .use(billingRoutes)
+  .use(createBillingRoutes(config))
 
 export type App = typeof app
 export default app

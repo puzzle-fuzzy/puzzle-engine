@@ -140,9 +140,13 @@ export async function cancelGenerationRecord(id: string) {
 
 /**
  * 获取含费用信息的记录，用于账单统计
- * 返回所有 cost 不为 NULL 的记录
+ * @param accountId 可选：按用户过滤
  */
-export async function getCostRecords() {
+export async function getCostRecords(accountId?: string) {
+  const conditions = [isNotNull(generationRecords.cost)]
+  if (accountId)
+    conditions.push(eq(generationRecords.accountId, accountId))
+
   const records = await getDb()
     .select({
       model: generationRecords.model,
@@ -151,8 +155,7 @@ export async function getCostRecords() {
       createdAt: generationRecords.createdAt,
     })
     .from(generationRecords)
-    .where(isNotNull(generationRecords.cost))
+    .where(and(...conditions))
 
-  // 过滤出有 totalPrice 的记录（JSONB 内部无法直接 SQL 过滤）
   return records.filter(r => r.cost && typeof (r.cost as any).totalPrice === 'number')
 }
