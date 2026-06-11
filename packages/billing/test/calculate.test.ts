@@ -243,10 +243,8 @@ describe('calculateCost', () => {
   // ── 未知计费类型 ──
 
   describe('未知计费类型', () => {
-    it('返回 unit=unknown, totalPrice=0', () => {
-      const result = calculateCost(unknownModel, {})
-
-      expect(result).toEqual({ unit: 'unknown', totalPrice: 0 })
+    it('应抛出错误', () => {
+      expect(() => calculateCost(unknownModel, {})).toThrow(/未知的计费单位/)
     })
   })
 })

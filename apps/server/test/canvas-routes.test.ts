@@ -102,11 +102,8 @@ mock.module('@excuse/billing', () => ({
   calculateCost: () => ({ unit: 'token', totalPrice: 0.01 }),
 }))
 
-mock.module('@excuse/shared', () => ({
-  createLogger: () => ({ info: () => {}, error: () => {}, warn: () => {}, debug: () => {} }),
-  parseOutputResult: (d: unknown) => d,
-  parseCostDetail: (d: unknown) => d,
-}))
+// 不 mock @excuse/shared — 只包含类型 + logger，不影响测试逻辑
+// mock @excuse/shared 会干扰其他并行测试的 logger 导入
 
 mock.module('../src/services/sse-manager', () => ({
   dispatchToUser: async () => {},

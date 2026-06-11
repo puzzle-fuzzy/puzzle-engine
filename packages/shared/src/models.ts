@@ -14,9 +14,9 @@ export interface ModelParameter {
 }
 
 export interface ModelPricing {
-  inputPrice: number // 文本：每百万 Token 价格（元）；图片：每张价格（元）；视频：720P 每秒价格（元）
-  outputPrice?: number // 文本输出：每百万 Token 价格（元）
-  inputPrice1080?: number // 视频：1080P 每秒价格（元）
+  inputPriceCents: number // 文本：每百万 Token 价格（分）；图片：每张价格（分）；视频：720P 每秒价格（分）
+  outputPriceCents?: number // 文本输出：每百万 Token 价格（分）
+  inputPrice1080Cents?: number // 视频：1080P 每秒价格（分）
   unit?: 'token' | 'image' | 'video'
   note?: string
 }

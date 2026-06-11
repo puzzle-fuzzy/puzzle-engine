@@ -1,3 +1,4 @@
+import type { GenerationNotifyPayload, OutputResult, VideoOutputResult } from '@excuse/shared'
 import type { TaskProcessorDeps } from '../src/task-processor'
 import { describe, expect, it, mock } from 'bun:test'
 import { createTaskProcessor, extractVideoUrl } from '../src/task-processor'
@@ -130,7 +131,7 @@ describe('processTask', () => {
   // ── SUCCEEDED ─────────────────────────────────────
 
   it('should download, calculate cost and mark succeeded', async () => {
-    const succeeded: Array<{ id: string, output: Record<string, unknown> }> = []
+    const succeeded: Array<{ id: string, output: OutputResult }> = []
     const downloaded: string[][] = []
     const deps = createMockDeps({
       queryTask: async () => ({
@@ -155,7 +156,7 @@ describe('processTask', () => {
     expect(succeeded).toHaveLength(1)
     expect(succeeded[0]!.id).toBe('rec-001')
     // output 应包含 savedUrls 和 originalUrl
-    const output = succeeded[0]!.output
+    const output = succeeded[0]!.output as VideoOutputResult
     expect(output.savedUrls).toEqual(['/api/uploads/task-001/video.mp4'])
     expect(output.originalUrl).toBe('https://cdn/video.mp4')
   })
@@ -272,7 +273,7 @@ describe('processTask', () => {
   // ── Canvas pipeline: canvasMeta propagation ────────
 
   it('should pass canvasMeta in succeeded notification for canvas-sourced records', async () => {
-    const notifications: Array<Record<string, unknown>> = []
+    const notifications: Array<GenerationNotifyPayload> = []
     const deps = createMockDeps({
       queryTask: async () => ({
         status: 'SUCCEEDED',
@@ -281,7 +282,7 @@ describe('processTask', () => {
       downloadAndMap: async urls => urls,
       markGenerationSucceeded: async () => {},
       notifyGenerationStatus: async (payload) => {
-        notifications.push(payload as unknown as Record<string, unknown>)
+        notifications.push(payload)
       },
     })
 
@@ -304,7 +305,7 @@ describe('processTask', () => {
   })
 
   it('should pass canvasMeta in failed notification for canvas-sourced records', async () => {
-    const notifications: Array<Record<string, unknown>> = []
+    const notifications: Array<GenerationNotifyPayload> = []
     const deps = createMockDeps({
       queryTask: async () => ({
         status: 'FAILED',
@@ -312,7 +313,7 @@ describe('processTask', () => {
       }),
       markGenerationFailed: async () => {},
       notifyGenerationStatus: async (payload) => {
-        notifications.push(payload as unknown as Record<string, unknown>)
+        notifications.push(payload)
       },
     })
 
@@ -335,7 +336,7 @@ describe('processTask', () => {
   })
 
   it('should NOT include canvasMeta for non-canvas records', async () => {
-    const notifications: Array<Record<string, unknown>> = []
+    const notifications: Array<GenerationNotifyPayload> = []
     const deps = createMockDeps({
       queryTask: async () => ({
         status: 'SUCCEEDED',
@@ -344,7 +345,7 @@ describe('processTask', () => {
       downloadAndMap: async urls => urls,
       markGenerationSucceeded: async () => {},
       notifyGenerationStatus: async (payload) => {
-        notifications.push(payload as unknown as Record<string, unknown>)
+        notifications.push(payload)
       },
     })
 

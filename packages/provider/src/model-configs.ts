@@ -65,7 +65,7 @@ export const MODELS: Record<string, ModelConfig> = {
     description: '阿里云最强文本生成模型，适合复杂任务',
     endpoint: 'https://dashscope.aliyuncs.com/api/v1/services/aigc/text-generation/generation',
     async: false,
-    pricing: { inputPrice: 2.4, outputPrice: 9.6, unit: 'token' },
+    pricing: { inputPriceCents: 240, outputPriceCents: 960, unit: 'token' },
     requestType: 'chat',
     inputMapping: TEXT_MAPPING,
     parameters: [
@@ -85,7 +85,7 @@ export const MODELS: Record<string, ModelConfig> = {
     description: '高性价比文本生成模型',
     endpoint: 'https://dashscope.aliyuncs.com/api/v1/services/aigc/text-generation/generation',
     async: false,
-    pricing: { inputPrice: 0.8, outputPrice: 2, unit: 'token' },
+    pricing: { inputPriceCents: 80, outputPriceCents: 200, unit: 'token' },
     requestType: 'chat',
     inputMapping: TEXT_MAPPING,
     parameters: [
@@ -104,7 +104,7 @@ export const MODELS: Record<string, ModelConfig> = {
     description: '超高速文本生成模型',
     endpoint: 'https://dashscope.aliyuncs.com/api/v1/services/aigc/text-generation/generation',
     async: false,
-    pricing: { inputPrice: 0.3, outputPrice: 0.6, unit: 'token' },
+    pricing: { inputPriceCents: 30, outputPriceCents: 60, unit: 'token' },
     requestType: 'chat',
     inputMapping: TEXT_MAPPING,
     parameters: [
@@ -122,7 +122,7 @@ export const MODELS: Record<string, ModelConfig> = {
     description: '超长上下文文本生成模型',
     endpoint: 'https://dashscope.aliyuncs.com/api/v1/services/aigc/text-generation/generation',
     async: false,
-    pricing: { inputPrice: 0.5, outputPrice: 2, unit: 'token' },
+    pricing: { inputPriceCents: 50, outputPriceCents: 200, unit: 'token' },
     requestType: 'chat',
     inputMapping: TEXT_MAPPING,
     parameters: [
@@ -140,7 +140,7 @@ export const MODELS: Record<string, ModelConfig> = {
     description: '最新千问推理模型，适合复杂分析和创作任务',
     endpoint: 'https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions',
     async: false,
-    pricing: { inputPrice: 1.6, outputPrice: 6.4, unit: 'token' },
+    pricing: { inputPriceCents: 160, outputPriceCents: 640, unit: 'token' },
     requestType: 'openai-chat',
     inputMapping: TEXT_MAPPING,
     parameters: [
@@ -162,7 +162,7 @@ export const MODELS: Record<string, ModelConfig> = {
     description: '最强图像生成模型，擅长复杂文本渲染',
     endpoint: 'https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation',
     async: false,
-    pricing: { inputPrice: 0.25, unit: 'image', note: '0.25元/张' },
+    pricing: { inputPriceCents: 25, unit: 'image', note: '0.25元/张' },
     requestType: 'image',
     inputMapping: IMAGE_MAPPING,
     parameters: [
@@ -190,7 +190,7 @@ export const MODELS: Record<string, ModelConfig> = {
     description: '高真实感图像生成模型',
     endpoint: 'https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation',
     async: false,
-    pricing: { inputPrice: 0.25, unit: 'image', note: '0.25元/张' },
+    pricing: { inputPriceCents: 25, unit: 'image', note: '0.25元/张' },
     requestType: 'image',
     // qwen-image-max 的 n 固定为 1，不暴露给用户；无 n 映射 → 不发送
     inputMapping: {
@@ -227,7 +227,7 @@ export const MODELS: Record<string, ModelConfig> = {
     description: '高质量文生视频模型',
     endpoint: 'https://dashscope.aliyuncs.com/api/v1/services/aigc/video-generation/video-synthesis',
     async: true,
-    pricing: { inputPrice: 0.9, inputPrice1080: 1.6, unit: 'video', note: '720P: 0.9元/秒, 1080P: 1.6元/秒' },
+    pricing: { inputPriceCents: 90, inputPrice1080Cents: 160, unit: 'video', note: '720P: 0.9元/秒, 1080P: 1.6元/秒' },
     requestType: 'video-t2v',
     inputMapping: VIDEO_T2V_MAPPING,
     parameters: [
@@ -261,7 +261,7 @@ export const MODELS: Record<string, ModelConfig> = {
     description: '基于首帧图像生成视频',
     endpoint: 'https://dashscope.aliyuncs.com/api/v1/services/aigc/video-generation/video-synthesis',
     async: true,
-    pricing: { inputPrice: 0.9, inputPrice1080: 1.6, unit: 'video', note: '720P: 0.9元/秒, 1080P: 1.6元/秒' },
+    pricing: { inputPriceCents: 90, inputPrice1080Cents: 160, unit: 'video', note: '720P: 0.9元/秒, 1080P: 1.6元/秒' },
     requestType: 'video-media',
     inputMapping: {
       ...VIDEO_MEDIA_MAPPING,
@@ -289,7 +289,7 @@ export const MODELS: Record<string, ModelConfig> = {
     description: '参考图像生成多角色视频',
     endpoint: 'https://dashscope.aliyuncs.com/api/v1/services/aigc/video-generation/video-synthesis',
     async: true,
-    pricing: { inputPrice: 0.9, inputPrice1080: 1.6, unit: 'video', note: '720P: 0.9元/秒, 1080P: 1.6元/秒' },
+    pricing: { inputPriceCents: 90, inputPrice1080Cents: 160, unit: 'video', note: '720P: 0.9元/秒, 1080P: 1.6元/秒' },
     requestType: 'video-media',
     inputMapping: VIDEO_MEDIA_MAPPING,
     // referenceUrls → input.media[{ type: "reference_image", url }]
@@ -326,7 +326,7 @@ export const MODELS: Record<string, ModelConfig> = {
     description: '视频编辑模型，支持风格变换和局部替换',
     endpoint: 'https://dashscope.aliyuncs.com/api/v1/services/aigc/video-generation/video-synthesis',
     async: true,
-    pricing: { inputPrice: 0.9, inputPrice1080: 1.6, unit: 'video', note: '720P: 0.9元/秒, 1080P: 1.6元/秒' },
+    pricing: { inputPriceCents: 90, inputPrice1080Cents: 160, unit: 'video', note: '720P: 0.9元/秒, 1080P: 1.6元/秒' },
     requestType: 'video-media',
     inputMapping: {
       ...VIDEO_MEDIA_MAPPING,
@@ -360,7 +360,7 @@ export const MODELS: Record<string, ModelConfig> = {
     description: '最新万相文生视频模型',
     endpoint: 'https://dashscope.aliyuncs.com/api/v1/services/aigc/video-generation/video-synthesis',
     async: true,
-    pricing: { inputPrice: 0.6, inputPrice1080: 1, unit: 'video', note: '720P: 0.6元/秒, 1080P: 1元/秒' },
+    pricing: { inputPriceCents: 60, inputPrice1080Cents: 100, unit: 'video', note: '720P: 0.6元/秒, 1080P: 1元/秒' },
     requestType: 'video-t2v',
     inputMapping: VIDEO_T2V_MAPPING,
     parameters: [
@@ -393,7 +393,7 @@ export const MODELS: Record<string, ModelConfig> = {
     description: '基于首帧/首尾帧/视频片段生成视频',
     endpoint: 'https://dashscope.aliyuncs.com/api/v1/services/aigc/video-generation/video-synthesis',
     async: true,
-    pricing: { inputPrice: 0.6, inputPrice1080: 1, unit: 'video', note: '720P: 0.6元/秒, 1080P: 1元/秒' },
+    pricing: { inputPriceCents: 60, inputPrice1080Cents: 100, unit: 'video', note: '720P: 0.6元/秒, 1080P: 1元/秒' },
     requestType: 'video-media',
     inputMapping: {
       ...VIDEO_MEDIA_MAPPING,
@@ -430,7 +430,7 @@ export const MODELS: Record<string, ModelConfig> = {
     description: '参考图像/视频生成多角色互动视频',
     endpoint: 'https://dashscope.aliyuncs.com/api/v1/services/aigc/video-generation/video-synthesis',
     async: true,
-    pricing: { inputPrice: 0.6, inputPrice1080: 1, unit: 'video', note: '720P: 0.6元/秒, 1080P: 1元/秒' },
+    pricing: { inputPriceCents: 60, inputPrice1080Cents: 100, unit: 'video', note: '720P: 0.6元/秒, 1080P: 1元/秒' },
     requestType: 'video-media',
     inputMapping: VIDEO_MEDIA_MAPPING,
     // referenceUrls → input.media[{ type: "reference_image", url }]
@@ -465,7 +465,7 @@ export const MODELS: Record<string, ModelConfig> = {
     description: '视频编辑模型，支持风格变换和局部替换',
     endpoint: 'https://dashscope.aliyuncs.com/api/v1/services/aigc/video-generation/video-synthesis',
     async: true,
-    pricing: { inputPrice: 0.6, inputPrice1080: 1, unit: 'video', note: '720P: 0.6元/秒, 1080P: 1元/秒' },
+    pricing: { inputPriceCents: 60, inputPrice1080Cents: 100, unit: 'video', note: '720P: 0.6元/秒, 1080P: 1元/秒' },
     requestType: 'video-media',
     inputMapping: {
       ...VIDEO_MEDIA_MAPPING,

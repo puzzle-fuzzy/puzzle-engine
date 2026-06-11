@@ -1,10 +1,14 @@
 // ===== 计费相关类型定义 =====
 
 export interface BillingStatistics {
-  total: number
-  today: number
-  week: number
-  month: number
+  totalCents: number
+  total: number // 向后兼容
+  todayCents: number
+  today: number // 向后兼容
+  weekCents: number
+  week: number // 向后兼容
+  monthCents: number
+  month: number // 向后兼容
   byCategory: CategoryBreakdown[]
   byModel: ModelBreakdown[]
   dailyTrend: DailyTrendItem[]
@@ -12,17 +16,20 @@ export interface BillingStatistics {
 
 export interface CategoryBreakdown {
   category: string
-  total: number
+  totalCents: number
+  total: number // 向后兼容
   percentage: number
 }
 
 export interface ModelBreakdown {
   model: string
-  total: number
+  totalCents: number
+  total: number // 向后兼容
   percentage: number
 }
 
 export interface DailyTrendItem {
   date: string
-  total: number
+  totalCents: number
+  total: number // 向后兼容
 }

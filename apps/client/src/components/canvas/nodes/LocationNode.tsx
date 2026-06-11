@@ -7,8 +7,8 @@ export default function LocationNode({ data }: NodeProps) {
   const profile = location.profile
 
   return (
-    <div className={`rounded-lg border-2 bg-amber-50 shadow-md w-[340px] overflow-hidden relative ${isRunning ? 'border-yellow-400 ring-2 ring-yellow-200' : 'border-amber-400'}`}>
-      <Handle type="target" position={Position.Top} className="!bg-amber-400" />
+    <div className={`rounded-lg border-2 bg-amber-50 shadow-md w-85 relative ${isRunning ? 'border-yellow-400 ring-2 ring-yellow-200' : 'border-amber-400'}`}>
+      <Handle type="target" position={Position.Top} className="bg-amber-400!" />
       <div className="bg-amber-400 text-white px-3 py-2 font-semibold text-sm flex items-center justify-between rounded-t-md">
         <span>
           场景：

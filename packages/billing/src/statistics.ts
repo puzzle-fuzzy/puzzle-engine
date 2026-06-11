@@ -1,14 +1,15 @@
-import type { BillingStatistics, CategoryBreakdown, DailyTrendItem, ModelBreakdown } from '@excuse/shared'
+import currency from 'currency.js'
+import type { BillingStatistics, CategoryBreakdown, CostDetail, DailyTrendItem, ModelBreakdown } from '@excuse/shared'
 
-interface CostRecord {
+export interface CostRecord {
   model: string
   category: string
-  cost: Record<string, unknown> | null
+  cost: CostDetail | null
   createdAt: string | Date
 }
 
 /**
- * 从生成记录列表中聚合统计计费数据
+ * 从生成记录列表中聚合统计计费数据（整数分计费）
  */
 export function aggregateStatistics(records: CostRecord[]): BillingStatistics {
   const now = new Date()
@@ -17,84 +18,88 @@ export function aggregateStatistics(records: CostRecord[]): BillingStatistics {
   weekStart.setDate(weekStart.getDate() - 7)
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1)
 
-  let total = 0
-  let today = 0
-  let week = 0
-  let month = 0
+  let totalCents = 0
+  let todayCents = 0
+  let weekCents = 0
+  let monthCents = 0
 
   const categoryMap = new Map<string, number>()
   const modelMap = new Map<string, number>()
   const dailyMap = new Map<string, number>()
 
   for (const record of records) {
-    const price = typeof record.cost?.totalPrice === 'number' ? record.cost.totalPrice : 0
+    const priceCents = record.cost?.totalPriceCents ?? 0
 
-    total += price
+    totalCents = currency(totalCents).add(priceCents).value
 
     const recordDate = new Date(record.createdAt)
     if (recordDate >= todayStart) {
-      today += price
+      todayCents = currency(todayCents).add(priceCents).value
     }
     if (recordDate >= weekStart) {
-      week += price
+      weekCents = currency(weekCents).add(priceCents).value
     }
     if (recordDate >= monthStart) {
-      month += price
+      monthCents = currency(monthCents).add(priceCents).value
     }
 
-    // 按类别聚合
     const categoryTotal = categoryMap.get(record.category) || 0
-    categoryMap.set(record.category, categoryTotal + price)
+    categoryMap.set(record.category, currency(categoryTotal).add(priceCents).value)
 
-    // 按模型聚合
     const modelTotal = modelMap.get(record.model) || 0
-    modelMap.set(record.model, modelTotal + price)
+    modelMap.set(record.model, currency(modelTotal).add(priceCents).value)
 
-    // 按日期聚合（最近 30 天，使用本地日期确保今日数据不遗漏）
     const dayKey = `${recordDate.getFullYear()}-${String(recordDate.getMonth() + 1).padStart(2, '0')}-${String(recordDate.getDate()).padStart(2, '0')}`
     const dayTotal = dailyMap.get(dayKey) || 0
-    dailyMap.set(dayKey, dayTotal + price)
+    dailyMap.set(dayKey, currency(dayTotal).add(priceCents).value)
   }
 
   const byCategory: CategoryBreakdown[] = Array.from(categoryMap.entries())
-    .map(([category, catTotal]) => ({
+    .map(([category, catCents]) => ({
       category,
-      total: roundTo4(catTotal),
-      percentage: total > 0 ? Math.round((catTotal / total) * 100) : 0,
+      totalCents: catCents,
+      total: centsToYuan(catCents),
+      percentage: totalCents > 0 ? Math.round((currency(catCents).divide(totalCents).value) * 100) : 0,
     }))
-    .sort((a, b) => b.total - a.total)
+    .sort((a, b) => b.totalCents - a.totalCents)
 
   const byModel: ModelBreakdown[] = Array.from(modelMap.entries())
-    .map(([model, modelTotal]) => ({
+    .map(([model, modelCents]) => ({
       model,
-      total: roundTo4(modelTotal),
-      percentage: total > 0 ? Math.round((modelTotal / total) * 100) : 0,
+      totalCents: modelCents,
+      total: centsToYuan(modelCents),
+      percentage: totalCents > 0 ? Math.round((currency(modelCents).divide(totalCents).value) * 100) : 0,
     }))
-    .sort((a, b) => b.total - a.total)
+    .sort((a, b) => b.totalCents - a.totalCents)
 
-  // 生成最近 30 天的趋势（填充空白天）
   const dailyTrend: DailyTrendItem[] = []
   for (let i = 29; i >= 0; i--) {
     const date = new Date(todayStart)
     date.setDate(date.getDate() - i)
     const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+    const dayCents = dailyMap.get(key) || 0
     dailyTrend.push({
       date: key,
-      total: roundTo4(dailyMap.get(key) || 0),
+      totalCents: dayCents,
+      total: centsToYuan(dayCents),
     })
   }
 
   return {
-    total: roundTo4(total),
-    today: roundTo4(today),
-    week: roundTo4(week),
-    month: roundTo4(month),
+    totalCents,
+    total: centsToYuan(totalCents),
+    todayCents,
+    today: centsToYuan(todayCents),
+    weekCents,
+    week: centsToYuan(weekCents),
+    monthCents,
+    month: centsToYuan(monthCents),
     byCategory,
     byModel,
     dailyTrend,
   }
 }
 
-function roundTo4(n: number): number {
-  return Math.round(n * 10000) / 10000
+function centsToYuan(cents: number): number {
+  return currency(cents, { fromCents: true }).value / 100
 }

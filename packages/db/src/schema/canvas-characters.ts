@@ -1,3 +1,4 @@
+import type { CharacterProfile } from '../domain-types'
 import { boolean, index, jsonb, pgTable, text, timestamp, uuid, varchar } from 'drizzle-orm/pg-core'
 import { canvasProjects } from './canvas-projects'
 
@@ -9,7 +10,7 @@ export const canvasCharacters = pgTable('canvas_characters', {
   description: text('description'),
   identityPrompt: text('identity_prompt'),
   negativePrompt: text('negative_prompt'),
-  profileJson: jsonb('profile_json').$type<Record<string, unknown>>(),
+  profileJson: jsonb('profile_json').$type<CharacterProfile>(),
   referenceImageUrl: text('reference_image_url'),
   turnaroundSheetUrl: text('turnaround_sheet_url'),
   locked: boolean('locked').default(false).notNull(),

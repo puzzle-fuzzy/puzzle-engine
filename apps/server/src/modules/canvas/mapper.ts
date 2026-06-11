@@ -1,11 +1,7 @@
-import type { CanvasCharacterRow, CanvasContinuityRow, CanvasLocationRow, CanvasProjectRow, CanvasShotRow } from '@excuse/db'
+import type { CanvasCharacterRow, CanvasContinuityRow, CanvasLocationRow, CanvasProjectRow, CanvasShotRow, CharacterProfile, ContinuityIssue, LocationProfile } from '@excuse/db'
 import type {
-  CanvasModelPreferences,
   CharacterDTO,
-  CharacterProfile,
-  ContinuityIssue,
   LocationDTO,
-  LocationProfile,
   ProjectDTO,
   ShotDTO,
 } from '@excuse/shared'
@@ -13,10 +9,8 @@ import type {
 export function mapCharacter(row: CanvasCharacterRow): CharacterDTO {
   let profile: CharacterProfile | null = null
   if (row.profileJson) {
-    try {
-      profile = row.profileJson as unknown as CharacterProfile
-    }
-    catch { profile = null }
+    // 类型已从 DB schema $type<CharacterProfile>() 推断；如需 runtime 校验可改用 Zod
+    profile = row.profileJson
   }
 
   return {
@@ -39,10 +33,7 @@ export function mapCharacter(row: CanvasCharacterRow): CharacterDTO {
 export function mapLocation(row: CanvasLocationRow): LocationDTO {
   let profile: LocationProfile | null = null
   if (row.profileJson) {
-    try {
-      profile = row.profileJson as unknown as LocationProfile
-    }
-    catch { profile = null }
+    profile = row.profileJson
   }
 
   return {
@@ -93,10 +84,7 @@ export function mapProjectDetail(
 ): ProjectDTO {
   let continuityIssues: ContinuityIssue[] = []
   if (continuityReport?.issuesJson) {
-    try {
-      continuityIssues = continuityReport.issuesJson as unknown as ContinuityIssue[]
-    }
-    catch { continuityIssues = [] }
+    continuityIssues = continuityReport.issuesJson
   }
 
   return {
@@ -105,8 +93,8 @@ export function mapProjectDetail(
     title: project.title ?? null,
     storyText: project.storyText,
     status: project.status,
-    analysis: project.analysisJson as unknown as ProjectDTO['analysis'] ?? null,
-    modelPreferences: (project.modelPreferencesJson ?? null) as unknown as CanvasModelPreferences | null,
+    analysis: project.analysisJson ?? null,
+    modelPreferences: project.modelPreferencesJson ?? null,
     characters: characters.map(mapCharacter),
     locations: locations.map(mapLocation),
     shots: shots.map(mapShot),

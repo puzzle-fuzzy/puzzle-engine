@@ -1,3 +1,4 @@
+import type { CostDetail, OutputResult } from '@excuse/shared'
 import type { GenerationCategory, GenerationNotifyPayload, GenerationStatus } from '@excuse/shared'
 import type { WorkerConfig } from './config'
 import { calculateCost } from '@excuse/billing'
@@ -34,7 +35,7 @@ export interface TaskProcessorDeps {
   }>
   downloadAndMap: (urls: string[], subDir: string, prefix: string) => Promise<string[]>
   markGenerationFailed: (id: string, message: string) => Promise<void>
-  markGenerationSucceeded: (id: string, output: Record<string, unknown>, cost?: Record<string, unknown>) => Promise<void>
+  markGenerationSucceeded: (id: string, output: OutputResult, cost?: CostDetail) => Promise<void>
   markGenerationProcessing: (id: string) => Promise<void>
   notifyGenerationStatus: (payload: GenerationNotifyPayload) => Promise<void>
 }
@@ -77,7 +78,7 @@ export function createTaskProcessor(config: WorkerConfig, deps?: Partial<TaskPro
     category: string
     createdAt: Date
     inputParams: Record<string, unknown> | null
-    cost: Record<string, unknown> | null
+    cost: CostDetail | null
   }): Promise<TaskResult> {
     const inputParams = record.inputParams ?? {}
     const canvasMeta = inputParams.source === 'canvas'
@@ -131,7 +132,7 @@ export function createTaskProcessor(config: WorkerConfig, deps?: Partial<TaskPro
           originalUrl: videoUrl,
         }
 
-        await succeed(record.id, output, actualCost as Record<string, unknown> | undefined)
+        await succeed(record.id, output as OutputResult, actualCost ?? undefined)
 
         await notify({
           accountId: record.accountId,
@@ -140,8 +141,8 @@ export function createTaskProcessor(config: WorkerConfig, deps?: Partial<TaskPro
           category: record.category as GenerationCategory,
           model: record.model,
           taskId,
-          outputResult: output,
-          cost: actualCost as Record<string, unknown> | undefined,
+          outputResult: output as OutputResult,
+          cost: actualCost ?? undefined,
           canvasMeta,
         })
 

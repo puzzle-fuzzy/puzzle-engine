@@ -24,7 +24,7 @@ function makeCharacterRow(overrides: Partial<CanvasCharacterRow> = {}): CanvasCh
       accessories: [],
       identityPrompt: 'long black hair, red dress',
       negativePrompt: 'blurry',
-    } as any,
+    },
     referenceImageUrl: 'https://cdn.example.com/alice.jpg',
     turnaroundSheetUrl: 'https://cdn.example.com/alice-turnaround.jpg',
     locked: false,
@@ -46,7 +46,11 @@ function makeLocationRow(overrides: Partial<CanvasLocationRow> = {}): CanvasLoca
       location: 'An ancient forest',
       era: 'medieval',
       atmosphere: 'mysterious',
-    } as any,
+      visualRules: { colorPalette: ['dark green', 'brown'], lighting: 'dim', architecture: 'none', floor: 'dirt', backgroundElements: ['trees'] },
+      cameraRules: { axisDirection: 'left-to-right', allowedAngles: ['wide'], forbiddenAngles: [] },
+      scenePrompt: 'A mysterious dark forest',
+      negativePrompt: 'bright, sunny',
+    },
     scenePrompt: 'A mysterious dark forest',
     negativePrompt: 'bright, sunny',
     referenceImageUrl: 'https://cdn.example.com/forest.jpg',
@@ -66,10 +70,10 @@ function makeShotRow(overrides: Partial<CanvasShotRow> = {}): CanvasShotRow {
     locationId: 'loc-1',
     characterIdsJson: ['char-1'],
     narrative: 'Alice walks through the forest',
-    cameraJson: { shotSize: 'medium', angle: 'front', movement: 'dolly in', lens: '35mm' } as any,
-    continuityJson: { screenDirection: 'left_to_right', characterFacing: { 'char-1': 'right' } } as any,
-    timelineJson: [{ time: '0s-1s', action: 'standing' }] as any,
-    environmentJson: { backgroundMotion: 'wind', lighting: 'moonlight' } as any,
+    cameraJson: { shotSize: 'medium', angle: 'front', movement: 'dolly in', lens: '35mm' },
+    continuityJson: { screenDirection: 'left_to_right', characterFacing: { 'char-1': 'right' }, actionStart: 'standing', actionEnd: 'walking', emotionStart: 'neutral', emotionEnd: 'worried' },
+    timelineJson: [{ time: '0s-1s', action: 'standing' }],
+    environmentJson: { backgroundMotion: 'wind', lighting: 'moonlight' },
     videoPrompt: 'A girl walks through a dark forest',
     negativePrompt: 'blurry',
     videoTaskId: 'task-123',
@@ -95,7 +99,8 @@ function makeProjectRow(overrides: Partial<CanvasProjectRow> = {}): CanvasProjec
       timeline: ['start', 'middle', 'end'],
       characterNames: ['Alice'],
       sceneNames: ['Forest'],
-    } as any,
+    },
+    modelPreferencesJson: null,
     canvasLayout: null,
     isDeleted: false,
     createdAt: new Date('2025-01-01T00:00:00Z'),
@@ -216,7 +221,7 @@ describe('mapShot', () => {
     expect(dto.characterIds).toEqual(['char-1'])
     expect(dto.narrative).toBe('Alice walks through the forest')
     expect(dto.camera).toEqual({ shotSize: 'medium', angle: 'front', movement: 'dolly in', lens: '35mm' })
-    expect(dto.continuity).toEqual({ screenDirection: 'left_to_right', characterFacing: { 'char-1': 'right' } })
+    expect(dto.continuity).toEqual({ screenDirection: 'left_to_right', characterFacing: { 'char-1': 'right' }, actionStart: 'standing', actionEnd: 'walking', emotionStart: 'neutral', emotionEnd: 'worried' })
     expect(dto.timeline).toEqual([{ time: '0s-1s', action: 'standing' }])
     expect(dto.environment).toEqual({ backgroundMotion: 'wind', lighting: 'moonlight' })
     expect(dto.videoPrompt).toBe('A girl walks through a dark forest')
@@ -233,8 +238,6 @@ describe('mapShot', () => {
     const row = makeShotRow({
       locationId: null,
       characterIdsJson: null,
-      cameraJson: null,
-      continuityJson: null,
       timelineJson: null,
       environmentJson: null,
       videoPrompt: null,
@@ -246,8 +249,6 @@ describe('mapShot', () => {
     const dto = mapShot(row)
     expect(dto.locationId).toBeNull()
     expect(dto.characterIds).toEqual([])
-    expect(dto.camera).toEqual({})
-    expect(dto.continuity).toEqual({})
     expect(dto.timeline).toBeNull()
     expect(dto.environment).toBeNull()
     expect(dto.videoPrompt).toBeNull()
@@ -295,7 +296,7 @@ describe('mapProjectDetail', () => {
       issuesJson: [
         { severity: 'error', code: 'MISSING_SCENE', message: 'test' },
         { severity: 'warning', code: 'FACING_CHANGE', message: 'test' },
-      ] as any,
+      ],
       createdAt: new Date('2025-01-01T00:00:00Z'),
     }
 

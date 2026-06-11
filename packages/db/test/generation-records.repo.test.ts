@@ -184,7 +184,7 @@ describe('generation-records repository', () => {
       const updated = await getGenerationRecordById(record.id)
       expect(updated!.status).toBe('succeeded')
       expect(updated!.outputResult).toEqual({ url: 'result.png' })
-      expect((updated!.cost as any).totalPrice).toBe(0.01)
+      expect(updated!.cost!.totalPrice).toBe(0.01)
     })
 
     it('should succeed without cost', async () => {
@@ -238,7 +238,7 @@ describe('generation-records repository', () => {
       const testCosts = costs.filter(c => c.model === 'qwen-vl')
       expect(testCosts.length).toBeGreaterThanOrEqual(2)
       testCosts.forEach((c) => {
-        expect(typeof (c.cost as any).totalPrice).toBe('number')
+        expect(typeof c.cost!.totalPrice).toBe('number')
       })
     })
 

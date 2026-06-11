@@ -1,3 +1,4 @@
+import type { ShotCamera, ShotContinuity, ShotEnvironment } from '@excuse/db'
 import type { CanvasModelPreferences, CharacterProfile, LocationProfile, NovelAnalysis, ShotDraft } from '@excuse/shared'
 import type { NormalizedCharacter, NormalizedLocation, NormalizedShot } from './continuity'
 import { calculateCost } from '@excuse/billing'
@@ -120,8 +121,9 @@ async function reconcileProjectShots(projectId: string) {
       continue
 
     if (record.status === 'succeeded') {
-      const output = (record.outputResult as Record<string, unknown>) ?? {}
-      const savedUrls = output.savedUrls as string[] | undefined
+      const output = record.outputResult
+      if (!output || !('savedUrls' in output)) continue
+      const savedUrls = output.savedUrls
       await updateCanvasShot(shot.id, {
         status: 'completed',
         videoUrl: savedUrls?.[0] || undefined,
@@ -208,7 +210,7 @@ export async function analyzeProject(projectId: string, config: { dashscopeApiKe
 
     await updateCanvasProject(projectId, {
       status: 'analyzed',
-      analysisJson: analysis as unknown as Record<string, unknown>,
+      analysisJson: analysis,
     })
 
     notifyNode(project.accountId, projectId, 'analysis', projectId, 'completed', { analysis })
@@ -226,7 +228,7 @@ export async function generateCharacters(projectId: string, config: { dashscopeA
   if (!project || !project.analysisJson)
     throw new Error('项目不存在或未分析')
 
-  const analysis = project.analysisJson as unknown as NovelAnalysis
+  const analysis = project.analysisJson!
   const accountId = project.accountId
 
   await deleteCanvasCharactersByProject(projectId, { excludeLocked: true })
@@ -261,7 +263,7 @@ export async function generateCharacters(projectId: string, config: { dashscopeA
         description: `${profile.age} ${profile.gender} ${profile.bodyShape}`,
         identityPrompt: profile.identityPrompt,
         negativePrompt: profile.negativePrompt,
-        profileJson: profile as unknown as Record<string, unknown>,
+        profileJson: profile,
       })
 
       notifyNode(accountId, projectId, 'character', character.id, 'completed', { name: profile.name, profile })
@@ -281,7 +283,7 @@ export async function generateLocations(projectId: string, config: { dashscopeAp
   if (!project || !project.analysisJson)
     throw new Error('项目不存在或未分析')
 
-  const analysis = project.analysisJson as unknown as NovelAnalysis
+  const analysis = project.analysisJson!
   const accountId = project.accountId
 
   await deleteCanvasLocationsByProject(projectId, { excludeLocked: true })
@@ -312,7 +314,7 @@ export async function generateLocations(projectId: string, config: { dashscopeAp
         projectId,
         name: profile.name || name,
         type: profile.type,
-        profileJson: profile as unknown as Record<string, unknown>,
+        profileJson: profile,
         scenePrompt: profile.scenePrompt,
         negativePrompt: profile.negativePrompt,
       })
@@ -435,7 +437,7 @@ export async function generateStoryboard(projectId: string, config: { dashscopeA
   if (!project.analysisJson)
     throw new Error('项目未分析')
 
-  const analysis = project.analysisJson as unknown as NovelAnalysis
+  const analysis = project.analysisJson!
   const accountId = project.accountId
 
   notifyNode(accountId, projectId, 'storyboard', projectId, 'running')
@@ -471,10 +473,10 @@ export async function generateStoryboard(projectId: string, config: { dashscopeA
       locationId: shot.locationId,
       characterIdsJson: shot.characterIds,
       narrative: shot.narrative,
-      cameraJson: shot.camera as unknown as Record<string, unknown>,
-      continuityJson: shot.continuity as unknown as Record<string, unknown>,
+      cameraJson: shot.camera,
+      continuityJson: shot.continuity,
       timelineJson: shot.timeline ?? null,
-      environmentJson: shot.environment ? shot.environment as unknown as Record<string, unknown> : null,
+      environmentJson: shot.environment ?? null,
     }))
 
     const created = await batchCreateCanvasShots(shotInserts)
@@ -507,10 +509,10 @@ export async function checkContinuity(projectId: string) {
     characterIds: (s.characterIdsJson ?? []) as string[],
     narrative: s.narrative,
     duration: s.duration,
-    camera: (s.cameraJson ?? {}) as NormalizedShot['camera'],
-    continuity: (s.continuityJson ?? {}) as NormalizedShot['continuity'],
-    timeline: (s.timelineJson ?? undefined) as NormalizedShot['timeline'],
-    environment: (s.environmentJson ?? undefined) as NormalizedShot['environment'],
+    camera: s.cameraJson,
+    continuity: s.continuityJson,
+    timeline: s.timelineJson ?? undefined,
+    environment: s.environmentJson ?? undefined,
   }))
 
   const normalizedCharacters: NormalizedCharacter[] = detail.characters.map(c => ({
@@ -521,7 +523,7 @@ export async function checkContinuity(projectId: string) {
   }))
 
   const normalizedLocations: NormalizedLocation[] = detail.locations.map((l) => {
-    const cameraRules = l.profileJson?.['cameraRules'] as NormalizedLocation['cameraRules'] | undefined
+    const cameraRules = l.profileJson?.cameraRules
     return {
       id: l.id,
       name: l.name,
@@ -539,7 +541,7 @@ export async function checkContinuity(projectId: string) {
 
   await createContinuityReport({
     projectId,
-    issuesJson: issues as unknown as Record<string, unknown>[],
+    issuesJson: issues,
   })
 
   notifyNode(accountId, projectId, 'continuity', projectId, 'completed', { issues })
@@ -573,12 +575,12 @@ export async function rebuildShotPrompts(projectId: string) {
         locationId: shot.locationId,
         characterIds: shot.characterIdsJson,
         narrative: shot.narrative,
-        camera: shot.cameraJson as NormalizedShot['camera'],
-        continuity: shot.continuityJson as NormalizedShot['continuity'],
+        camera: shot.cameraJson,
+        continuity: shot.continuityJson,
         timeline: shot.timelineJson ?? undefined,
-        environment: shot.environmentJson as NormalizedShot['environment'],
+        environment: shot.environmentJson ?? undefined,
         duration: shot.duration,
-      } as NormalizedShot,
+      },
       characters: shotCharacters.map(c => ({
         id: c.id,
         name: c.name,
@@ -590,10 +592,10 @@ export async function rebuildShotPrompts(projectId: string) {
         name: shotLocation.name,
         scenePrompt: shotLocation.scenePrompt ?? '',
         negativePrompt: shotLocation.negativePrompt ?? '',
-        cameraRules: (shotLocation.profileJson?.['cameraRules'] as NormalizedLocation['cameraRules'] | undefined) ?? { axisDirection: '', allowedAngles: [] as string[], forbiddenAngles: [] as string[] },
+        cameraRules: shotLocation.profileJson?.cameraRules ?? { axisDirection: '', allowedAngles: [] as string[], forbiddenAngles: [] as string[] },
       },
       timeline: shot.timelineJson ?? undefined,
-      environment: shot.environmentJson as NormalizedShot['environment'],
+      environment: shot.environmentJson ?? undefined,
     })
 
     await updateCanvasShot(shot.id, {
@@ -698,7 +700,7 @@ export async function generateVideos(projectId: string, config: { dashscopeApiKe
 
 export async function updateModelPreferences(projectId: string, prefs: CanvasModelPreferences) {
   await updateCanvasProject(projectId, {
-    modelPreferencesJson: prefs as unknown as Record<string, string>,
+    modelPreferencesJson: prefs,
   })
   return getProjectDetail(projectId)
 }
@@ -731,8 +733,8 @@ export async function updateShotData(shotId: string, patch: {
   locationId?: string
   characterIdsJson?: string[]
   narrative?: string
-  cameraJson?: Record<string, unknown>
-  environmentJson?: Record<string, unknown>
+  cameraJson?: ShotCamera
+  environmentJson?: ShotEnvironment
   videoPrompt?: string
 }) {
   return updateCanvasShot(shotId, patch)

@@ -1,4 +1,4 @@
-import type { GenerationCategory, GenerationStatus } from '@excuse/db'
+import type { CostDetail, GenerationCategory, OutputResult, GenerationStatus } from '@excuse/db'
 
 // ===== SSE 事件类型定义 =====
 
@@ -13,9 +13,9 @@ export interface GenerationNotifyPayload {
   category: GenerationCategory
   model: string
   taskId: string
-  outputResult?: Record<string, unknown>
+  outputResult?: OutputResult
   errorMessage?: string
-  cost?: Record<string, unknown>
+  cost?: CostDetail
   /** Canvas pipeline metadata (present when source === 'canvas') */
   canvasMeta?: {
     projectId: string
@@ -33,9 +33,9 @@ export interface SSEGenerationStatusEvent {
   status: GenerationStatus
   category: GenerationCategory
   model: string
-  outputResult?: Record<string, unknown>
+  outputResult?: OutputResult
   errorMessage?: string
-  cost?: Record<string, unknown>
+  cost?: CostDetail
 }
 
 /**

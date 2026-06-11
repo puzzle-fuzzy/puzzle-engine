@@ -1,11 +1,16 @@
+import currency from 'currency.js'
+import type { CostDetail } from '@excuse/shared'
 import type { ModelConfig } from '@excuse/shared'
 
 /**
- * 计算单次生成的费用
+ * 计算单次生成的费用（整数分计费）
  *
- * - 文本：按输入/输出 token 数 × 每百万 token 价格
- * - 图片：按张数 × 单价
- * - 视频：按时长（秒）× 单价（按分辨率）
+ * - 文本：按输入/输出 token 数 × 每百万 token 价格（分）
+ * - 图片：按张数 × 单价（分）
+ * - 视频：按时长（秒）× 单价（分，按分辨率）
+ *
+ * 所有金额运算使用 currency.js，避免浮点误差。
+ * totalPriceCents 为权威整数值，totalPrice 为向后兼容的浮点值。
  */
 export function calculateCost(
   model: ModelConfig,
@@ -16,72 +21,86 @@ export function calculateCost(
     imageCount?: number
     videoDuration?: number
   },
-): Record<string, unknown> {
+): CostDetail {
   const pricing = model.pricing
 
   switch (pricing.unit) {
     case 'token': {
-      // 文本生成
       const inputTokens = usage?.inputTokens || 0
       const outputTokens = usage?.outputTokens || 0
-      const inputCost = (inputTokens / 1_000_000) * (pricing.inputPrice || 0)
-      const outputCost = (outputTokens / 1_000_000) * (pricing.outputPrice || 0)
-      const total = roundTo4(inputCost + outputCost)
+
+      const inputCostCents = currency(pricing.inputPriceCents)
+        .multiply(inputTokens)
+        .divide(1_000_000).value
+      const outputCostCents = currency(pricing.outputPriceCents || 0)
+        .multiply(outputTokens)
+        .divide(1_000_000).value
+      const totalCents = currency(inputCostCents).add(outputCostCents).value
 
       return {
         unit: 'token',
         inputTokens,
         outputTokens,
-        inputUnitPrice: pricing.inputPrice,
-        outputUnitPrice: pricing.outputPrice,
-        inputCost: roundTo4(inputCost),
-        outputCost: roundTo4(outputCost),
-        totalPrice: total,
+        inputUnitPriceCents: pricing.inputPriceCents,
+        inputUnitPrice: centsToYuan(pricing.inputPriceCents),
+        outputUnitPriceCents: pricing.outputPriceCents,
+        outputUnitPrice: pricing.outputPriceCents ? centsToYuan(pricing.outputPriceCents) : undefined,
+        inputCostCents,
+        inputCost: centsToYuan(inputCostCents),
+        outputCostCents,
+        outputCost: centsToYuan(outputCostCents),
+        totalPriceCents: totalCents,
+        totalPrice: centsToYuan(totalCents),
       }
     }
 
     case 'image': {
-      // 图片生成
-      const count = usage?.imageCount || (params.n as number) || 1
-      const unitPrice = pricing.inputPrice
-      const total = roundTo4(count * unitPrice)
+      const count = usage?.imageCount || (typeof params.n === 'number' ? params.n : 1)
+      const totalCents = currency(pricing.inputPriceCents).multiply(count).value
 
       return {
         unit: 'image',
         quantity: count,
-        unitPrice,
-        totalPrice: total,
+        unitPriceCents: pricing.inputPriceCents,
+        unitPrice: centsToYuan(pricing.inputPriceCents),
+        totalPriceCents: totalCents,
+        totalPrice: centsToYuan(totalCents),
       }
     }
 
     case 'video': {
-      // 视频生成
-      const duration = usage?.videoDuration || (params.duration as number) || 5
-      const resolution = (params.resolution as string) || '720P'
-      const unitPrice = resolution === '1080P' ? (pricing.inputPrice1080 || pricing.inputPrice) : pricing.inputPrice
-      const total = roundTo4(duration * unitPrice)
+      const duration = usage?.videoDuration || (typeof params.duration === 'number' ? params.duration : 5)
+      const resolution = typeof params.resolution === 'string' ? params.resolution : '720P'
+      const unitPriceCents = resolution === '1080P'
+        ? (pricing.inputPrice1080Cents || pricing.inputPriceCents)
+        : pricing.inputPriceCents
+      const totalCents = currency(unitPriceCents).multiply(duration).value
 
       return {
         unit: 'video',
         duration,
         resolution,
-        unitPrice,
-        totalPrice: total,
+        unitPriceCents,
+        unitPrice: centsToYuan(unitPriceCents),
+        totalPriceCents: totalCents,
+        totalPrice: centsToYuan(totalCents),
       }
     }
 
     default:
-      return { unit: 'unknown', totalPrice: 0 }
+      throw new Error(`未知的计费单位: ${pricing.unit}`)
   }
 }
 
 /**
  * 预估费用（生成前调用，用于显示）
  */
-export function estimateCost(model: ModelConfig, params: Record<string, unknown>): Record<string, unknown> {
-  return calculateCost(model, params, undefined)
+export function estimateCost(model: ModelConfig, params: Record<string, unknown>): CostDetail {
+  const result = calculateCost(model, params, undefined)
+  result.estimated = true
+  return result
 }
 
-function roundTo4(n: number): number {
-  return Math.round(n * 10000) / 10000
+function centsToYuan(cents: number): number {
+  return currency(cents, { fromCents: true }).value / 100
 }

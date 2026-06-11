@@ -6,6 +6,7 @@
       "name": "excuse",
       "dependencies": {
         "@elysiajs/swagger": "^1.3.1",
+        "currency.js": "^2.0.4",
         "drizzle-orm": "^0.45.2",
         "pg": "^8.21.0",
       },
@@ -35,6 +36,7 @@
         "@xyflow/react": "^12.11.0",
         "class-variance-authority": "^0.7.1",
         "clsx": "^2.1.1",
+        "currency.js": "2",
         "lucide-react": "^1.17.0",
         "next-themes": "^0.4.6",
         "radix-ui": "^1.5.0",
@@ -105,6 +107,7 @@
       "version": "0.0.1",
       "dependencies": {
         "@excuse/shared": "workspace:*",
+        "currency.js": "2",
       },
     },
     "packages/db": {
@@ -901,6 +904,8 @@
     "cssesc": ["cssesc@3.0.0", "https://registry.npmmirror.com/cssesc/-/cssesc-3.0.0.tgz", { "bin": { "cssesc": "bin/cssesc" } }, "sha512-/Tb/JcjK111nNScGob5MNtsntNM1aCNUDipB/TkwZFhyDrrE47SOx/18wF2bbjgc3ZzCSKW1T5nt5EbFoAz/Vg=="],
 
     "csstype": ["csstype@3.2.3", "https://registry.npmmirror.com/csstype/-/csstype-3.2.3.tgz", {}, "sha512-z1HGKcYy2xA8AGQfwrn0PAy+PB7X/GSj3UVJW9qKyn43xWa+gl5nXmU4qqLMRzWVLFC8KusUX8T/0kCiOYpAIQ=="],
+
+    "currency.js": ["currency.js@2.0.4", "https://registry.npmmirror.com/currency.js/-/currency.js-2.0.4.tgz", {}, "sha512-6/OplJYgJ0RUlli74d93HJ/OsKVBi8lB1+Z6eJYS1YZzBuIp4qKKHpJ7ad+GvTlWmLR/hLJOWTykN5Nm8NJ7+w=="],
 
     "d3-color": ["d3-color@3.1.0", "https://registry.npmmirror.com/d3-color/-/d3-color-3.1.0.tgz", {}, "sha512-zg/chbXyeBtMQ1LbD/WSoW2DpC3I0mpmPdW+ynRTj/x2DAWYrIY7qeZIHidozwV24m4iavr15lNwIwLxRmOxhA=="],
 

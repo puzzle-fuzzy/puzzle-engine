@@ -1,3 +1,4 @@
+import type { ShotCamera, ShotContinuity, ShotEnvironment, ShotTimelineEntry } from '@excuse/db'
 // ===== 画布流水线领域类型 =====
 
 /** 用户可选择的模型类别偏好 */
@@ -149,10 +150,10 @@ export interface ShotDTO {
   locationId: string | null
   characterIds: string[]
   narrative: string
-  camera: Record<string, unknown>
-  continuity: Record<string, unknown>
-  timeline: Array<{ time: string, action: string }> | null
-  environment: Record<string, unknown> | null
+  camera: ShotCamera
+  continuity: ShotContinuity
+  timeline: ShotTimelineEntry[] | null
+  environment: ShotEnvironment | null
   videoPrompt: string | null
   negativePrompt: string | null
   videoTaskId: string | null

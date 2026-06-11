@@ -87,7 +87,7 @@ describe('canvas repositories', () => {
         accountId,
         title: '测试项目',
         storyText: '故事',
-        analysisJson: { summary: '摘要' },
+        analysisJson: { summary: '摘要', mainConflict: '冲突', timeline: [], characterNames: [], sceneNames: [] },
       })
 
       expect(project.title).toBe('测试项目')
@@ -108,7 +108,7 @@ describe('canvas repositories', () => {
       const updated = await updateCanvasProject(project.id, {
         title: '更新标题',
         status: 'analyzed',
-        analysisJson: { mainConflict: '冲突' },
+        analysisJson: { mainConflict: '冲突', summary: '', timeline: [], characterNames: [], sceneNames: [] },
       })
 
       expect(updated).not.toBeNull()
@@ -295,8 +295,8 @@ describe('canvas repositories', () => {
         projectId,
         shotIndex: 1,
         narrative: '角色走入场景',
-        cameraJson: { shotSize: '中景', angle: '正面' },
-        continuityJson: { screenDirection: '左→右' },
+        cameraJson: { shotSize: '中景', angle: '正面', movement: '固定', lens: '35mm' },
+        continuityJson: { screenDirection: '左→右', characterFacing: {}, actionStart: '', actionEnd: '', emotionStart: '', emotionEnd: '' },
       })
 
       expect(shot.id).toBeDefined()
@@ -314,8 +314,8 @@ describe('canvas repositories', () => {
 
     it('should batch create shots', async () => {
       const shots = await batchCreateCanvasShots([
-        { projectId, shotIndex: 1, narrative: '镜头1', cameraJson: {}, continuityJson: {} },
-        { projectId, shotIndex: 2, narrative: '镜头2', cameraJson: {}, continuityJson: {} },
+        { projectId, shotIndex: 1, narrative: '镜头1', cameraJson: { shotSize: '中景', angle: '正面', movement: '固定', lens: '35mm' }, continuityJson: { screenDirection: '左→右', characterFacing: {}, actionStart: '', actionEnd: '', emotionStart: '', emotionEnd: '' } },
+        { projectId, shotIndex: 2, narrative: '镜头2', cameraJson: { shotSize: '中景', angle: '正面', movement: '固定', lens: '35mm' }, continuityJson: { screenDirection: '左→右', characterFacing: {}, actionStart: '', actionEnd: '', emotionStart: '', emotionEnd: '' } },
       ])
 
       expect(shots).toHaveLength(2)
@@ -324,9 +324,9 @@ describe('canvas repositories', () => {
     })
 
     it('should list shots by project ordered by shotIndex', async () => {
-      await createCanvasShot({ projectId, shotIndex: 3, narrative: '镜头3', cameraJson: {}, continuityJson: {} })
-      await createCanvasShot({ projectId, shotIndex: 1, narrative: '镜头1', cameraJson: {}, continuityJson: {} })
-      await createCanvasShot({ projectId, shotIndex: 2, narrative: '镜头2', cameraJson: {}, continuityJson: {} })
+      await createCanvasShot({ projectId, shotIndex: 3, narrative: '镜头3', cameraJson: { shotSize: '中景', angle: '正面', movement: '固定', lens: '35mm' }, continuityJson: { screenDirection: '左→右', characterFacing: {}, actionStart: '', actionEnd: '', emotionStart: '', emotionEnd: '' } })
+      await createCanvasShot({ projectId, shotIndex: 1, narrative: '镜头1', cameraJson: { shotSize: '中景', angle: '正面', movement: '固定', lens: '35mm' }, continuityJson: { screenDirection: '左→右', characterFacing: {}, actionStart: '', actionEnd: '', emotionStart: '', emotionEnd: '' } })
+      await createCanvasShot({ projectId, shotIndex: 2, narrative: '镜头2', cameraJson: { shotSize: '中景', angle: '正面', movement: '固定', lens: '35mm' }, continuityJson: { screenDirection: '左→右', characterFacing: {}, actionStart: '', actionEnd: '', emotionStart: '', emotionEnd: '' } })
 
       const list = await listCanvasShotsByProject(projectId)
       expect(list).toHaveLength(3)
@@ -336,7 +336,7 @@ describe('canvas repositories', () => {
     })
 
     it('should update shot fields', async () => {
-      const shot = await createCanvasShot({ projectId, shotIndex: 1, narrative: '原始', cameraJson: {}, continuityJson: {} })
+      const shot = await createCanvasShot({ projectId, shotIndex: 1, narrative: '原始', cameraJson: { shotSize: '中景', angle: '正面', movement: '固定', lens: '35mm' }, continuityJson: { screenDirection: '左→右', characterFacing: {}, actionStart: '', actionEnd: '', emotionStart: '', emotionEnd: '' } })
 
       const updated = await updateCanvasShot(shot.id, {
         narrative: '更新叙述',
@@ -350,7 +350,7 @@ describe('canvas repositories', () => {
     })
 
     it('should reset shot to draft', async () => {
-      const shot = await createCanvasShot({ projectId, shotIndex: 1, narrative: '镜头', cameraJson: {}, continuityJson: {} })
+      const shot = await createCanvasShot({ projectId, shotIndex: 1, narrative: '镜头', cameraJson: { shotSize: '中景', angle: '正面', movement: '固定', lens: '35mm' }, continuityJson: { screenDirection: '左→右', characterFacing: {}, actionStart: '', actionEnd: '', emotionStart: '', emotionEnd: '' } })
       await updateCanvasShot(shot.id, { status: 'generating', videoTaskId: 'task-123' })
 
       await resetCanvasShotToDraft(shot.id)
@@ -363,7 +363,7 @@ describe('canvas repositories', () => {
     })
 
     it('should delete shots by project', async () => {
-      await createCanvasShot({ projectId, shotIndex: 1, narrative: '镜头', cameraJson: {}, continuityJson: {} })
+      await createCanvasShot({ projectId, shotIndex: 1, narrative: '镜头', cameraJson: { shotSize: '中景', angle: '正面', movement: '固定', lens: '35mm' }, continuityJson: { screenDirection: '左→右', characterFacing: {}, actionStart: '', actionEnd: '', emotionStart: '', emotionEnd: '' } })
       await deleteCanvasShotsByProject(projectId)
 
       const list = await listCanvasShotsByProject(projectId)

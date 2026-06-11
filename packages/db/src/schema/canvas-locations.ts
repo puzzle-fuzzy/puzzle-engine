@@ -1,3 +1,4 @@
+import type { LocationProfile } from '../domain-types'
 import { boolean, index, jsonb, pgTable, text, timestamp, uuid, varchar } from 'drizzle-orm/pg-core'
 import { canvasProjects } from './canvas-projects'
 
@@ -6,7 +7,7 @@ export const canvasLocations = pgTable('canvas_locations', {
   projectId: uuid('project_id').references(() => canvasProjects.id).notNull(),
   name: varchar('name', { length: 200 }).notNull(),
   type: varchar('type', { length: 50 }).default('mixed').notNull(),
-  profileJson: jsonb('profile_json').$type<Record<string, unknown>>(),
+  profileJson: jsonb('profile_json').$type<LocationProfile>(),
   scenePrompt: text('scene_prompt'),
   negativePrompt: text('negative_prompt'),
   referenceImageUrl: text('reference_image_url'),

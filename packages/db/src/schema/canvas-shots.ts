@@ -1,3 +1,4 @@
+import type { ShotCamera, ShotContinuity, ShotEnvironment, ShotTimelineEntry } from '../domain-types'
 import { integer, index, jsonb, pgEnum, pgTable, text, timestamp, uuid, varchar } from 'drizzle-orm/pg-core'
 import { canvasLocations } from './canvas-locations'
 import { canvasProjects } from './canvas-projects'
@@ -18,10 +19,10 @@ export const canvasShots = pgTable('canvas_shots', {
   locationId: uuid('location_id').references(() => canvasLocations.id),
   characterIdsJson: jsonb('character_ids_json').$type<string[]>().default([]).notNull(),
   narrative: text('narrative').notNull(),
-  cameraJson: jsonb('camera_json').$type<Record<string, unknown>>().notNull(),
-  continuityJson: jsonb('continuity_json').$type<Record<string, unknown>>().notNull(),
-  timelineJson: jsonb('timeline_json').$type<Array<{ time: string, action: string }>>(),
-  environmentJson: jsonb('environment_json').$type<Record<string, unknown>>(),
+  cameraJson: jsonb('camera_json').$type<ShotCamera>().notNull(),
+  continuityJson: jsonb('continuity_json').$type<ShotContinuity>().notNull(),
+  timelineJson: jsonb('timeline_json').$type<ShotTimelineEntry[]>(),
+  environmentJson: jsonb('environment_json').$type<ShotEnvironment>(),
   videoPrompt: text('video_prompt'),
   negativePrompt: text('negative_prompt'),
   videoTaskId: varchar('video_task_id', { length: 255 }),
