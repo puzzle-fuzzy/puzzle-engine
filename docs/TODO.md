@@ -372,7 +372,7 @@
 
 ### Phase 4 — 运维可观测（1-2 周）
 1. Prometheus metrics
-2. OpenAPI spec（@elysiajs/swagger）
+2. OpenAPI spec（@elysiajs/openapi）
 3. 数据保留策略
 4. 生产部署方案（Dockerfile + nginx + compose.prod）
 
