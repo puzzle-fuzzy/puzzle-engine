@@ -21,6 +21,11 @@ const mockMarkSucceeded = mock(() => Promise.resolve(undefined))
 const mockCalculateCost = mock(() => ({ unit: 'token', totalPrice: 0.01 }))
 const mockGenerate = mock(() => Promise.resolve({ success: false, error: 'mock error' }))
 
+const mockNotifyStatus = mock(() => Promise.resolve(undefined))
+const mockGetUploadedFilesByIds = mock(() => Promise.resolve([]))
+const mockCancelRecord = mock(() => Promise.resolve(undefined))
+const mockResetToPending = mock(() => Promise.resolve(undefined))
+
 mock.module('@excuse/db', () => ({
   createGenerationRecord: mockCreateRecord,
   listGenerationRecords: mockListRecords,
@@ -29,6 +34,10 @@ mock.module('@excuse/db', () => ({
   markGenerationFailed: mockMarkFailed,
   markGenerationProcessing: mockMarkProcessing,
   markGenerationSucceeded: mockMarkSucceeded,
+  notifyGenerationStatus: mockNotifyStatus,
+  getUploadedFilesByIds: mockGetUploadedFilesByIds,
+  cancelGenerationRecord: mockCancelRecord,
+  resetGenerationToPending: mockResetToPending,
 }))
 
 mock.module('@excuse/provider', () => ({
@@ -141,6 +150,10 @@ describe('generate routes', () => {
     mockMarkSucceeded.mockClear()
     mockCalculateCost.mockClear()
     mockGenerate.mockClear()
+    mockNotifyStatus.mockClear()
+    mockGetUploadedFilesByIds.mockClear()
+    mockCancelRecord.mockClear()
+    mockResetToPending.mockClear()
 
     const app = createGenerateRoutes(testConfig)
     client = treaty(app)
@@ -175,6 +188,7 @@ describe('generate routes', () => {
 
     it('同步模型（文本）成功时标记为 succeeded', async () => {
       mockCreateRecord.mockResolvedValue(makeRecord())
+      mockGetRecordById.mockResolvedValue(makeRecord({ status: 'succeeded' }))
       mockGenerate.mockResolvedValue({
         success: true,
         output: { text: '你好' },
@@ -188,12 +202,13 @@ describe('generate routes', () => {
       )
 
       expect(data?.success).toBe(true)
-      expect(data?.status).toBe('succeeded')
+      expect(data?.record?.status).toBe('succeeded')
       expect(mockMarkSucceeded).toHaveBeenCalled()
     })
 
     it('同步模型 API 失败时标记为 failed', async () => {
       mockCreateRecord.mockResolvedValue(makeRecord())
+      mockGetRecordById.mockResolvedValue(makeRecord({ status: 'failed' }))
       mockGenerate.mockResolvedValue({
         success: false,
         error: 'API 错误',
@@ -205,12 +220,13 @@ describe('generate routes', () => {
       )
 
       expect(data?.success).toBe(false)
-      expect(data?.status).toBe('failed')
+      expect(data?.record?.status).toBe('failed')
       expect(mockMarkFailed).toHaveBeenCalled()
     })
 
     it('缺少 prompt 参数时由模型验证层拒绝', async () => {
       mockCreateRecord.mockResolvedValue(makeRecord())
+      mockGetRecordById.mockResolvedValue(makeRecord({ status: 'failed' }))
       // getModelById('qwen-max') 返回的模型参数中有 prompt required，
       // 路由层会检测到缺少必填参数
       mockGenerate.mockResolvedValue({
@@ -226,7 +242,7 @@ describe('generate routes', () => {
 
       // 缺少必填参数应返回失败
       expect(data?.success).toBe(false)
-      expect(data?.status).toBe('failed')
+      expect(data?.record?.status).toBe('failed')
     })
   })
 
@@ -296,10 +312,13 @@ describe('generate routes', () => {
   // ═══════════════════════════════════════════════════
 
   describe('GET /api/records/:id', () => {
-    it('未登录时返回错误', async () => {
+    it('未登录时也能查询单条记录（公开接口）', async () => {
+      mockGetRecordById.mockResolvedValue(makeRecord())
+
       const { data } = await client.api.records({ id: 'rec-001' }).get()
 
-      expect(data?.success === false || data === undefined).toBe(true)
+      expect(data?.success).toBe(true)
+      expect(data?.record).toBeDefined()
     })
 
     it('返回单条记录', async () => {
