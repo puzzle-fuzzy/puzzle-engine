@@ -72,8 +72,10 @@ export default app
 app.listen(config.port)
 
 // 启动 PostgreSQL LISTEN — 接收 Worker 的生成状态通知并推送到 SSE 客户端
-startSSEListener().catch((err: any) => {
-  const code = err?.aggregateErrors?.[0]?.code || err?.code
+startSSEListener().catch((err: unknown) => {
+  const error = err instanceof Error ? err : null
+  const aggregateCode = (error?.cause as { aggregateErrors?: Array<{ code?: string }> } | undefined)?.aggregateErrors?.[0]?.code
+  const code = aggregateCode ?? (error as NodeJS.ErrnoException)?.code
   if (code === 'ECONNREFUSED') {
     logger.error('❌ PostgreSQL 未启动（连接被拒绝），请检查数据库服务')
   }

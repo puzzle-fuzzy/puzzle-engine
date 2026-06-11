@@ -2,6 +2,7 @@ import type { FormEvent } from 'react'
 import { Loader2 } from 'lucide-react'
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router'
+import { getErrorMessage } from '@excuse/shared'
 import { useAuth } from '../auth/AuthContext'
 import { Button } from '../components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card'
@@ -30,8 +31,8 @@ export default function Login() {
       await login(email.trim(), password)
       navigate('/')
     }
-    catch (err: any) {
-      setError(err?.message || '登录失败，请重试')
+    catch (err: unknown) {
+      setError(getErrorMessage(err) || '登录失败，请重试')
     }
     finally {
       setLoading(false)

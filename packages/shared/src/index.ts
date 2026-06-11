@@ -1,6 +1,7 @@
 export * from './auth'
 export * from './billing'
 export * from './canvas'
+export * from './error'
 export * from './generation'
 export * from './logger'
 export * from './models'

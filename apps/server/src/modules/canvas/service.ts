@@ -1,5 +1,6 @@
 import type { ShotCamera, ShotEnvironment } from '@excuse/db'
 import type { CanvasModelPreferences, CharacterProfile, LocationProfile, NovelAnalysis, ShotDraft } from '@excuse/shared'
+import type { OSSConfig } from '@excuse/provider'
 import type { NormalizedCharacter, NormalizedLocation, NormalizedShot } from './continuity'
 import { calculateCost } from '@excuse/billing'
 import {
@@ -345,7 +346,7 @@ export async function generateLocations(projectId: string, config: { dashscopeAp
   return getProjectDetail(projectId)
 }
 
-export async function generateCharacterRefs(projectId: string, config: { dashscopeApiKey: string, dashscopeBaseUrl?: string, storageRoot: string, oss?: any }) {
+export async function generateCharacterRefs(projectId: string, config: { dashscopeApiKey: string, dashscopeBaseUrl?: string, storageRoot: string, oss?: OSSConfig }) {
   const detail = await getCanvasProjectDetail(projectId)
   if (!detail)
     throw new Error('项目不存在')
@@ -402,7 +403,7 @@ export async function generateCharacterRefs(projectId: string, config: { dashsco
   return getProjectDetail(projectId)
 }
 
-export async function generateLocationRefs(projectId: string, config: { dashscopeApiKey: string, dashscopeBaseUrl?: string, storageRoot: string, oss?: any }) {
+export async function generateLocationRefs(projectId: string, config: { dashscopeApiKey: string, dashscopeBaseUrl?: string, storageRoot: string, oss?: OSSConfig }) {
   const detail = await getCanvasProjectDetail(projectId)
   if (!detail)
     throw new Error('项目不存在')
