@@ -1,6 +1,10 @@
 import type { CostDetail, ModelConfig } from '@excuse/shared'
 import currency from 'currency.js'
 
+/**
+ * currency.js 精度配置 — 4 位小数确保分→元转换和乘法累加时不丢精度
+ * 例如: 9999999 分 × 0.0001 = 999.9999 元，2 位精度会截断为 1000.00
+ */
 const PRECISION = { precision: 4 }
 
 /**
@@ -26,6 +30,7 @@ export function calculateCost(
   const pricing = model.pricing
 
   switch (pricing.unit) {
+    // token 计费: 输入/输出分别按每百万 token 单价计算
     case 'token': {
       const inputTokens = usage?.inputTokens || 0
       const outputTokens = usage?.outputTokens || 0
@@ -57,6 +62,7 @@ export function calculateCost(
       }
     }
 
+    // 图片计费: 按张数 × 单价，张数优先取 usage.imageCount，其次取 params.n，默认 1
     case 'image': {
       const count = usage?.imageCount || (typeof params.n === 'number' ? params.n : 1)
       const totalCents = currency(pricing.inputPriceCents, PRECISION).multiply(count).value
@@ -71,6 +77,7 @@ export function calculateCost(
       }
     }
 
+    // 视频计费: 按时长（秒）× 单价，1080P 优先使用独立定价，缺省回退到基础定价
     case 'video': {
       const duration = usage?.videoDuration || (typeof params.duration === 'number' ? params.duration : 5)
       const resolution = typeof params.resolution === 'string' ? params.resolution : '720P'
@@ -96,7 +103,10 @@ export function calculateCost(
 }
 
 /**
- * 预估费用（生成前调用，用于显示）
+ * 预估费用（生成前调用，用于前端展示）
+ *
+ * 与 calculateCost 相同计算逻辑，但标记 estimated=true，
+ * usage 参数传 undefined 表示未获得实际用量，使用默认值估算。
  */
 export function estimateCost(model: ModelConfig, params: Record<string, unknown>): CostDetail {
   const result = calculateCost(model, params, undefined)
@@ -104,6 +114,14 @@ export function estimateCost(model: ModelConfig, params: Record<string, unknown>
   return result
 }
 
+/**
+ * 分 → 元转换（保留 2 位小数）
+ *
+ * 算术: cents * 100 / 10000 = cents / 100
+ * 使用 Math.round 避免浮点误差（例: 1999 → 19.99，而非 19.989999...）
+ *
+ * 不变量: totalPriceCents（整数分）为权威值，totalPrice（元）仅为展示派生值
+ */
 function centsToYuan(cents: number): number {
   return Math.round(cents * 100) / 10000
 }

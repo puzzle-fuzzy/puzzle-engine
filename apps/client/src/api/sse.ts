@@ -2,6 +2,13 @@ import type { SSEGenerationStatusEvent, SSENotificationEvent, SSEPipelineNodeEve
 import { fetchEventSource } from '@microsoft/fetch-event-source'
 import { getAuthToken } from './client'
 
+/**
+ * SSE 事件类型映射 — 服务器推送的事件名与 payload 结构
+ *
+ * - generation_status: 生成任务状态变更（pending → processing → succeeded/failed）
+ * - pipeline_node_update: Canvas pipeline 各节点进度更新
+ * - notification: 系统通知（余额预警、任务完成等）
+ */
 interface SSEEventMap {
   generation_status: SSEGenerationStatusEvent
   pipeline_node_update: SSEPipelineNodeEvent
@@ -9,6 +16,10 @@ interface SSEEventMap {
 }
 
 // ===== 错误类型 — 控制重连策略 =====
+// fetch-event-source 通过 onopen 抛出的错误类型决定是否重连：
+//   - RetriableError: onerror 返回延迟值后自动重试（5xx、网络中断）
+//   - FatalError: 不重连，连接终止（4xx 非 401/403）
+//   - UnauthorizedError: 401/403，停止重连并清理登录态
 
 class RetriableError extends Error {}
 class FatalError extends Error {}
@@ -28,6 +39,7 @@ class SSEClient {
   private isConnecting = false
   private handlers: { [K in keyof SSEEventMap]?: Set<(data: SSEEventMap[K]) => void> } = {}
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null
+  /** 用户主动调用 disconnect() 时为 true，此时不触发自动重连 */
   private intentionallyClosed = false
 
   /**
@@ -93,7 +105,7 @@ class SSEClient {
           this.scheduleReconnect()
         }
       },
-      openWhenHidden: true,
+      openWhenHidden: true, // 保持后台 tab 连接不断开，确保 Canvas 页面切走后仍能收到 pipeline 更新
     }).catch((err) => {
       this.cleanupConnection()
       if (!this.intentionallyClosed && !(err instanceof UnauthorizedError)) {
@@ -117,15 +129,12 @@ class SSEClient {
    * @returns 取消订阅的函数
    */
   on<K extends keyof SSEEventMap>(event: K, handler: (data: SSEEventMap[K]) => void): () => void {
-    const set = this.handlers[event] as Set<(data: SSEEventMap[K]) => void> | undefined
+    let set = this.handlers[event] as Set<(data: SSEEventMap[K]) => void> | undefined
     if (!set) {
-      const newSet = new Set<(data: SSEEventMap[K]) => void>()
-      this.handlers[event] = newSet as any
-      newSet.add(handler)
+      set = new Set<(data: SSEEventMap[K]) => void>()
+      ;(this.handlers as Record<string, unknown>)[event] = set
     }
-    else {
-      set.add(handler)
-    }
+    set.add(handler)
     return () => {
       const existing = this.handlers[event] as Set<(data: SSEEventMap[K]) => void> | undefined
       existing?.delete(handler)
@@ -152,6 +161,7 @@ class SSEClient {
           this.emit('notification', JSON.parse(data) as SSENotificationEvent)
           break
         case 'heartbeat':
+          // 服务端 30s 心跳，无需业务处理；连接本身保活由 fetch-event-source 管理
           break
         case 'connected':
           console.info('[SSE] Connected:', data)

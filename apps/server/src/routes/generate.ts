@@ -19,6 +19,20 @@ import { AssetStorage, DashScopeClient, getModelById } from '@excuse/provider'
 import { Elysia, t } from 'elysia'
 import { createAuthPlugin } from '../plugins/auth'
 
+/**
+ * 生成任务路由 — CRUD + retry/cancel
+ *
+ * 任务状态机:
+ *   pending → (provider 调用) → processing → succeeded / failed
+ *   pending → (用户取消) → cancelled (等同 failed + errorMessage='用户取消')
+ *   failed → (retry) → pending → ...
+ *
+ * 关键约束:
+ *   - dedupe: 同一用户 + 同模型 + 同参数在 pending/processing 时不重复提交
+ *   - referenceFileIds: 必须属于当前用户，校验在 DB 写入之后但在 provider 调用之前
+ *   - 异步任务（视频）: provider 返回 providerTaskId，Worker 轮询完成后更新
+ *   - 同步任务（文本/图片）: 直接下载并保存输出，一步到位
+ */
 export function createGenerateRoutes(config: ServerConfig) {
   const client = new DashScopeClient({
     apiKey: config.dashscopeApiKey,
@@ -247,7 +261,7 @@ export function createGenerateRoutes(config: ServerConfig) {
       }),
     })
 
-    // 重试失败任务
+    // 重试失败任务 — 重走完整的 provider 调用流程（参数校验 → 调用 → 结果处理）
     .post('/records/:id/retry', async ({ params, userId }) => {
       if (!userId)
         return { success: false, error: '请先登录' }
@@ -348,7 +362,7 @@ export function createGenerateRoutes(config: ServerConfig) {
       }),
     })
 
-    // 取消进行中的任务
+    // 取消进行中的任务 — 同时通知 provider 取消（best-effort）+ 更新 DB + SSE 推送
     .post('/records/:id/cancel', async ({ params, userId }) => {
       if (!userId)
         return { success: false, error: '请先登录' }
@@ -361,7 +375,7 @@ export function createGenerateRoutes(config: ServerConfig) {
       if (record.status !== 'pending' && record.status !== 'processing')
         return { success: false, error: '只能取消等待中或处理中的任务' }
 
-      // Try to cancel at DashScope if we have a taskId
+      // 尝试在 provider 侧取消（best-effort：即使 provider 取消失败，DB 和 SSE 仍标记为已取消）
       if (record.taskId) {
         await client.cancelTask(record.taskId)
       }

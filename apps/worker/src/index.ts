@@ -7,8 +7,16 @@ const config = loadConfig()
 const processor = createTaskProcessor(config)
 const logger = createLogger('worker')
 
+/**
+ * 轮询循环控制状态
+ *
+ * running: SIGINT/SIGTERM 时置 false，循环在下一轮检查后退出
+ * currentTaskPromise: 当前正在处理的任务，用于优雅退出时等待其完成
+ */
 let running = true
 let currentTaskPromise: Promise<TaskResult> | null = null
+
+/** 优雅退出最大等待时间 — 超过此时间强制退出，避免长时间挂起 */
 const GRACEFUL_TIMEOUT_MS = 30_000
 
 // ── 优雅退出 ──────────────────────────────────────────
@@ -39,7 +47,17 @@ for (const signal of ['SIGINT', 'SIGTERM'] as const) {
 }
 
 // ── 轮询循环 ──────────────────────────────────────────
-async function main() {
+/**
+ * Worker 主循环 — 持续轮询 DB 中 pending 的视频任务并处理
+ *
+ * 流程: pollPendingVideoTasks() → processor.processTask() → 根据 action 结果处理
+ * 退出: SIGINT/SIGTERM → running=false → 当前任务完成后退出（最长 30s）
+ *
+ * 恢复策略:
+ *   - ECONNREFUSED: DB 不可用时立即停止 worker（需人工检查 DB 服务）
+ *   - 其他错误: 记录日志后继续下一轮轮询
+ *   - 半完成状态: pollPendingVideoTasks 会重新捞取 processing 但 provider 已返回结果的任务
+ */
   logger.info({ pollIntervalMs: config.pollIntervalMs }, '🤖 Worker started')
 
   while (running) {
@@ -56,6 +74,10 @@ async function main() {
         const result = await currentTaskPromise
         currentTaskPromise = null
 
+        // result.action 含义:
+        //   completed — 任务成功完成，结果已写入 DB
+        //   skipped — 记录无 taskId 或已被其他 worker 处理，跳过
+        //   ignored — provider 返回未识别状态，记录警告
         switch (result.action) {
           case 'completed':
             taskLogger.info('✅ Task completed')
@@ -71,8 +93,10 @@ async function main() {
         }
       }
     }
-    catch (error: any) {
-      const code = error?.cause?.code || error?.code
+    catch (error: unknown) {
+      const err = error instanceof Error ? error : null
+      const code = (err?.cause as { code?: string } | undefined)?.code
+        ?? (err as NodeJS.ErrnoException)?.code
       if (code === 'ECONNREFUSED') {
         logger.error('❌ PostgreSQL 未启动（连接被拒绝），请检查数据库服务')
         running = false
