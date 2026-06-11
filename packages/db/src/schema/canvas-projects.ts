@@ -29,6 +29,6 @@ export const canvasProjects = pgTable('canvas_projects', {
   isDeleted: boolean('is_deleted').default(false).notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
-}, (table) => [
+}, table => [
   index('idx_canvas_projects_account_created').on(table.accountId, table.isDeleted, table.createdAt),
 ])

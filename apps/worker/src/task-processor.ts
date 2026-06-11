@@ -1,5 +1,4 @@
-import type { CostDetail, OutputResult } from '@excuse/shared'
-import type { GenerationCategory, GenerationNotifyPayload, GenerationStatus } from '@excuse/shared'
+import type { CostDetail, GenerationCategory, GenerationNotifyPayload, GenerationStatus, OutputResult } from '@excuse/shared'
 import type { WorkerConfig } from './config'
 import { calculateCost } from '@excuse/billing'
 import {

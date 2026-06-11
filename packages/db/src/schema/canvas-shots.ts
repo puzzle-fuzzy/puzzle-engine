@@ -1,5 +1,5 @@
 import type { ShotCamera, ShotContinuity, ShotEnvironment, ShotTimelineEntry } from '../domain-types'
-import { integer, index, jsonb, pgEnum, pgTable, text, timestamp, uuid, varchar } from 'drizzle-orm/pg-core'
+import { index, integer, jsonb, pgEnum, pgTable, text, timestamp, uuid, varchar } from 'drizzle-orm/pg-core'
 import { canvasLocations } from './canvas-locations'
 import { canvasProjects } from './canvas-projects'
 
@@ -31,6 +31,6 @@ export const canvasShots = pgTable('canvas_shots', {
   errorMessage: text('error_message'),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
-}, (table) => [
+}, table => [
   index('idx_canvas_shots_project_index').on(table.projectId, table.shotIndex),
 ])

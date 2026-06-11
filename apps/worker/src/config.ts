@@ -19,7 +19,7 @@ export interface WorkerConfig {
  * 从环境变量读取并构建 Worker 配置
  */
 export function loadConfig(): WorkerConfig {
-  return {
+  const config = {
     dashscopeApiKey: process.env.DASHSCOPE_API_KEY || '',
     dashscopeBaseUrl: process.env.DASHSCOPE_BASE_URL || 'https://dashscope.aliyuncs.com/api/v1',
     storageRoot: process.env.STORAGE_ROOT || './uploads',
@@ -27,6 +27,20 @@ export function loadConfig(): WorkerConfig {
     staleTimeoutMs: Number(process.env.WORKER_STALE_TIMEOUT_MS) || 4 * 60 * 60 * 1000, // 4h
     oss: loadOSSConfig(),
   }
+
+  if (process.env.NODE_ENV === 'production') {
+    const missing: string[] = []
+    if (!process.env.DATABASE_URL)
+      missing.push('DATABASE_URL')
+    if (!config.dashscopeApiKey)
+      missing.push('DASHSCOPE_API_KEY')
+
+    if (missing.length > 0) {
+      throw new Error(`Missing required environment variables in production: ${missing.join(', ')}`)
+    }
+  }
+
+  return config
 }
 
 function loadOSSConfig(): OSSConfig | undefined {

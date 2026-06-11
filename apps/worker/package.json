@@ -6,7 +6,9 @@
   "module": "src/index.ts",
   "scripts": {
     "dev": "bun --env-file ../../.env src/index.ts",
-    "test": "bun test"
+    "test": "bun test",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "build": "bun build src/index.ts --target=bun --outdir=dist"
   },
   "dependencies": {
     "@excuse/billing": "workspace:*",

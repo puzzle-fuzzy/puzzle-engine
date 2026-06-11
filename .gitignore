@@ -1,6 +1,10 @@
 # 依赖（bun install）
 node_modules
 
+# 仅保留根 bun.lock，子包 lockfile 由 workspace 管理
+apps/*/bun.lock
+packages/*/bun.lock
+
 # 输出目录
 out
 dist

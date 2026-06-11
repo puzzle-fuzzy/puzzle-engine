@@ -1,5 +1,5 @@
-import currency from 'currency.js'
 import type { BillingStatistics, CategoryBreakdown, CostDetail, DailyTrendItem, ModelBreakdown } from '@excuse/shared'
+import currency from 'currency.js'
 
 export interface CostRecord {
   model: string

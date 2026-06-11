@@ -1,5 +1,4 @@
 import { Download, X } from 'lucide-react'
-import { Button } from '@/components/ui/button'
 
 interface MediaPreviewDialogProps {
   url: string | null
@@ -24,7 +23,10 @@ export default function MediaPreviewDialog({ url, onClose }: MediaPreviewDialogP
         </a>
         <button
           className="absolute left-2 top-2 rounded-full bg-black/50 p-1.5 text-white hover:bg-black/70"
-          onClick={e => { e.stopPropagation(); onClose() }}
+          onClick={(e) => {
+            e.stopPropagation()
+            onClose()
+          }}
         >
           <X className="size-4" />
         </button>

@@ -1,6 +1,6 @@
 import type { StorageConfig } from './types'
 import { mkdir, unlink, writeFile } from 'node:fs/promises'
-import { dirname, join } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
 import { logger } from '@excuse/shared'
 /// <reference path="./ali-oss.d.ts" />
 import OSS from 'ali-oss'
@@ -172,13 +172,25 @@ export class AssetStorage {
 
     // Delete from OSS if enabled
     if (this.ossClient) {
-      const prefix = this.config.oss?.uploadPrefix || 'uploads'
-      const key = `${prefix}/${storagePath}`
-      try {
-        await this.ossClient.delete(key)
-      }
-      catch (err) {
-        logger.warn({ err, key }, 'Failed to delete OSS file')
+      // Determine prefix based on which upload method was used.
+      // uploadUserFile uses uploadPrefix, uploadGenerated uses generatedPrefix.
+      // We try both to ensure we delete the correct key.
+      const uploadPrefix = this.config.oss?.uploadPrefix || 'uploads'
+      const generatedPrefix = this.config.oss?.generatedPrefix || 'generated'
+      const keysToDelete = [
+        `${uploadPrefix}/${storagePath}`,
+        `${generatedPrefix}/${storagePath}`,
+      ]
+      for (const key of keysToDelete) {
+        try {
+          await this.ossClient.delete(key)
+        }
+        catch (err) {
+          // Key may not exist under this prefix, log only non-404 errors
+          const message = (err as Error)?.message || ''
+          if (!message.includes('NoSuchKey'))
+            logger.warn({ err, key }, 'Failed to delete OSS file')
+        }
       }
     }
   }
@@ -195,17 +207,58 @@ export class AssetStorage {
   // ── 私有辅助方法 ──────────────────────────────────────
 
   private async downloadToBuffer(url: string): Promise<Buffer> {
-    const response = await fetch(url)
-    if (!response.ok) {
-      throw new Error(`Failed to download: ${response.status} ${response.statusText}`)
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), 60_000) // 60s timeout
+
+    try {
+      const response = await fetch(url, { signal: controller.signal })
+      if (!response.ok) {
+        throw new Error(`Failed to download: ${response.status} ${response.statusText}`)
+      }
+
+      // Check Content-Length if available
+      const contentLength = response.headers.get('content-length')
+      const MAX_DOWNLOAD_SIZE = 100 * 1024 * 1024 // 100MB
+      if (contentLength && Number(contentLength) > MAX_DOWNLOAD_SIZE) {
+        throw new Error(`Remote file too large: ${contentLength} bytes (max ${MAX_DOWNLOAD_SIZE})`)
+      }
+
+      const chunks: Uint8Array[] = []
+      let totalSize = 0
+      const reader = response.body?.getReader()
+      if (!reader)
+        throw new Error('No response body')
+
+      for (;;) {
+        const { done, value } = await reader.read()
+        if (done)
+          break
+        totalSize += value.length
+        if (totalSize > MAX_DOWNLOAD_SIZE) {
+          reader.cancel()
+          throw new Error(`Download exceeded ${MAX_DOWNLOAD_SIZE / 1024 / 1024}MB limit`)
+        }
+        chunks.push(value)
+      }
+
+      return Buffer.concat(chunks)
     }
-    return Buffer.from(await response.arrayBuffer())
+    finally {
+      clearTimeout(timeout)
+    }
   }
 
   private async saveLocal(buffer: Buffer, fileName: string): Promise<void> {
-    const dir = join(this.config.storageRoot, dirname(fileName))
+    // Path traversal prevention: ensure resolved path stays within storageRoot
+    const storageRoot = resolve(this.config.storageRoot)
+    const safeFileName = fileName.replace(/\.\./g, '').replace(/\\/g, '')
+    const fullPath = resolve(storageRoot, safeFileName)
+    if (!fullPath.startsWith(storageRoot)) {
+      throw new Error(`Path traversal detected: ${fileName}`)
+    }
+    const dir = dirname(fullPath)
     await mkdir(dir, { recursive: true })
-    await writeFile(join(this.config.storageRoot, fileName), buffer)
+    await writeFile(fullPath, buffer)
   }
 
   private getLocalPublicUrl(fileName: string): string {

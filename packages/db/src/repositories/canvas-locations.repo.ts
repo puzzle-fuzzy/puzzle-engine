@@ -17,6 +17,19 @@ export async function getCanvasLocationById(id: string) {
   return location ?? null
 }
 
+/**
+ * 校验 location 属于指定用户的项目。返回 location 或 null。
+ */
+export async function getCanvasLocationForAccount(locationId: string, accountId: string) {
+  const [row] = await getDb()
+    .select({ location: canvasLocations, projectAccountId: canvasProjects.accountId })
+    .from(canvasLocations)
+    .innerJoin(canvasProjects, eq(canvasLocations.projectId, canvasProjects.id))
+    .where(and(eq(canvasLocations.id, locationId), eq(canvasProjects.accountId, accountId), eq(canvasProjects.isDeleted, false)))
+    .limit(1)
+  return row?.location ?? null
+}
+
 export async function listCanvasLocationsByProject(projectId: string) {
   return getDb()
     .select()

@@ -1,5 +1,4 @@
 import type { InputMapping, ModelConfig } from '@excuse/shared'
-import type { DashScopeConfig, ProviderResult, TaskStatus } from './types'
 import type {
   DashScopeChatResponse,
   DashScopeImageResponse,
@@ -8,6 +7,7 @@ import type {
   DashScopeUsage,
   DashScopeVideoSubmitResponse,
 } from './dashscope-types'
+import type { DashScopeConfig, ProviderResult, TaskStatus } from './types'
 import { parseDashScopeError } from './dashscope-errors'
 import { getModelById } from './model-configs'
 
@@ -204,13 +204,15 @@ export class DashScopeClient {
       let text: string
       if (isOpenaiFormat) {
         text = (data as DashScopeOpenaiChatResponse).choices?.[0]?.message?.content ?? ''
-      } else {
+      }
+      else {
         const output = (data as DashScopeChatResponse).output
         const content = output.choices?.[0]?.message?.content
         text = Array.isArray(content)
           ? content[0]?.text ?? ''
           : typeof content === 'string' ? content : ''
-        if (!text && output.text) text = output.text
+        if (!text && output.text)
+          text = output.text
       }
 
       return {

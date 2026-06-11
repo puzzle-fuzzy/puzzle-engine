@@ -3,6 +3,7 @@ import { useCallback, useState } from 'react'
 import { toast } from 'sonner'
 import { deleteCanvasCharacter, deleteCanvasLocation, deleteCanvasShot, retryCanvasShot, updateCanvasCharacter, updateCanvasLocation, updateCanvasProject, updateCanvasShot, uploadFile } from '../../api/client'
 import { Button } from '../ui/button'
+import { ConfirmDialog } from '../ui/confirm-dialog'
 import { Input } from '../ui/input'
 import { PromptEditor } from './PromptEditor'
 import { ReferenceUploadZone } from './ReferenceUploadZone'
@@ -15,6 +16,16 @@ interface NodeDetailPanelProps {
 
 export default function NodeDetailPanel({ selectedNode, project, onUpdate }: NodeDetailPanelProps) {
   const [saving, setSaving] = useState(false)
+  const [confirmState, setConfirmState] = useState<{
+    open: boolean
+    title: string
+    description?: string
+    onConfirm: () => void
+  }>({ open: false, title: '', onConfirm: () => {} })
+
+  const confirm = useCallback((title: string, description: string, onConfirm: () => void) => {
+    setConfirmState({ open: true, title, description, onConfirm })
+  }, [])
 
   // Node IDs in ReactFlow use prefixes: char-xxx, loc-xxx, shot-xxx
   const entityId = selectedNode.id.replace(/^(char-|loc-|shot-)/, '')
@@ -30,7 +41,7 @@ export default function NodeDetailPanel({ selectedNode, project, onUpdate }: Nod
       await updateCanvasShot(shot.id, { videoPrompt: prompt })
       onUpdate()
     }
-    catch (err) {
+    catch {
       toast.error('更新镜头 Prompt 失败')
     }
     finally {
@@ -68,7 +79,7 @@ export default function NodeDetailPanel({ selectedNode, project, onUpdate }: Nod
       await updateCanvasCharacter(character.id, patch)
       onUpdate()
     }
-    catch (err) {
+    catch {
       toast.error('更新角色失败')
     }
   }, [character, onUpdate])
@@ -84,7 +95,7 @@ export default function NodeDetailPanel({ selectedNode, project, onUpdate }: Nod
       await updateCanvasLocation(location.id, patch)
       onUpdate()
     }
-    catch (err) {
+    catch {
       toast.error('更新场景失败')
     }
   }, [location, onUpdate])
@@ -105,7 +116,7 @@ export default function NodeDetailPanel({ selectedNode, project, onUpdate }: Nod
       await updateCanvasShot(shot.id, patch)
       onUpdate()
     }
-    catch (err) {
+    catch {
       toast.error('更新镜头失败')
     }
   }, [shot, onUpdate])
@@ -132,7 +143,7 @@ export default function NodeDetailPanel({ selectedNode, project, onUpdate }: Nod
       await updateCanvasProject(project.id, patch)
       onUpdate()
     }
-    catch (err) {
+    catch {
       toast.error('更新项目信息失败')
     }
     finally {
@@ -188,7 +199,7 @@ export default function NodeDetailPanel({ selectedNode, project, onUpdate }: Nod
             <label className="text-xs font-medium text-muted-foreground">叙事描述</label>
             <textarea
               value={editShotNarrative}
-              onChange={(e) => setEditShotNarrative(e.target.value)}
+              onChange={e => setEditShotNarrative(e.target.value)}
               onBlur={() => handleShotFieldUpdate({ narrative: editShotNarrative })}
               className="flex min-h-16 w-full rounded-lg border border-input bg-background px-3 py-2 text-xs shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               rows={3}
@@ -200,7 +211,7 @@ export default function NodeDetailPanel({ selectedNode, project, onUpdate }: Nod
             <Input
               type="number"
               value={editShotDuration}
-              onChange={(e) => setEditShotDuration(Number(e.target.value))}
+              onChange={e => setEditShotDuration(Number(e.target.value))}
               onBlur={() => editShotDuration > 0 && handleShotFieldUpdate({ duration: editShotDuration })}
               min={1}
               max={30}
@@ -212,7 +223,7 @@ export default function NodeDetailPanel({ selectedNode, project, onUpdate }: Nod
               <label className="text-xs font-medium text-muted-foreground">场景</label>
               <select
                 value={shot.locationId || ''}
-                onChange={(e) => handleShotFieldUpdate({ locationId: e.target.value || undefined })}
+                onChange={e => handleShotFieldUpdate({ locationId: e.target.value || undefined })}
                 className="w-full rounded-lg border border-input bg-background px-3 py-1.5 text-xs shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
                 <option value="">无场景</option>
@@ -279,8 +290,7 @@ export default function NodeDetailPanel({ selectedNode, project, onUpdate }: Nod
             variant="destructive"
             size="sm"
             onClick={() => {
-              if (confirm(`确认删除镜头 ${shot.shotIndex}？此操作不可恢复。`))
-                deleteCanvasShot(shot.id).then(onUpdate)
+              confirm(`确认删除镜头 ${shot.shotIndex}？`, '此操作不可恢复。', () => deleteCanvasShot(shot.id).then(onUpdate))
             }}
           >
             删除镜头
@@ -295,7 +305,7 @@ export default function NodeDetailPanel({ selectedNode, project, onUpdate }: Nod
               <label className="text-xs font-medium text-muted-foreground">名称</label>
               <Input
                 value={editCharName}
-                onChange={(e) => setEditCharName(e.target.value)}
+                onChange={e => setEditCharName(e.target.value)}
                 onBlur={() => handleCharacterFieldUpdate({ name: editCharName })}
                 placeholder="角色名称"
               />
@@ -304,7 +314,7 @@ export default function NodeDetailPanel({ selectedNode, project, onUpdate }: Nod
               <label className="text-xs font-medium text-muted-foreground">角色定位</label>
               <Input
                 value={editCharRole}
-                onChange={(e) => setEditCharRole(e.target.value)}
+                onChange={e => setEditCharRole(e.target.value)}
                 onBlur={() => handleCharacterFieldUpdate({ role: editCharRole })}
                 placeholder="如：主角、配角"
               />
@@ -315,7 +325,7 @@ export default function NodeDetailPanel({ selectedNode, project, onUpdate }: Nod
             <label className="text-xs font-medium text-muted-foreground">描述</label>
             <textarea
               value={editCharDesc}
-              onChange={(e) => setEditCharDesc(e.target.value)}
+              onChange={e => setEditCharDesc(e.target.value)}
               onBlur={() => handleCharacterFieldUpdate({ description: editCharDesc })}
               className="flex min-h-16 w-full rounded-lg border border-input bg-background px-3 py-2 text-xs shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               placeholder="角色描述"
@@ -344,8 +354,7 @@ export default function NodeDetailPanel({ selectedNode, project, onUpdate }: Nod
             variant="destructive"
             size="sm"
             onClick={() => {
-              if (confirm(`确认删除角色「${character.name}」？关联的镜头将移除该角色引用。`))
-                deleteCanvasCharacter(character.id).then(onUpdate)
+              confirm(`确认删除角色「${character.name}」？`, '关联的镜头将移除该角色引用。', () => deleteCanvasCharacter(character.id).then(onUpdate))
             }}
           >
             删除角色
@@ -360,7 +369,7 @@ export default function NodeDetailPanel({ selectedNode, project, onUpdate }: Nod
               <label className="text-xs font-medium text-muted-foreground">名称</label>
               <Input
                 value={editLocName}
-                onChange={(e) => setEditLocName(e.target.value)}
+                onChange={e => setEditLocName(e.target.value)}
                 onBlur={() => handleLocationFieldUpdate({ name: editLocName })}
                 placeholder="场景名称"
               />
@@ -369,7 +378,7 @@ export default function NodeDetailPanel({ selectedNode, project, onUpdate }: Nod
               <label className="text-xs font-medium text-muted-foreground">类型</label>
               <Input
                 value={editLocType}
-                onChange={(e) => setEditLocType(e.target.value)}
+                onChange={e => setEditLocType(e.target.value)}
                 onBlur={() => handleLocationFieldUpdate({ type: editLocType })}
                 placeholder="如：室内、室外"
               />
@@ -397,8 +406,7 @@ export default function NodeDetailPanel({ selectedNode, project, onUpdate }: Nod
             variant="destructive"
             size="sm"
             onClick={() => {
-              if (confirm(`确认删除场景「${location.name}」？关联的镜头将移除该场景引用。`))
-                deleteCanvasLocation(location.id).then(onUpdate)
+              confirm(`确认删除场景「${location.name}」？`, '关联的镜头将移除该场景引用。', () => deleteCanvasLocation(location.id).then(onUpdate))
             }}
           >
             删除场景
@@ -412,7 +420,7 @@ export default function NodeDetailPanel({ selectedNode, project, onUpdate }: Nod
             <label className="text-xs font-medium text-muted-foreground">项目标题</label>
             <Input
               value={editTitle}
-              onChange={(e) => setEditTitle(e.target.value)}
+              onChange={e => setEditTitle(e.target.value)}
               placeholder="输入项目标题"
             />
           </div>
@@ -420,12 +428,15 @@ export default function NodeDetailPanel({ selectedNode, project, onUpdate }: Nod
             <label className="text-xs font-medium text-muted-foreground">
               故事文本
               <span className="ml-1 text-muted-foreground/60">
-                ({editStoryText.length} 字符)
+                (
+                {editStoryText.length}
+                {' '}
+                字符)
               </span>
             </label>
             <textarea
               value={editStoryText}
-              onChange={(e) => setEditStoryText(e.target.value)}
+              onChange={e => setEditStoryText(e.target.value)}
               className="flex min-h-30 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               placeholder="在此粘贴故事文本..."
               rows={6}
@@ -446,6 +457,14 @@ export default function NodeDetailPanel({ selectedNode, project, onUpdate }: Nod
           选中故事输入、分析、角色、场景或镜头节点可查看和编辑详细信息。
         </p>
       )}
+
+      <ConfirmDialog
+        open={confirmState.open}
+        onOpenChange={open => !open && setConfirmState(prev => ({ ...prev, open: false }))}
+        title={confirmState.title}
+        description={confirmState.description}
+        onConfirm={confirmState.onConfirm}
+      />
     </div>
   )
 }

@@ -21,6 +21,19 @@ export async function getCanvasShotById(id: string) {
   return shot ?? null
 }
 
+/**
+ * 校验 shot 属于指定用户的项目。返回 shot 或 null。
+ */
+export async function getCanvasShotForAccount(shotId: string, accountId: string) {
+  const [row] = await getDb()
+    .select({ shot: canvasShots, projectAccountId: canvasProjects.accountId })
+    .from(canvasShots)
+    .innerJoin(canvasProjects, eq(canvasShots.projectId, canvasProjects.id))
+    .where(and(eq(canvasShots.id, shotId), eq(canvasProjects.accountId, accountId), eq(canvasProjects.isDeleted, false)))
+    .limit(1)
+  return row?.shot ?? null
+}
+
 export async function listCanvasShotsByProject(projectId: string) {
   return getDb()
     .select()

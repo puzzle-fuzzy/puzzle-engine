@@ -1,6 +1,6 @@
 import type { GenerationRecord } from '@/api/client'
-import currency from 'currency.js'
 import { isImageOutput, isTextOutput, isVideoOutput } from '@excuse/shared'
+import currency from 'currency.js'
 import {
   Download,
   FileText,
@@ -35,7 +35,7 @@ export default function Assets() {
       const data = await fetchRecords({ limit: 200 })
       setRecords(data.records.filter(r => r.status === 'succeeded'))
     }
-    catch (err) {
+    catch {
       toast.error('加载资产列表失败')
     }
   }, [])
@@ -196,7 +196,8 @@ export default function Assets() {
               </p>
               {previewRecord.cost?.totalPriceCents != null && (
                 <p className="text-xs text-muted-foreground">
-                  费用: ¥{currency(previewRecord.cost.totalPriceCents, { fromCents: true, precision: 4 }).format()}
+                  费用: ¥
+                  {currency(previewRecord.cost.totalPriceCents, { fromCents: true, precision: 4 }).format()}
                 </p>
               )}
             </div>

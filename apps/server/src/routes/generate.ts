@@ -5,9 +5,9 @@ import {
   cancelGenerationRecord,
   createGenerationRecord,
   deleteGenerationRecord,
-  findGenerationByDedupeKey,
+  findGenerationByDedupeKeyForAccount,
   getGenerationRecordById,
-  getUploadedFilesByIds,
+  getUploadedFilesByIdsForAccount,
   listGenerationRecords,
   markGenerationFailed,
   markGenerationProcessing,
@@ -52,9 +52,9 @@ export function createGenerateRoutes(config: ServerConfig) {
         return { success: false, error: `Unknown model: ${model}` }
       }
 
-      // 去重：同一 model + 相同参数短时间内不重复提交
-      const dedupeKey = `${model}:${JSON.stringify(parameters)}`
-      const existing = await findGenerationByDedupeKey(dedupeKey)
+      // 去重：同一用户 + 同一 model + 相同参数短时间内不重复提交
+      const dedupeKey = `${userId}:${model}:${JSON.stringify(parameters)}`
+      const existing = await findGenerationByDedupeKeyForAccount(dedupeKey, userId)
       if (existing && (existing.status === 'pending' || existing.status === 'processing')) {
         const updated = await getGenerationRecordById(existing.id)
         return { success: true, record: serializeRecord(updated!), duplicated: true }
@@ -78,10 +78,13 @@ export function createGenerateRoutes(config: ServerConfig) {
         dedupeKey,
       })
 
-      // 解析参考图 URL
+      // 解析参考图 URL（仅允许当前用户的文件）
       let referenceUrls: string[] | undefined
       if (referenceFileIds?.length) {
-        const files = await getUploadedFilesByIds(referenceFileIds)
+        const files = await getUploadedFilesByIdsForAccount(referenceFileIds, userId)
+        if (files.length !== referenceFileIds.length) {
+          return { success: false, error: '部分参考文件不存在或不属于当前用户' }
+        }
         referenceUrls = files.map(f => f.publicUrl)
       }
 
@@ -192,11 +195,19 @@ export function createGenerateRoutes(config: ServerConfig) {
     })
 
     // 获取单条记录详情
-    .get('/records/:id', async ({ params }) => {
+    .get('/records/:id', async ({ params, userId }) => {
+      if (!userId) {
+        return { success: false, error: '请先登录' }
+      }
+
       const record = await getGenerationRecordById(params.id)
 
       if (!record) {
         return { success: false, error: 'Record not found' }
+      }
+
+      if (record.accountId !== userId) {
+        return { success: false, error: '无权查看该记录' }
       }
 
       return { success: true, record: serializeRecord(record) }
@@ -252,7 +263,10 @@ export function createGenerateRoutes(config: ServerConfig) {
         : undefined
       let referenceUrls: string[] | undefined
       if (referenceFileIds?.length) {
-        const files = await getUploadedFilesByIds(referenceFileIds)
+        const files = await getUploadedFilesByIdsForAccount(referenceFileIds, userId)
+        if (files.length !== referenceFileIds.length) {
+          return { success: false, error: '部分参考文件不存在或不属于当前用户' }
+        }
         referenceUrls = files.map(f => f.publicUrl)
       }
 

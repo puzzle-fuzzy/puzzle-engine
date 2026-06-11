@@ -40,7 +40,7 @@ export function getAuthToken() {
 
 // ===== Eden Treaty 客户端 =====
 
-export const api = treaty<App>('http://localhost:5007', {
+export const api = treaty<App>(import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:5007', {
   headers: () => ({
     ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
   }),

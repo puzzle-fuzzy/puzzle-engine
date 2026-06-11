@@ -1,5 +1,5 @@
-import currency from 'currency.js'
 import type { CostDetail, ModelConfig } from '@excuse/shared'
+import currency from 'currency.js'
 
 const PRECISION = { precision: 4 }
 
@@ -32,10 +32,12 @@ export function calculateCost(
 
       const inputCostCents = currency(pricing.inputPriceCents, PRECISION)
         .multiply(inputTokens)
-        .divide(1_000_000).value
+        .divide(1_000_000)
+        .value
       const outputCostCents = currency(pricing.outputPriceCents || 0, PRECISION)
         .multiply(outputTokens)
-        .divide(1_000_000).value
+        .divide(1_000_000)
+        .value
       const totalCents = currency(inputCostCents, PRECISION).add(outputCostCents).value
 
       return {

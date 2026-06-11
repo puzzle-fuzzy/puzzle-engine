@@ -1,6 +1,6 @@
-import currency from 'currency.js'
 import type { GenerateResponse, GenerationRecord, ModelConfig, ModelParameter } from '@/api/client'
 import { isImageOutput, isTextOutput, isVideoOutput } from '@excuse/shared'
+import currency from 'currency.js'
 import {
   CheckCircle2,
   Clock,
@@ -29,6 +29,7 @@ import {
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { Input } from '@/components/ui/input'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Select } from '@/components/ui/select'
@@ -117,6 +118,7 @@ export default function Workspace() {
   const [expandedPrompts, setExpandedPrompts] = useState<Set<string>>(() => new Set())
   const [copiedId, setCopiedId] = useState<string | null>(null)
   const [groupByProject, setGroupByProject] = useState(false)
+  const [deleteConfirm, setDeleteConfirm] = useState<{ open: boolean, id: string }>({ open: false, id: '' })
   // 每个媒体参数的上传状态：paramName → { uploading, uploadedUrl, uploadedName }
   const [mediaUploadState, setMediaUploadState] = useState<Record<string, {
     uploading: boolean
@@ -202,7 +204,7 @@ export default function Workspace() {
         addRecord(result.record)
       }
     }
-    catch (error) {
+    catch {
       toast.error('生成请求失败')
     }
     finally {
@@ -230,17 +232,21 @@ export default function Workspace() {
     }
   }
 
-  // 删除记录 — 直接从 state 移除
+  // 删除记录 — 弹出确认弹窗
   async function handleDelete(id: string) {
-    // eslint-disable-next-line no-alert
-    if (!confirm('确定要删除这条记录吗？'))
-      return
+    setDeleteConfirm({ open: true, id })
+  }
+
+  async function confirmDelete() {
     try {
-      await deleteRecord(id)
-      removeRecord(id)
+      await deleteRecord(deleteConfirm.id)
+      removeRecord(deleteConfirm.id)
     }
     catch {
-      toast.error('生成请求失败')
+      toast.error('删除记录失败')
+    }
+    finally {
+      setDeleteConfirm({ open: false, id: '' })
     }
   }
 
@@ -583,7 +589,8 @@ export default function Workspace() {
                 )}
                 {record.cost.unitPriceCents != null && (
                   <span>
-                    单价: ¥{formatCents(record.cost.unitPriceCents, 4)}
+                    单价: ¥
+                    {formatCents(record.cost.unitPriceCents, 4)}
                   </span>
                 )}
                 {record.cost.inputTokens != null && (
@@ -614,7 +621,8 @@ export default function Workspace() {
               </div>
               {record.cost.totalPriceCents != null && (
                 <p className="font-medium text-foreground">
-                  总计: ¥{formatCents(record.cost.totalPriceCents, 4)}
+                  总计: ¥
+                  {formatCents(record.cost.totalPriceCents, 4)}
                   {record.cost.estimated && ' (预估)'}
                 </p>
               )}
@@ -969,6 +977,13 @@ export default function Workspace() {
           </div>
         </div>
       )}
+
+      <ConfirmDialog
+        open={deleteConfirm.open}
+        onOpenChange={open => !open && setDeleteConfirm({ open: false, id: '' })}
+        title="确定要删除这条记录吗？"
+        onConfirm={confirmDelete}
+      />
     </div>
   )
 }

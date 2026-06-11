@@ -1,7 +1,7 @@
 import type { SSEGenerationStatusEvent } from '@excuse/shared'
 import type { GenerationRecord, ProjectDTO } from '@/api/client'
-import { create } from 'zustand'
 import { parseCostDetail, parseOutputResult } from '@excuse/shared'
+import { create } from 'zustand'
 import { fetchRecords, listCanvasProjects } from '@/api/client'
 import { sseClient } from '@/api/sse'
 

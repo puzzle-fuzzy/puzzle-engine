@@ -14,7 +14,7 @@ export interface ServerConfig {
 }
 
 export function loadConfig(): ServerConfig {
-  return {
+  const config = {
     port: Number(process.env.PORT) || 5007,
     databaseUrl: process.env.DATABASE_URL || 'postgres://excuse:excuse_dev@localhost:5433/excuse',
     dashscopeApiKey: process.env.DASHSCOPE_API_KEY || '',
@@ -26,6 +26,22 @@ export function loadConfig(): ServerConfig {
     jwtExpiresIn: process.env.JWT_EXPIRES_IN || '7d',
     oss: loadOSSConfig(),
   }
+
+  if (process.env.NODE_ENV === 'production') {
+    const missing: string[] = []
+    if (!process.env.DATABASE_URL)
+      missing.push('DATABASE_URL')
+    if (!config.dashscopeApiKey)
+      missing.push('DASHSCOPE_API_KEY')
+    if (!process.env.JWT_SECRET || config.jwtSecret.length < 32)
+      missing.push('JWT_SECRET (at least 32 characters)')
+
+    if (missing.length > 0) {
+      throw new Error(`Missing required environment variables in production: ${missing.join(', ')}`)
+    }
+  }
+
+  return config
 }
 
 function loadOSSConfig(): OSSConfig | undefined {

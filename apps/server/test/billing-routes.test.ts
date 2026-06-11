@@ -125,8 +125,13 @@ describe('billing routes', () => {
     it('调用 getCostRecords 获取原始数据', async () => {
       mockGetCostRecords.mockResolvedValue([])
       mockAggregateStatistics.mockReturnValue({
-        total: 0, today: 0, week: 0, month: 0,
-        byCategory: [], byModel: [], dailyTrend: [],
+        total: 0,
+        today: 0,
+        week: 0,
+        month: 0,
+        byCategory: [],
+        byModel: [],
+        dailyTrend: [],
       })
 
       await client.api.billing.statistics.get({
@@ -142,8 +147,13 @@ describe('billing routes', () => {
       ]
       mockGetCostRecords.mockResolvedValue(records)
       mockAggregateStatistics.mockReturnValue({
-        total: 5, today: 0, week: 0, month: 0,
-        byCategory: [], byModel: [], dailyTrend: [],
+        total: 5,
+        today: 0,
+        week: 0,
+        month: 0,
+        byCategory: [],
+        byModel: [],
+        dailyTrend: [],
       })
 
       await client.api.billing.statistics.get({

@@ -41,6 +41,6 @@ export const uploadedFiles = pgTable('uploaded_files', {
 
   /** 上传时间 */
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
-}, (table) => [
+}, table => [
   index('idx_uploaded_files_account').on(table.accountId),
 ])

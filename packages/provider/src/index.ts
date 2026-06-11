@@ -1,6 +1,6 @@
 export { DashScopeClient } from './dashscope-client'
 export { getDashScopeErrorMessage, parseDashScopeError } from './dashscope-errors'
+export type * from './dashscope-types'
 export { getModelById, getModelsByCategory, MODELS } from './model-configs'
 export { AssetStorage } from './storage'
 export type { DashScopeConfig, OSSConfig, ProviderResult, StorageConfig, TaskStatus } from './types'
-export type * from './dashscope-types'

@@ -1,4 +1,4 @@
-import type { ShotCamera, ShotContinuity, ShotEnvironment } from '@excuse/db'
+import type { ShotCamera, ShotEnvironment } from '@excuse/db'
 import type { CanvasModelPreferences, CharacterProfile, LocationProfile, NovelAnalysis, ShotDraft } from '@excuse/shared'
 import type { NormalizedCharacter, NormalizedLocation, NormalizedShot } from './continuity'
 import { calculateCost } from '@excuse/billing'
@@ -15,9 +15,9 @@ import {
   deleteCanvasLocationsByProject,
   deleteCanvasShotById,
   deleteCanvasShotsByProject,
-  getCanvasProjectById,
   getCanvasCharacterById,
   getCanvasLocationById,
+  getCanvasProjectById,
   getCanvasProjectDetail,
   getCanvasShotById,
   getGenerationRecordsByTaskIds,
@@ -122,7 +122,8 @@ async function reconcileProjectShots(projectId: string) {
 
     if (record.status === 'succeeded') {
       const output = record.outputResult
-      if (!output || !('savedUrls' in output)) continue
+      if (!output || !('savedUrls' in output))
+        continue
       const savedUrls = output.savedUrls
       await updateCanvasShot(shot.id, {
         status: 'completed',
@@ -143,7 +144,12 @@ async function reconcileProjectShots(projectId: string) {
     const updatedShots = await listCanvasShotsByProject(projectId)
     const stillGenerating = updatedShots.some(s => s.status === 'generating')
     if (!stillGenerating && updatedShots.length > 0) {
+      const hasFailed = updatedShots.some(s => s.status === 'failed')
+      // 全部成功 → completed；存在失败 → 仍标记 completed 但前端可区分
       await updateCanvasProject(projectId, { status: 'completed' })
+      if (hasFailed) {
+        // 通知前端存在失败镜头，但项目整体视为完成（允许重试单个镜头）
+      }
     }
   }
 }
@@ -175,6 +181,13 @@ export async function saveCanvasLayout(projectId: string, layout: Record<string,
 }
 
 // ===== 流水线步骤 =====
+
+/** 流水线状态守卫：防止对正在 generating 的项目重复触发 */
+function assertNotGenerating(status: string | null | undefined): void {
+  if (status === 'generating') {
+    throw new Error('项目正在生成中，请等待完成后再操作')
+  }
+}
 
 export async function analyzeProject(projectId: string, config: { dashscopeApiKey: string, dashscopeBaseUrl?: string }) {
   const project = await getCanvasProjectById(projectId)
@@ -227,6 +240,7 @@ export async function generateCharacters(projectId: string, config: { dashscopeA
   const project = await getCanvasProjectById(projectId)
   if (!project || !project.analysisJson)
     throw new Error('项目不存在或未分析')
+  assertNotGenerating(project.status)
 
   const analysis = project.analysisJson!
   const accountId = project.accountId
@@ -282,6 +296,7 @@ export async function generateLocations(projectId: string, config: { dashscopeAp
   const project = await getCanvasProjectById(projectId)
   if (!project || !project.analysisJson)
     throw new Error('项目不存在或未分析')
+  assertNotGenerating(project.status)
 
   const analysis = project.analysisJson!
   const accountId = project.accountId
@@ -334,6 +349,7 @@ export async function generateCharacterRefs(projectId: string, config: { dashsco
   const detail = await getCanvasProjectDetail(projectId)
   if (!detail)
     throw new Error('项目不存在')
+  assertNotGenerating(detail.project.status)
 
   const client = createClient(config)
   const storage = new AssetStorage({ storageRoot: config.storageRoot, oss: config.oss })
@@ -341,7 +357,7 @@ export async function generateCharacterRefs(projectId: string, config: { dashsco
   const imageModel = getImageModel(detail.project.modelPreferencesJson)
 
   for (const char of detail.characters) {
-    if (char.locked || char.identityPrompt)
+    if (char.locked || !char.identityPrompt || char.referenceImageUrl)
       continue
 
     notifyNode(accountId, projectId, 'character', char.id, 'running')
@@ -349,12 +365,12 @@ export async function generateCharacterRefs(projectId: string, config: { dashsco
     try {
       const portraitResult = await client.generateImage(imageModel, {
         prompt: `${char.identityPrompt}, portrait photo, neutral expression, solid background, front view, high quality`,
-        size: '1024*1024',
+        size: '2048*2048',
         n: 1,
       })
 
       if (portraitResult.success && portraitResult.output) {
-        const urls = portraitResult.output['urls']
+        const urls = portraitResult.output.urls
         if (Array.isArray(urls) && urls.length) {
           const savedUrls = await storage.downloadAndMap(urls as string[], `canvas/${char.id}`, 'portrait')
           await updateCanvasCharacter(char.id, { referenceImageUrl: savedUrls[0] || urls[0] })
@@ -363,12 +379,12 @@ export async function generateCharacterRefs(projectId: string, config: { dashsco
 
       const turnaroundResult = await client.generateImage(imageModel, {
         prompt: `${char.identityPrompt}, character turnaround sheet showing front view, side view, and back view, white background, character design sheet`,
-        size: '1024*1024',
+        size: '2048*2048',
         n: 1,
       })
 
       if (turnaroundResult.success && turnaroundResult.output) {
-        const urls = turnaroundResult.output['urls']
+        const urls = turnaroundResult.output.urls
         if (Array.isArray(urls) && urls.length) {
           const savedUrls = await storage.downloadAndMap(urls as string[], `canvas/${char.id}`, 'turnaround')
           await updateCanvasCharacter(char.id, { turnaroundSheetUrl: savedUrls[0] || urls[0] })
@@ -390,6 +406,7 @@ export async function generateLocationRefs(projectId: string, config: { dashscop
   const detail = await getCanvasProjectDetail(projectId)
   if (!detail)
     throw new Error('项目不存在')
+  assertNotGenerating(detail.project.status)
 
   const client = createClient(config)
   const storage = new AssetStorage({ storageRoot: config.storageRoot, oss: config.oss })
@@ -405,12 +422,12 @@ export async function generateLocationRefs(projectId: string, config: { dashscop
     try {
       const result = await client.generateImage(imageModel, {
         prompt: `${loc.scenePrompt}, establishing shot, wide angle, cinematic lighting, no people, no characters, empty scene, uninhabited`,
-        size: '1024*1024',
+        size: '2048*2048',
         n: 1,
       })
 
       if (result.success && result.output) {
-        const urls = result.output['urls']
+        const urls = result.output.urls
         if (Array.isArray(urls) && urls.length) {
           const savedUrls = await storage.downloadAndMap(urls as string[], `canvas/${loc.id}`, 'ref')
           await updateCanvasLocation(loc.id, { referenceImageUrl: savedUrls[0] || urls[0] })
@@ -432,6 +449,7 @@ export async function generateStoryboard(projectId: string, config: { dashscopeA
   const detail = await getCanvasProjectDetail(projectId)
   if (!detail)
     throw new Error('项目不存在')
+  assertNotGenerating(detail.project.status)
 
   const project = detail.project
   if (!project.analysisJson)
@@ -499,6 +517,7 @@ export async function checkContinuity(projectId: string) {
   const detail = await getCanvasProjectDetail(projectId)
   if (!detail)
     throw new Error('项目不存在')
+  assertNotGenerating(detail.project.status)
 
   const accountId = detail.project.accountId
 
@@ -553,6 +572,7 @@ export async function rebuildShotPrompts(projectId: string) {
   const detail = await getCanvasProjectDetail(projectId)
   if (!detail)
     throw new Error('项目不存在')
+  assertNotGenerating(detail.project.status)
 
   const accountId = detail.project.accountId
   const characterMap = new Map(detail.characters.map(c => [c.id, c]))
@@ -686,7 +706,9 @@ export async function generateVideos(projectId: string, config: { dashscopeApiKe
   }
 
   if (hasAnyVideo) {
-    await updateCanvasProject(projectId, { status: 'completed' })
+    // 保持 generating 状态，等待 worker 轮询完所有 shot 后再标记完成
+    // reconcileProjectShots() 会在所有 shot 完成后自动将项目标记为 completed
+    await updateCanvasProject(projectId, { status: 'generating' })
   }
   else {
     // All submissions failed — revert to prompts_ready so user can retry

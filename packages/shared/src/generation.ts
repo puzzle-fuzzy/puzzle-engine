@@ -17,7 +17,7 @@ import type {
 
 // 重导出域类型，保持下游 import 不变
 export type { CostDetail, GenerationCategory, GenerationStatus }
-export type { TextOutputResult, ImageOutputResult, VideoOutputResult, ProcessingOutputResult, OutputResult }
+export type { ImageOutputResult, OutputResult, ProcessingOutputResult, TextOutputResult, VideoOutputResult }
 
 // ===== SSE → GenerationRecord 运行时解析 =====
 

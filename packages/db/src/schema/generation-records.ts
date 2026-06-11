@@ -1,5 +1,5 @@
 import type { CostDetail, OutputResult } from '../domain-types'
-import { boolean, index, integer, jsonb, pgEnum, pgTable, text, timestamp, uuid, varchar } from 'drizzle-orm/pg-core'
+import { index, integer, jsonb, pgEnum, pgTable, text, timestamp, uuid, varchar } from 'drizzle-orm/pg-core'
 import { accounts } from './accounts'
 
 /**
@@ -68,7 +68,7 @@ export const generationRecords = pgTable('generation_records', {
 
   /** 最后更新时间（状态变更时更新） */
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
-}, (table) => [
+}, table => [
   index('idx_gen_records_account_created').on(table.accountId, table.createdAt),
   index('idx_gen_records_status_category').on(table.status, table.category),
 ])

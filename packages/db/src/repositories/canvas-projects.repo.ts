@@ -21,6 +21,18 @@ export async function getCanvasProjectById(id: string) {
   return project ?? null
 }
 
+/**
+ * 按 ID + accountId 查询项目，用于 owner 校验
+ */
+export async function getCanvasProjectByIdForAccount(id: string, accountId: string) {
+  const [project] = await getDb()
+    .select()
+    .from(canvasProjects)
+    .where(and(eq(canvasProjects.id, id), eq(canvasProjects.accountId, accountId), eq(canvasProjects.isDeleted, false)))
+    .limit(1)
+  return project ?? null
+}
+
 export async function listCanvasProjectsByAccount(accountId: string) {
   return getDb()
     .select()

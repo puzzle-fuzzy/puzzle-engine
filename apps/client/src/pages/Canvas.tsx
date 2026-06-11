@@ -1,10 +1,11 @@
 import type { ProjectDTO } from '@excuse/shared'
 import { useEffect, useState } from 'react'
-import { toast } from 'sonner'
 import { useNavigate } from 'react-router'
+import { toast } from 'sonner'
 import { createCanvasProject, deleteCanvasProject, listCanvasProjects } from '../api/client'
 import { Button } from '../components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card'
+import { ConfirmDialog } from '../components/ui/confirm-dialog'
 
 const STATUS_LABELS: Record<string, string> = {
   draft: '草稿',
@@ -43,6 +44,7 @@ export default function Canvas() {
   const [creating, setCreating] = useState(false)
   const [title, setTitle] = useState('')
   const [storyText, setStoryText] = useState('')
+  const [deleteConfirm, setDeleteConfirm] = useState<{ open: boolean, id: string }>({ open: false, id: '' })
 
   useEffect(() => {
     loadProjects()
@@ -53,7 +55,7 @@ export default function Canvas() {
       const res = await listCanvasProjects()
       setProjects(res.data)
     }
-    catch (err) {
+    catch {
       toast.error('加载项目列表失败')
     }
     finally {
@@ -72,7 +74,7 @@ export default function Canvas() {
       })
       navigate(`/canvas/${res.data.id}`)
     }
-    catch (err) {
+    catch {
       toast.error('创建项目失败')
     }
     finally {
@@ -82,15 +84,19 @@ export default function Canvas() {
 
   async function handleDelete(id: string, e: React.MouseEvent) {
     e.stopPropagation()
-    // eslint-disable-next-line no-alert
-    if (!confirm('确认删除该项目？'))
-      return
+    setDeleteConfirm({ open: true, id })
+  }
+
+  async function confirmDelete() {
     try {
-      await deleteCanvasProject(id)
-      setProjects(prev => prev.filter(p => p.id !== id))
+      await deleteCanvasProject(deleteConfirm.id)
+      setProjects(prev => prev.filter(p => p.id !== deleteConfirm.id))
     }
-    catch (err) {
+    catch {
       toast.error('删除项目失败')
+    }
+    finally {
+      setDeleteConfirm({ open: false, id: '' })
     }
   }
 
@@ -173,6 +179,14 @@ export default function Canvas() {
               </div>
             )}
       </div>
+
+      <ConfirmDialog
+        open={deleteConfirm.open}
+        onOpenChange={open => !open && setDeleteConfirm({ open: false, id: '' })}
+        title="确认删除该项目？"
+        description="删除后项目数据将无法恢复。"
+        onConfirm={confirmDelete}
+      />
     </div>
   )
 }

@@ -63,7 +63,8 @@ export default function Billing() {
               <Icon className="size-5 text-muted-foreground" />
               <div>
                 <p className="text-2xl font-bold">
-                  ¥{formatCents(valueCents)}
+                  ¥
+                  {formatCents(valueCents)}
                 </p>
                 <p className="text-xs text-muted-foreground">{label}</p>
               </div>
@@ -89,7 +90,8 @@ export default function Billing() {
                       <div className="flex items-center justify-between text-sm">
                         <span>{CATEGORY_LABELS[item.category] || item.category}</span>
                         <span className="text-muted-foreground">
-                          ¥{formatCents(item.totalCents, 4)}
+                          ¥
+                          {formatCents(item.totalCents, 4)}
                           {' '}
                           (
                           {item.percentage}
@@ -124,7 +126,8 @@ export default function Billing() {
                       <div className="flex items-center justify-between text-sm">
                         <span className="truncate">{item.model}</span>
                         <span className="text-muted-foreground">
-                          ¥{formatCents(item.totalCents, 4)}
+                          ¥
+                          {formatCents(item.totalCents, 4)}
                           {' '}
                           (
                           {item.percentage}
@@ -167,7 +170,8 @@ export default function Billing() {
                         title={`${item.date}: ¥${formatCents(item.totalCents, 4)}`}
                       >
                         <div className="absolute -top-6 left-1/2 -translate-x-1/2 hidden group-hover:block whitespace-nowrap rounded bg-black/80 px-1.5 py-0.5 text-[10px] text-white">
-                          ¥{formatCents(item.totalCents)}
+                          ¥
+                          {formatCents(item.totalCents)}
                         </div>
                       </div>
                     )

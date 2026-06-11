@@ -11,8 +11,8 @@ import { t } from 'elysia'
  * 这是 ElysiaJS 的最佳实践，确保 derive 的类型变更传播到父级实例。
  *
  * 支持两种认证方式：
- *   1. Authorization: Bearer <token>（常规 HTTP 请求）
- *   2. ?token=<jwt>（SSE 连接，因为 EventSource 不支持自定义 header）
+ *   1. Authorization: Bearer <token>（推荐，所有请求均适用）
+ *   2. ?token=<jwt>（兼容旧客户端，仅 SSE 连接使用）
  *
  * @see https://elysiajs.com/plugins/jwt
  * @see https://elysiajs.com/plugins/bearer

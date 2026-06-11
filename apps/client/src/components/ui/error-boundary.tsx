@@ -4,7 +4,7 @@ import { Button } from './button'
 
 interface ErrorBoundaryProps {
   children: ReactNode
-  fallback?: ComponentType<{ error: Error; reset: () => void }>
+  fallback?: ComponentType<{ error: Error, reset: () => void }>
 }
 
 interface ErrorBoundaryState {

@@ -1,4 +1,4 @@
-import type { CostDetail, GenerationCategory, OutputResult, GenerationStatus } from '@excuse/db'
+import type { CostDetail, GenerationCategory, GenerationStatus, OutputResult } from '@excuse/db'
 
 // ===== SSE 事件类型定义 =====
 

@@ -17,6 +17,19 @@ export async function getCanvasCharacterById(id: string) {
   return character ?? null
 }
 
+/**
+ * 校验 character 属于指定用户的项目。返回 character（含 projectId）或 null。
+ */
+export async function getCanvasCharacterForAccount(characterId: string, accountId: string) {
+  const [row] = await getDb()
+    .select({ character: canvasCharacters, projectAccountId: canvasProjects.accountId })
+    .from(canvasCharacters)
+    .innerJoin(canvasProjects, eq(canvasCharacters.projectId, canvasProjects.id))
+    .where(and(eq(canvasCharacters.id, characterId), eq(canvasProjects.accountId, accountId), eq(canvasProjects.isDeleted, false)))
+    .limit(1)
+  return row?.character ?? null
+}
+
 export async function listCanvasCharactersByProject(projectId: string) {
   return getDb()
     .select()

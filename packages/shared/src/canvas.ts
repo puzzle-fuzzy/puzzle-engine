@@ -11,7 +11,7 @@ import type {
 } from '@excuse/db'
 
 // 域类型从 @excuse/db import type 重导出（编译期擦除，零运行时影响）
-export type { CanvasModelPreferences, NovelAnalysis, CharacterProfile, LocationProfile, ContinuityIssue }
+export type { CanvasModelPreferences, CharacterProfile, ContinuityIssue, LocationProfile, NovelAnalysis }
 export type { ShotCamera, ShotContinuity, ShotEnvironment, ShotTimelineEntry }
 
 // ===== 画布流水线领域类型 =====

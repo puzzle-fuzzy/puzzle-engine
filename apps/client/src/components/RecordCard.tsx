@@ -1,18 +1,17 @@
 import type { GenerationRecord, ModelConfig } from '@/api/client'
-import currency from 'currency.js'
+import type { Category } from '@/pages/workspace-utils'
 import { isImageOutput, isTextOutput, isVideoOutput } from '@excuse/shared'
+import currency from 'currency.js'
 import {
   Copy,
   Download,
   FileText,
-  RotateCcw,
   Trash2,
 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { CATEGORY_CONFIG, formatDuration, formatTime, HIDDEN_PARAMS, isImageUrl, isUrl, isVideoUrl, STATUS_CONFIG } from '@/pages/workspace-utils'
-import type { Category } from '@/pages/workspace-utils'
 
 interface RecordCardProps {
   record: GenerationRecord
@@ -182,7 +181,8 @@ export default function RecordCard({
             </div>
             {record.cost.totalPriceCents != null && (
               <p className="font-medium text-foreground">
-                总计: ¥{currency(record.cost.totalPriceCents, { fromCents: true, precision: 4 }).format()}
+                总计: ¥
+                {currency(record.cost.totalPriceCents, { fromCents: true, precision: 4 }).format()}
                 {record.cost.estimated && ' (预估)'}
               </p>
             )}

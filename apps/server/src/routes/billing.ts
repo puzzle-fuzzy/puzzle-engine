@@ -1,8 +1,8 @@
+import type { ServerConfig } from '../config'
 import { aggregateStatistics } from '@excuse/billing'
 import { getCostRecords } from '@excuse/db'
-import type { ServerConfig } from '../config'
-import { createAuthPlugin } from '../plugins/auth'
 import { Elysia } from 'elysia'
+import { createAuthPlugin } from '../plugins/auth'
 
 export function createBillingRoutes(config: ServerConfig) {
   return new Elysia({ prefix: '/api/billing' })

@@ -153,6 +153,18 @@ export async function findGenerationByDedupeKey(dedupeKey: string) {
 }
 
 /**
+ * 按 dedupeKey + accountId 查询记录，防止同用户同参数重复提交
+ */
+export async function findGenerationByDedupeKeyForAccount(dedupeKey: string, accountId: string) {
+  const [record] = await getDb()
+    .select()
+    .from(generationRecords)
+    .where(and(eq(generationRecords.dedupeKey, dedupeKey), eq(generationRecords.accountId, accountId)))
+    .limit(1)
+  return record ?? null
+}
+
+/**
  * 获取含费用信息的记录，用于账单统计
  * @param accountId 可选：按用户过滤
  */

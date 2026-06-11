@@ -5,7 +5,9 @@
   "module": "src/index.ts",
   "scripts": {
     "test": "bun test",
-    "dev": "bun --env-file ../../.env src/index.ts"
+    "dev": "bun --env-file ../../.env src/index.ts",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "build": "bun build src/index.ts --target=bun --outdir=dist"
   },
   "dependencies": {
     "@elysia/bearer": "^1.4.4",

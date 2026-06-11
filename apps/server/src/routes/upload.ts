@@ -4,6 +4,9 @@ import { AssetStorage } from '@excuse/provider'
 import { Elysia, t } from 'elysia'
 import { createAuthPlugin } from '../plugins/auth'
 
+const ALLOWED_MIME_TYPES = ['image/png', 'image/jpeg', 'image/webp', 'image/gif']
+const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10MB
+
 export function createUploadRoutes(config: ServerConfig) {
   const storage = new AssetStorage({
     storageRoot: config.storageRoot,
@@ -21,6 +24,14 @@ export function createUploadRoutes(config: ServerConfig) {
       const file = body.file
       if (!file) {
         return { success: false, error: 'No file provided' }
+      }
+
+      if (!ALLOWED_MIME_TYPES.includes(file.type)) {
+        return { success: false, error: `不支持的文件类型: ${file.type}，仅允许 PNG/JPEG/WebP/GIF` }
+      }
+
+      if (file.size > MAX_FILE_SIZE) {
+        return { success: false, error: `文件大小超过限制（最大 ${MAX_FILE_SIZE / 1024 / 1024}MB）` }
       }
 
       const subDir = `ref_${Date.now()}`
