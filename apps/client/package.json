@@ -8,7 +8,8 @@
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "test": "vitest"
+    "test": "vitest",
+    "typecheck": "tsc -b"
   },
   "dependencies": {
     "@dagrejs/dagre": "^3.0.0",

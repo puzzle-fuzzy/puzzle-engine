@@ -213,7 +213,7 @@ function CanvasFlowInner(props: {
 
       if (newlyMeasured.length === 0) {
         if (!fittedOnceRef.current) {
-          timer = setTimeout(fitView, 100, { padding: 0.15, duration: 300 })
+          timer = window.setTimeout(fitView, 100, { padding: 0.15, duration: 300 })
           fittedOnceRef.current = true
         }
         return
@@ -241,7 +241,7 @@ function CanvasFlowInner(props: {
       setNodes(final)
 
       if (!fittedOnceRef.current) {
-        timer = setTimeout(fitView, 100, { padding: 0.15, duration: 300 })
+        timer = window.setTimeout(fitView, 100, { padding: 0.15, duration: 300 })
         fittedOnceRef.current = true
       }
     })

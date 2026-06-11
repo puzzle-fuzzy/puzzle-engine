@@ -711,11 +711,11 @@ export default function Workspace() {
             {record.status === 'succeeded'
               && record.outputResult
               && (isImageOutput(record.outputResult) || isVideoOutput(record.outputResult))
-              && (isImageOutput(record.outputResult) ? record.outputResult.savedUrls : record.outputResult.savedUrls).map((url, i) => (
+              && (isImageOutput(record.outputResult) ? record.outputResult.savedUrls : record.outputResult.savedUrls).map((url, i, arr) => (
                 <Button key={url} variant="outline" size="sm" asChild>
                   <a href={url} download>
                     <Download className="size-3" />
-                    {(isImageOutput(record.outputResult) ? record.outputResult.savedUrls : record.outputResult.savedUrls).length > 1 ? `下载 ${i + 1}` : '下载'}
+                    {arr.length > 1 ? `下载 ${i + 1}` : '下载'}
                   </a>
                 </Button>
               ))}

@@ -2,7 +2,6 @@ import type { StorageConfig } from './types'
 import { mkdir, unlink, writeFile } from 'node:fs/promises'
 import { dirname, join, resolve } from 'node:path'
 import { logger } from '@excuse/shared'
-/// <reference path="./ali-oss.d.ts" />
 import OSS from 'ali-oss'
 
 /**

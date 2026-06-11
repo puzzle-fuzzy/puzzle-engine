@@ -42,7 +42,7 @@ export function ConfirmDialog({
     try {
       setLoading(true)
       const result = onConfirm()
-      if (result instanceof Promise) {
+      if (result && typeof result === 'object' && 'then' in result) {
         await result
       }
       onOpenChange(false)

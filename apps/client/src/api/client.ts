@@ -318,7 +318,7 @@ export async function updateCanvasShot(shotId: string, patch: {
   videoPrompt?: string
 }): Promise<{ success: boolean, data: unknown }> {
   return unwrapEden<{ success: boolean, data: unknown }>(
-    await api.api.canvas.shots({ shotId }).patch(patch),
+    await api.api.canvas.shots({ shotId }).patch(patch as any),
   )
 }
 

@@ -2,6 +2,7 @@ import type { CanvasLocationInsert } from '../types'
 import { and, eq } from 'drizzle-orm'
 import { getDb } from '../db'
 import { canvasLocations } from '../schema/canvas-locations'
+import { canvasProjects } from '../schema/canvas-projects'
 
 export async function createCanvasLocation(values: CanvasLocationInsert) {
   const [location] = await getDb().insert(canvasLocations).values(values).returning()

@@ -52,11 +52,7 @@ export function createGenerateRoutes(config: ServerConfig) {
         return { success: false, error: `Unknown model: ${model}` }
       }
 
-      // audio 模型不在 DB generation_category 枚举中，拒绝
-      if (modelConfig.category === 'audio') {
-        return { success: false, error: `Audio generation is not supported` }
-      }
-      const category = modelConfig.category as GenerationCategory
+      const category = modelConfig.category
 
       // 去重：同一用户 + 同一 model + 相同参数短时间内不重复提交
       const dedupeKey = `${userId}:${model}:${JSON.stringify(parameters)}`
@@ -120,7 +116,7 @@ export function createGenerateRoutes(config: ServerConfig) {
         // 异步任务（视频生成）— 保存 providerTaskId，Worker 会轮询
         await markGenerationProcessing(record.id, {
           taskId: result.providerTaskId,
-          outputResult: (result.output ?? { type: 'processing', status: 'processing' }) as OutputResult,
+          outputResult: (result.output ?? { type: 'processing', status: 'processing' }) as unknown as OutputResult,
         })
 
         // 通知 SSE 客户端状态变为 processing
@@ -138,7 +134,7 @@ export function createGenerateRoutes(config: ServerConfig) {
       }
 
       // 同步任务完成（文本/图片）— 下载并保存结果
-      let outputResult: OutputResult = result.output as OutputResult ?? { type: 'text', text: '' }
+      let outputResult: OutputResult = (result.output ?? { type: 'text', text: '' }) as unknown as OutputResult
       if (modelConfig.category === 'image' && result.output && 'urls' in result.output) {
         const urls = Array.isArray(result.output.urls) ? result.output.urls : []
         const savedUrls = await storage.downloadAndMap(urls, taskId, 'img')
@@ -269,10 +265,7 @@ export function createGenerateRoutes(config: ServerConfig) {
       if (!modelConfig)
         return { success: false, error: `Unknown model: ${record.model}` }
 
-      if (modelConfig.category === 'audio') {
-        return { success: false, error: `Audio generation is not supported` }
-      }
-      const retryCategory = modelConfig.category as GenerationCategory
+      const retryCategory = modelConfig.category
 
       const inputParams = record.inputParams
       const referenceFileIds = Array.isArray(inputParams.referenceFileIds)
@@ -314,7 +307,7 @@ export function createGenerateRoutes(config: ServerConfig) {
       if (result.providerTaskId) {
         await markGenerationProcessing(record.id, {
           taskId: result.providerTaskId,
-          outputResult: (result.output ?? { type: 'processing', status: 'processing' }) as OutputResult,
+          outputResult: (result.output ?? { type: 'processing', status: 'processing' }) as unknown as OutputResult,
         })
         await notifyGenerationStatus({
           accountId: userId,
@@ -329,7 +322,7 @@ export function createGenerateRoutes(config: ServerConfig) {
       }
 
       // Sync task succeeded (text/image retry)
-      let outputResult: OutputResult = result.output as OutputResult ?? { type: 'text', text: '' }
+      let outputResult: OutputResult = (result.output ?? { type: 'text', text: '' }) as unknown as OutputResult
       if (modelConfig.category === 'image' && result.output && 'urls' in result.output) {
         const urls = Array.isArray(result.output.urls) ? result.output.urls : []
         const savedUrls = await storage.downloadAndMap(urls, newTaskId, 'img')

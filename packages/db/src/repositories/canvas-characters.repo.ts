@@ -2,6 +2,7 @@ import type { CanvasCharacterInsert } from '../types'
 import { and, eq } from 'drizzle-orm'
 import { getDb } from '../db'
 import { canvasCharacters } from '../schema/canvas-characters'
+import { canvasProjects } from '../schema/canvas-projects'
 
 export async function createCanvasCharacter(values: CanvasCharacterInsert) {
   const [character] = await getDb().insert(canvasCharacters).values(values).returning()

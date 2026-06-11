@@ -1,5 +1,5 @@
 import type { UploadedFileInsert } from '../types'
-import { eq, inArray } from 'drizzle-orm'
+import { and, eq, inArray } from 'drizzle-orm'
 import { getDb } from '../db'
 import { uploadedFiles } from '../schema'
 

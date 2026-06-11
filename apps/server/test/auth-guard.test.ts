@@ -15,10 +15,10 @@ import { beforeEach, describe, expect, it, mock } from 'bun:test'
 // ─── Mock 依赖 ─────────────────────────────────────
 
 // @excuse/db — 账户查询 + 生成记录 + 上传文件
-const mockGetAccountByEmail = mock(() => Promise.resolve(null))
-const mockGetAccountByUsername = mock(() => Promise.resolve(null))
-const mockGetAccountById = mock(() => Promise.resolve(null))
-const mockCreateAccount = mock(() => Promise.resolve(null))
+const mockGetAccountByEmail = mock(() => Promise.resolve(null as any))
+const mockGetAccountByUsername = mock(() => Promise.resolve(null as any))
+const mockGetAccountById = mock(() => Promise.resolve(null as any))
+const mockCreateAccount = mock(() => Promise.resolve(null as any))
 const mockCreateGenerationRecord = mock(() =>
   Promise.resolve({ id: 'rec-001', taskId: 'task-001' }),
 )

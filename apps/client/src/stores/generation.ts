@@ -1,5 +1,5 @@
-import type { SSEGenerationStatusEvent } from '@excuse/shared'
-import type { GenerationRecord, ProjectDTO } from '@/api/client'
+import type { ProjectDTO, SSEGenerationStatusEvent } from '@excuse/shared'
+import type { GenerationRecord } from '@/api/client'
 import { parseCostDetail, parseOutputResult } from '@excuse/shared'
 import { create } from 'zustand'
 import { fetchRecords, listCanvasProjects } from '@/api/client'

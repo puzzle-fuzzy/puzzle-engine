@@ -8,15 +8,15 @@ import { beforeAll, beforeEach, describe, expect, it, mock } from 'bun:test'
  * Mock @excuse/db 和 @excuse/billing，测试 GET /api/billing/statistics
  */
 
-const mockGetCostRecords = mock(() => Promise.resolve([]))
+const mockGetCostRecords = mock(() => Promise.resolve([] as any[]))
 const mockAggregateStatistics = mock(() => ({
   total: 0,
   today: 0,
   week: 0,
   month: 0,
-  byCategory: [],
-  byModel: [],
-  dailyTrend: [],
+  byCategory: [] as any[],
+  byModel: [] as any[],
+  dailyTrend: [] as any[],
 }))
 
 mock.module('@excuse/db', () => ({

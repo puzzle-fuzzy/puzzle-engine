@@ -1,14 +1,14 @@
 import { pollPendingVideoTasks } from '@excuse/db'
 import { createLogger } from '@excuse/shared'
 import { loadConfig } from './config'
-import { createTaskProcessor } from './task-processor'
+import { type TaskResult, createTaskProcessor } from './task-processor'
 
 const config = loadConfig()
 const processor = createTaskProcessor(config)
 const logger = createLogger('worker')
 
 let running = true
-let currentTaskPromise: Promise<unknown> | null = null
+let currentTaskPromise: Promise<TaskResult> | null = null
 const GRACEFUL_TIMEOUT_MS = 30_000
 
 // ── 优雅退出 ──────────────────────────────────────────

@@ -228,7 +228,7 @@ function getAssetUrls(record: GenerationRecord): string[] {
     return output.savedUrls
   if (isImageOutput(output) && output.urls?.length)
     return output.urls
-  if (urls?.length)
-    return urls
+  if (isVideoOutput(output) && output.urls?.length)
+    return output.urls
   return []
 }

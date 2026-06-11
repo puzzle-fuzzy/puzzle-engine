@@ -1,6 +1,7 @@
 import type { CanvasShotInsert } from '../types'
 import { and, asc, eq, inArray } from 'drizzle-orm'
 import { getDb } from '../db'
+import { canvasProjects } from '../schema/canvas-projects'
 import { canvasShots } from '../schema/canvas-shots'
 
 export async function createCanvasShot(values: CanvasShotInsert) {

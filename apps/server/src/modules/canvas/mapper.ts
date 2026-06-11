@@ -40,7 +40,7 @@ export function mapLocation(row: CanvasLocationRow): LocationDTO {
     id: row.id,
     projectId: row.projectId,
     name: row.name,
-    type: row.type,
+    type: row.type as 'interior' | 'exterior' | 'mixed',
     profile,
     scenePrompt: row.scenePrompt ?? null,
     negativePrompt: row.negativePrompt ?? null,

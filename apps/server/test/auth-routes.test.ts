@@ -16,10 +16,10 @@ import { beforeAll, beforeEach, describe, expect, it, mock } from 'bun:test'
 
 // ─── Mock @excuse/db ───────────────────────────────
 
-const mockGetAccountByEmail = mock(() => Promise.resolve(null))
-const mockGetAccountByUsername = mock(() => Promise.resolve(null))
-const mockGetAccountById = mock(() => Promise.resolve(null))
-const mockCreateAccount = mock(() => Promise.resolve(null))
+const mockGetAccountByEmail = mock(() => Promise.resolve(null as any))
+const mockGetAccountByUsername = mock(() => Promise.resolve(null as any))
+const mockGetAccountById = mock(() => Promise.resolve(null as any))
+const mockCreateAccount = mock(() => Promise.resolve(null as any))
 
 mock.module('@excuse/db', () => ({
   getAccountByEmail: mockGetAccountByEmail,
