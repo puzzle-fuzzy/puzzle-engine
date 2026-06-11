@@ -31,7 +31,7 @@ export async function listCanvasProjectsByAccount(accountId: string) {
 
 export async function updateCanvasProject(
   id: string,
-  values: Partial<Pick<CanvasProjectInsert, 'title' | 'storyText' | 'status' | 'analysisJson' | 'modelPreferencesJson' | 'canvasLayout'>>,
+  values: Partial<Omit<CanvasProjectInsert, 'id' | 'accountId' | 'createdAt' | 'updatedAt'>>,
 ) {
   const [updated] = await getDb()
     .update(canvasProjects)
