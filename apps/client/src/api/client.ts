@@ -303,3 +303,21 @@ export async function updateCanvasShot(shotId: string, patch: {
     await api.api.canvas.shots({ shotId }).patch(patch),
   )
 }
+
+export async function deleteCanvasCharacter(characterId: string): Promise<{ success: boolean }> {
+  return unwrapEden<{ success: boolean }>(
+    await api.api.canvas.characters({ characterId }).delete(),
+  )
+}
+
+export async function deleteCanvasLocation(locationId: string): Promise<{ success: boolean }> {
+  return unwrapEden<{ success: boolean }>(
+    await api.api.canvas.locations({ locationId }).delete(),
+  )
+}
+
+export async function deleteCanvasShot(shotId: string): Promise<{ success: boolean }> {
+  return unwrapEden<{ success: boolean }>(
+    await api.api.canvas.shots({ shotId }).delete(),
+  )
+}

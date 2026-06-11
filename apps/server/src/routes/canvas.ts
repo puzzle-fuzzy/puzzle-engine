@@ -230,4 +230,26 @@ export function createCanvasRoutes(config: ServerConfig) {
         videoPrompt: t.Optional(t.String()),
       }),
     })
+
+    // ===== 资源 DELETE =====
+    .delete('/characters/:characterId', async ({ params: { characterId }, userId }) => {
+      if (!userId)
+        return { success: false, error: '请先登录' }
+      await svc.deleteCharacter(characterId)
+      return { success: true }
+    })
+
+    .delete('/locations/:locationId', async ({ params: { locationId }, userId }) => {
+      if (!userId)
+        return { success: false, error: '请先登录' }
+      await svc.deleteLocation(locationId)
+      return { success: true }
+    })
+
+    .delete('/shots/:shotId', async ({ params: { shotId }, userId }) => {
+      if (!userId)
+        return { success: false, error: '请先登录' }
+      await svc.deleteShot(shotId)
+      return { success: true }
+    })
 }
