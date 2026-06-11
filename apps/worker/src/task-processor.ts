@@ -1,4 +1,4 @@
-import type { GenerationNotifyPayload } from '@excuse/shared'
+import type { GenerationCategory, GenerationNotifyPayload, GenerationStatus } from '@excuse/shared'
 import type { WorkerConfig } from './config'
 import { calculateCost } from '@excuse/billing'
 import {
@@ -94,8 +94,8 @@ export function createTaskProcessor(config: WorkerConfig, deps?: Partial<TaskPro
       await notify({
         accountId: record.accountId,
         recordId: record.id,
-        status: 'failed',
-        category: record.category,
+        status: 'failed' as GenerationStatus,
+        category: record.category as GenerationCategory,
         model: record.model,
         taskId,
         errorMessage: 'Task timed out (>4h)',
@@ -135,8 +135,8 @@ export function createTaskProcessor(config: WorkerConfig, deps?: Partial<TaskPro
         await notify({
           accountId: record.accountId,
           recordId: record.id,
-          status: 'succeeded',
-          category: record.category,
+          status: 'succeeded' as GenerationStatus,
+          category: record.category as GenerationCategory,
           model: record.model,
           taskId,
           outputResult: output,
@@ -165,8 +165,8 @@ export function createTaskProcessor(config: WorkerConfig, deps?: Partial<TaskPro
         await notify({
           accountId: record.accountId,
           recordId: record.id,
-          status: 'failed',
-          category: record.category,
+          status: 'failed' as GenerationStatus,
+          category: record.category as GenerationCategory,
           model: record.model,
           taskId,
           errorMessage: errMsg,

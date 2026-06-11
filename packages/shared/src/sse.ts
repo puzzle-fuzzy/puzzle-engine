@@ -1,3 +1,5 @@
+import type { GenerationCategory, GenerationStatus } from '@excuse/db'
+
 // ===== SSE 事件类型定义 =====
 
 /**
@@ -7,8 +9,8 @@
 export interface GenerationNotifyPayload {
   accountId: string
   recordId: string
-  status: string
-  category: string
+  status: GenerationStatus
+  category: GenerationCategory
   model: string
   taskId: string
   outputResult?: Record<string, unknown>
@@ -28,8 +30,8 @@ export interface GenerationNotifyPayload {
 export interface SSEGenerationStatusEvent {
   id: string
   taskId: string
-  status: string
-  category: string
+  status: GenerationStatus
+  category: GenerationCategory
   model: string
   outputResult?: Record<string, unknown>
   errorMessage?: string
