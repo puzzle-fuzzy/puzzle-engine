@@ -12,3 +12,6 @@ export * from './schema'
 
 // 类型
 export * from './types'
+
+// Domain 类型（纯接口，供 schema $type() 和 @excuse/shared import type）
+export * from './domain-types'
