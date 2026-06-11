@@ -1,4 +1,4 @@
-import type { GenerationCategory, GenerationStatus } from '@excuse/db'
+import type { GenerationCategory, GenerationRecordRow, GenerationStatus } from '@excuse/db'
 import type { ServerConfig } from '../config'
 import { calculateCost } from '@excuse/billing'
 import {
@@ -27,11 +27,11 @@ export function createGenerateRoutes(config: ServerConfig) {
   })
 
   /** 从 DB 行序列化为前端兼容的 GenerationRecord（Date→string） */
-  function serializeRecord(record: Record<string, unknown>) {
+  function serializeRecord(record: GenerationRecordRow) {
     return {
       ...record,
-      createdAt: record.createdAt instanceof Date ? record.createdAt.toISOString() : String(record.createdAt),
-      updatedAt: record.updatedAt instanceof Date ? record.updatedAt.toISOString() : String(record.updatedAt),
+      createdAt: record.createdAt.toISOString(),
+      updatedAt: record.updatedAt.toISOString(),
     }
   }
 
@@ -166,7 +166,8 @@ export function createGenerateRoutes(config: ServerConfig) {
       const limit = query.limit ?? 50
       const offset = query.offset ?? 0
 
-      const records = await listGenerationRecords({ accountId: userId, category, status, limit, offset })
+      const rows = await listGenerationRecords({ accountId: userId, category, status, limit, offset })
+      const records = rows.map(serializeRecord)
 
       return { records, total: records.length }
     }, {
@@ -186,7 +187,7 @@ export function createGenerateRoutes(config: ServerConfig) {
         return { success: false, error: 'Record not found' }
       }
 
-      return { success: true, record }
+      return { success: true, record: serializeRecord(record) }
     }, {
       params: t.Object({
         id: t.String(),

@@ -1,6 +1,7 @@
 import type { SSEGenerationStatusEvent } from '@excuse/shared'
 import type { GenerationRecord, ProjectDTO } from '@/api/client'
 import { create } from 'zustand'
+import { parseCostDetail, parseOutputResult } from '@excuse/shared'
 import { fetchRecords, listCanvasProjects } from '@/api/client'
 import { sseClient } from '@/api/sse'
 
@@ -61,9 +62,9 @@ export const useGenerationStore = create<GenerationState>((set, get) => ({
       next[existingIndex] = {
         ...next[existingIndex],
         status: event.status,
-        ...(event.outputResult && { outputResult: event.outputResult }),
+        ...(event.outputResult && { outputResult: parseOutputResult(event.outputResult) }),
         ...(event.errorMessage && { errorMessage: event.errorMessage }),
-        ...(event.cost && { cost: event.cost }),
+        ...(event.cost && { cost: parseCostDetail(event.cost) }),
       }
       set({ records: next })
     }
