@@ -1,6 +1,6 @@
-import type { ServerConfig } from '../src/config'
 import { treaty } from '@elysia/eden'
 import { beforeEach, describe, expect, it, mock } from 'bun:test'
+import { makeAccount, makeTestConfig } from './helpers/test-factory'
 
 /**
  * 上传路由单元测试
@@ -54,37 +54,21 @@ import { createUploadRoutes } from '../src/routes/upload'
 
 // ─── 测试配置 ──────────────────────────────────────
 
-const testConfig: ServerConfig = {
-  port: 0,
-  databaseUrl: '',
+const testConfig = makeTestConfig({
   dashscopeApiKey: 'test-key',
   dashscopeBaseUrl: 'https://test.example.com',
   storageRoot: './test-uploads',
-  frontendUrl: '',
-  workerPollIntervalMs: 0,
   jwtSecret: 'test-upload-secret',
-  jwtExpiresIn: '1h',
-  oss: undefined,
-}
-
-function makeAccount(overrides: Record<string, any> = {}) {
-  return {
-    id: 'acc-upload-test',
-    username: 'uploaduser',
-    email: 'upload@example.com',
-    password: 'hashed-password',
-    avatar: null,
-    isActive: true,
-    createdAt: new Date('2024-01-01'),
-    updatedAt: new Date('2024-01-01'),
-    ...overrides,
-  }
-}
+})
 
 async function getValidToken(client: ReturnType<typeof treaty>): Promise<string> {
   mockGetAccountByEmail.mockResolvedValue(null)
   mockGetAccountByUsername.mockResolvedValue(null)
-  mockCreateAccount.mockResolvedValue(makeAccount())
+  mockCreateAccount.mockResolvedValue(makeAccount({
+    id: 'acc-upload-test',
+    username: 'uploaduser',
+    email: 'upload@example.com',
+  }))
 
   const res = await client.api.auth.register.post({
     username: 'uploaduser',
@@ -92,7 +76,7 @@ async function getValidToken(client: ReturnType<typeof treaty>): Promise<string>
     password: 'password123456',
   })
 
-  return (res.data as any)?.token as string
+  return (res.data as { token?: string })?.token as string
 }
 
 // ─── 测试 ──────────────────────────────────────────

@@ -1,6 +1,6 @@
-import type { ServerConfig } from '../src/config'
 import { treaty } from '@elysia/eden'
 import { beforeAll, beforeEach, describe, expect, it, mock } from 'bun:test'
+import { makeTestConfig, signTestToken } from './helpers/test-factory'
 
 /**
  * 计费统计路由测试
@@ -30,28 +30,15 @@ mock.module('@excuse/billing', () => ({
 // eslint-disable-next-line import/first
 import { createBillingRoutes } from '../src/routes/billing'
 
-const testConfig: ServerConfig = {
-  port: 0,
-  databaseUrl: '',
+const testConfig = makeTestConfig({
   dashscopeApiKey: 'test-key',
   dashscopeBaseUrl: 'https://test.local',
   storageRoot: '/tmp/test-uploads',
-  frontendUrl: '',
-  workerPollIntervalMs: 0,
   jwtSecret: 'test-billing-secret',
-  jwtExpiresIn: '1h',
-  oss: undefined,
-}
+})
 
 async function getAuthToken(): Promise<string> {
-  const { Elysia } = await import('elysia')
-  const jwtApp = new Elysia()
-    .use((await import('@elysia/jwt')).jwt({ name: 'jwt', secret: testConfig.jwtSecret, exp: '1h' }))
-    .get('/sign', async ({ jwt }) => jwt.sign({ sub: 'acc-001' }))
-
-  const jwtClient = treaty(jwtApp)
-  const { data } = await jwtClient.sign.get()
-  return data as unknown as string
+  return signTestToken(testConfig.jwtSecret, 'acc-001')
 }
 
 describe('billing routes', () => {

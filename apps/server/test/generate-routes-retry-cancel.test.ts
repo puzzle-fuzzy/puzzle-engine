@@ -1,6 +1,6 @@
-import type { ServerConfig } from '../src/config'
 import { treaty } from '@elysia/eden'
 import { beforeAll, beforeEach, describe, expect, it, mock } from 'bun:test'
+import { makeFailedRecord, makeProcessingRecord, makeTestConfig, signTestToken } from './helpers/test-factory'
 
 /**
  * Generate 路由 retry / cancel 端点测试
@@ -73,68 +73,15 @@ import { createGenerateRoutes } from '../src/routes/generate'
 
 // ─── 测试配置 ────────────────────────────────────────────
 
-const testConfig: ServerConfig = {
-  port: 0,
-  databaseUrl: '',
+const testConfig = makeTestConfig({
   dashscopeApiKey: 'test-key',
   dashscopeBaseUrl: 'https://test.local',
   storageRoot: '/tmp/test-uploads',
-  frontendUrl: '',
-  workerPollIntervalMs: 0,
   jwtSecret: 'test-retry-cancel-secret',
-  jwtExpiresIn: '1h',
-  oss: undefined,
-}
-
-function makeFailedRecord(overrides: Record<string, any> = {}) {
-  return {
-    id: 'rec-failed-001',
-    accountId: 'acc-001',
-    taskId: 'gen_old_task',
-    model: 'qwen-max',
-    category: 'text',
-    status: 'failed',
-    inputParams: { prompt: '你好' },
-    outputResult: null,
-    cost: null,
-    errorMessage: 'previous error',
-    retryCount: 0,
-    dedupeKey: 'qwen-max:{"prompt":"你好"}',
-    createdAt: new Date('2024-01-01'),
-    updatedAt: new Date('2024-01-01'),
-    ...overrides,
-  }
-}
-
-function makeProcessingRecord(overrides: Record<string, any> = {}) {
-  return {
-    id: 'rec-proc-001',
-    accountId: 'acc-001',
-    taskId: 'gen_proc_task',
-    model: 'qwen-max',
-    category: 'text',
-    status: 'processing',
-    inputParams: { prompt: 'test' },
-    outputResult: {},
-    cost: null,
-    errorMessage: null,
-    retryCount: 0,
-    dedupeKey: null,
-    createdAt: new Date('2024-01-01'),
-    updatedAt: new Date('2024-01-01'),
-    ...overrides,
-  }
-}
+})
 
 async function getAuthToken(): Promise<string> {
-  const { Elysia } = await import('elysia')
-  const jwtApp = new Elysia()
-    .use((await import('@elysia/jwt')).jwt({ name: 'jwt', secret: testConfig.jwtSecret, exp: '1h' }))
-    .get('/sign', async ({ jwt }) => jwt.sign({ sub: 'acc-001' }))
-
-  const jwtClient = treaty(jwtApp)
-  const { data } = await jwtClient.sign.get()
-  return data as unknown as string
+  return signTestToken(testConfig.jwtSecret, 'acc-001')
 }
 
 // ─── 测试 ────────────────────────────────────────────────

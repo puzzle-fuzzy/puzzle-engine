@@ -14,12 +14,34 @@ import { beforeAll, beforeEach, describe, expect, it, mock } from 'bun:test'
  * Bun.password.hash/verify 是真实操作，不 mock — 保证 bcrypt 流程正确。
  */
 
+// ─── Mock 类型 ──────────────────────────────────────────
+
+/** 测试用账户行结构（匹配 createAuthRoutes 所需的 DB row 字段） */
+interface AccountRow {
+  id: string
+  username: string
+  email: string
+  password: string
+  avatar: string | null
+  isActive: boolean
+  createdAt: Date
+  updatedAt: Date
+}
+
+/** 认证响应结构（Eden 推导后通过运行时访问 token/user） */
+interface AuthData {
+  success: boolean
+  token?: string
+  user?: AccountRow
+  error?: string
+}
+
 // ─── Mock @excuse/db ───────────────────────────────
 
-const mockGetAccountByEmail = mock(() => Promise.resolve(null as any))
-const mockGetAccountByUsername = mock(() => Promise.resolve(null as any))
-const mockGetAccountById = mock(() => Promise.resolve(null as any))
-const mockCreateAccount = mock(() => Promise.resolve(null as any))
+const mockGetAccountByEmail = mock<() => Promise<AccountRow | null>>(() => Promise.resolve(null))
+const mockGetAccountByUsername = mock<() => Promise<AccountRow | null>>(() => Promise.resolve(null))
+const mockGetAccountById = mock<() => Promise<AccountRow | null>>(() => Promise.resolve(null))
+const mockCreateAccount = mock<(values: Record<string, unknown>) => Promise<AccountRow | null>>(() => Promise.resolve(null))
 
 mock.module('@excuse/db', () => ({
   getAccountByEmail: mockGetAccountByEmail,
@@ -49,7 +71,7 @@ const testConfig: ServerConfig = {
 
 // ─── 辅助函数 ──────────────────────────────────────
 
-function makeAccount(overrides: Record<string, any> = {}) {
+function makeAccount(overrides: Partial<AccountRow> = {}): AccountRow {
   return {
     id: 'acc-001',
     username: 'testuser',
@@ -104,16 +126,16 @@ describe('auth routes', () => {
 
       expect(error).toBeNull()
       expect(data?.success).toBe(true)
-      expect(typeof data?.token).toBe('string')
-      expect(data?.user).toBeDefined()
+      expect(typeof (data as AuthData | null)?.token).toBe('string')
+      expect((data as AuthData | null)?.user).toBeDefined()
       // 响应中不能包含 password
-      expect((data as any)?.user?.password).toBeUndefined()
+      expect((data as AuthData | null)?.user?.password).toBeUndefined()
       // createAccount 应被调用一次
       expect(mockCreateAccount).toHaveBeenCalledTimes(1)
       // 传入 createAccount 的 password 应该是 bcrypt hash
-      const createCallArg = mockCreateAccount.mock.calls[0][0] as any
+      const createCallArg = mockCreateAccount.mock.calls[0][0]
       expect(createCallArg.password).not.toBe('testpassword123')
-      expect(createCallArg.password.startsWith('$2b$')).toBe(true)
+      expect(String(createCallArg.password).startsWith('$2b$')).toBe(true)
     })
 
     it('should reject duplicate email', async () => {
@@ -189,9 +211,9 @@ describe('auth routes', () => {
 
       expect(error).toBeNull()
       expect(data?.success).toBe(true)
-      expect(typeof data?.token).toBe('string')
-      expect(data?.user).toBeDefined()
-      expect((data as any)?.user?.password).toBeUndefined()
+      expect(typeof (data as AuthData | null)?.token).toBe('string')
+      expect((data as AuthData | null)?.user).toBeDefined()
+      expect((data as AuthData | null)?.user?.password).toBeUndefined()
     })
 
     it('should reject non-existent email', async () => {
@@ -251,7 +273,7 @@ describe('auth routes', () => {
         email: 'test@example.com',
         password: 'testpassword123',
       })
-      const token = (regRes.data as any)?.token
+      const token = (regRes.data as AuthData | null)?.token
       expect(token).toBeDefined()
 
       // /me 查询账户
@@ -263,8 +285,8 @@ describe('auth routes', () => {
 
       expect(error).toBeNull()
       expect(data?.success).toBe(true)
-      expect(data?.user).toBeDefined()
-      expect((data as any)?.user?.password).toBeUndefined()
+      expect((data as AuthData | null)?.user).toBeDefined()
+      expect((data as AuthData | null)?.user?.password).toBeUndefined()
       // 应该使用 token 中 sub 对应的 id 查询
       expect(mockGetAccountById).toHaveBeenCalledWith('acc-001')
     })
@@ -296,7 +318,7 @@ describe('auth routes', () => {
         email: 'test@example.com',
         password: 'testpassword123',
       })
-      const token = (regRes.data as any)?.token
+      const token = (regRes.data as AuthData | null)?.token
 
       // 模拟用户已被删除
       mockGetAccountById.mockResolvedValue(null)

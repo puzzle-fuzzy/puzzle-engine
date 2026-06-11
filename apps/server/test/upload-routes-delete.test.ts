@@ -1,5 +1,5 @@
-import type { ServerConfig } from '../src/config'
 import { beforeEach, describe, expect, it, mock } from 'bun:test'
+import { makeTestConfig, makeUploadedFile, signTestToken } from './helpers/test-factory'
 
 /**
  * 上传路由 DELETE 端点测试
@@ -54,58 +54,15 @@ import { createUploadRoutes } from '../src/routes/upload'
 
 // ─── 测试配置 ────────────────────────────────────────────
 
-const testConfig: ServerConfig = {
-  port: 0,
-  databaseUrl: '',
+const testConfig = makeTestConfig({
   dashscopeApiKey: 'test-key',
   dashscopeBaseUrl: 'https://test.example.com',
   storageRoot: './test-uploads',
-  frontendUrl: '',
-  workerPollIntervalMs: 0,
   jwtSecret: 'test-upload-delete-secret',
-  jwtExpiresIn: '1h',
-  oss: undefined,
-}
-
-function _makeAccount(overrides: Record<string, any> = {}) {
-  return {
-    id: 'acc-upload-delete',
-    username: 'deleteuser',
-    email: 'delete@example.com',
-    password: 'hashed-password',
-    avatar: null,
-    isActive: true,
-    createdAt: new Date('2024-01-01'),
-    updatedAt: new Date('2024-01-01'),
-    ...overrides,
-  }
-}
+})
 
 async function getValidToken(): Promise<string> {
-  const { treaty } = await import('@elysia/eden')
-  const { Elysia } = await import('elysia')
-  const jwtApp = new Elysia()
-    .use((await import('@elysia/jwt')).jwt({ name: 'jwt', secret: testConfig.jwtSecret, exp: '1h' }))
-    .get('/sign', async ({ jwt }) => jwt.sign({ sub: 'acc-upload-delete' }))
-
-  const jwtClient = treaty(jwtApp)
-  const { data } = await jwtClient.sign.get()
-  return data as unknown as string
-}
-
-function makeUploadedFile(overrides: Record<string, any> = {}) {
-  return {
-    id: 'file-001',
-    accountId: 'acc-upload-delete',
-    fileName: 'test.png',
-    fileSize: 1024,
-    mimeType: 'image/png',
-    storagePath: 'ref_123/test.png',
-    publicUrl: '/uploads/ref_123/test.png',
-    purpose: 'reference',
-    createdAt: new Date('2024-01-01'),
-    ...overrides,
-  }
+  return signTestToken(testConfig.jwtSecret, 'acc-upload-delete')
 }
 
 // ─── 测试 ────────────────────────────────────────────────
@@ -176,7 +133,7 @@ describe('upload routes — DELETE /api/upload/:id', () => {
 
   it('成功删除自己的文件', async () => {
     const token = await getValidToken()
-    mockGetUploadedFileById.mockResolvedValue(makeUploadedFile())
+    mockGetUploadedFileById.mockResolvedValue(makeUploadedFile({ accountId: 'acc-upload-delete' }))
 
     const response = await uploadApp.handle(new Request('http://localhost/api/upload/file-001', {
       method: 'DELETE',

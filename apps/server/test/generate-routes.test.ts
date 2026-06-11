@@ -1,6 +1,6 @@
-import type { ServerConfig } from '../src/config'
 import { treaty } from '@elysia/eden'
 import { beforeAll, beforeEach, describe, expect, it, mock } from 'bun:test'
+import { makeRecord, makeTestConfig, signTestToken } from './helpers/test-factory'
 
 /**
  * 生成路由单元测试
@@ -9,17 +9,46 @@ import { beforeAll, beforeEach, describe, expect, it, mock } from 'bun:test'
  * 测试 /api/generate, /api/records, /api/records/:id, DELETE /api/records/:id 的 HTTP 行为
  */
 
+// ─── Mock 类型 ───────────────────────────────────────────────
+
+/** 生成记录 mock 行结构（覆盖所有测试用例的形状变体） */
+interface MockGenRecord {
+  id: string
+  accountId: string
+  taskId: string
+  model: string
+  category: string
+  status: string
+  inputParams: Record<string, unknown>
+  outputResult: Record<string, unknown> | null
+  cost: Record<string, unknown> | null
+  errorMessage: string | null
+  createdAt: Date
+  updatedAt: Date
+}
+
+/** Provider 返回结构（涵盖同步/异步/成功/失败所有变体） */
+interface MockProviderResult {
+  success: boolean
+  error?: string
+  output?: Record<string, unknown>
+  usage?: Record<string, unknown>
+  providerTaskId?: string
+}
+
 // ─── Mocks ───────────────────────────────────────────────
 
-const mockCreateRecord = mock(() => Promise.resolve(null))
-const mockListRecords = mock(() => Promise.resolve([]))
-const mockGetRecordById = mock(() => Promise.resolve(null))
-const mockDeleteRecord = mock(() => Promise.resolve(undefined))
-const mockMarkFailed = mock(() => Promise.resolve(undefined))
-const mockMarkProcessing = mock(() => Promise.resolve(undefined))
-const mockMarkSucceeded = mock(() => Promise.resolve(undefined))
-const mockCalculateCost = mock(() => ({ unit: 'token', totalPriceCents: 1, totalPrice: 0.01 }))
-const mockGenerate = mock(() => Promise.resolve({ success: false, error: 'mock error' }))
+const mockCreateRecord = mock<() => Promise<MockGenRecord | null>>(() => Promise.resolve(null))
+const mockListRecords = mock<(filter: Record<string, unknown>) => Promise<MockGenRecord[]>>(() => Promise.resolve([]))
+const mockGetRecordById = mock<(id: string) => Promise<MockGenRecord | null>>(() => Promise.resolve(null))
+const mockDeleteRecord = mock<(id: string) => Promise<void>>(() => Promise.resolve(undefined))
+const mockMarkFailed = mock<(id: string, error: string) => Promise<void>>(() => Promise.resolve(undefined))
+const mockMarkProcessing = mock<(id: string, data: Record<string, unknown>) => Promise<void>>(() => Promise.resolve(undefined))
+const mockMarkSucceeded = mock<(id: string, output: unknown, cost: unknown) => Promise<void>>(() => Promise.resolve(undefined))
+const mockCalculateCost = mock<() => Record<string, unknown>>(() => ({ unit: 'token', totalPriceCents: 1, totalPrice: 0.01 }))
+const mockGenerate = mock<(model: string, params: Record<string, unknown>, refs?: string[]) => Promise<MockProviderResult>>(() =>
+  Promise.resolve({ success: false, error: 'mock error' }),
+)
 
 const mockNotifyStatus = mock(() => Promise.resolve(undefined))
 const mockGetUploadedFilesByIdsForAccount = mock(() => Promise.resolve([]))
@@ -94,52 +123,17 @@ import { createGenerateRoutes } from '../src/routes/generate'
 
 // ─── 测试配置 ────────────────────────────────────────────
 
-const testConfig: ServerConfig = {
-  port: 0,
-  databaseUrl: '',
+const testConfig = makeTestConfig({
   dashscopeApiKey: 'test-key',
   dashscopeBaseUrl: 'https://test.local',
   storageRoot: '/tmp/test-uploads',
-  frontendUrl: '',
-  workerPollIntervalMs: 0,
   jwtSecret: 'test-generate-secret',
-  jwtExpiresIn: '1h',
-  oss: undefined,
-}
-
-function makeRecord(overrides: Record<string, any> = {}) {
-  return {
-    id: 'rec-001',
-    accountId: 'acc-001',
-    taskId: 'gen_123_abc',
-    model: 'qwen-max',
-    category: 'text',
-    status: 'succeeded',
-    inputParams: {},
-    outputResult: {},
-    cost: { totalPriceCents: 1, totalPrice: 0.01 },
-    errorMessage: null,
-    createdAt: new Date('2024-01-01'),
-    updatedAt: new Date('2024-01-01'),
-    ...overrides,
-  }
-}
+})
 
 // ─── 辅助：获取有效 token ────────────────────────────────
 
-async function getAuthToken(_client: ReturnType<typeof treaty>): Promise<string> {
-  // 直接用 Elysia JWT 签一个 token
-  const { sign: _sign } = await import('@elysia/jwt')
-  // 使用 treaty 的方式不太方便直接签名，用一个简单的 workaround
-  // 创建一个小 app 来签发 token
-  const { Elysia } = await import('elysia')
-  const jwtApp = new Elysia()
-    .use((await import('@elysia/jwt')).jwt({ name: 'jwt', secret: testConfig.jwtSecret, exp: '1h' }))
-    .get('/sign', async ({ jwt }) => jwt.sign({ sub: 'acc-001' }))
-
-  const jwtClient = treaty(jwtApp)
-  const { data } = await jwtClient.sign.get()
-  return data as unknown as string
+async function getAuthToken(): Promise<string> {
+  return signTestToken(testConfig.jwtSecret, 'acc-001')
 }
 
 // ─── 测试 ────────────────────────────────────────────────
@@ -149,7 +143,7 @@ describe('generate routes', () => {
   let token: string
 
   beforeAll(async () => {
-    token = await getAuthToken(client!)
+    token = await getAuthToken()
   })
 
   beforeEach(() => {
