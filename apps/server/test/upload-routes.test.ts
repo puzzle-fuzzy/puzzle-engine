@@ -26,12 +26,18 @@ const mockGetAccountByEmail = mock<() => Promise<MockAccountRow | null>>(() => P
 const mockGetAccountByUsername = mock<() => Promise<MockAccountRow | null>>(() => Promise.resolve(null))
 const mockGetAccountById = mock<() => Promise<MockAccountRow | null>>(() => Promise.resolve(null))
 const mockCreateAccount = mock<(values: Record<string, unknown>) => Promise<MockAccountRow | null>>(() => Promise.resolve(null))
-const mockCreateUploadedFile = mock<(values: Record<string, unknown>) => Promise<{ id: string, fileName: string, publicUrl: string, mimeType: string }>>(() =>
+const mockCreateUploadedFile = mock<() => Promise<Record<string, unknown>>>(() =>
   Promise.resolve({
     id: 'file-001',
+    accountId: 'acc-upload-test',
     fileName: 'test.png',
+    fileSize: 1024,
     publicUrl: '/uploads/test.png',
     mimeType: 'image/png',
+    storagePath: '/uploads/ref_test.png',
+    purpose: 'reference',
+    metadata: null,
+    createdAt: new Date('2024-01-01'),
   }),
 )
 
@@ -166,9 +172,15 @@ describe('upload routes', () => {
       })
       mockCreateUploadedFile.mockResolvedValue({
         id: 'file-001',
+        accountId: 'acc-upload-test',
         fileName: 'test.png',
+        fileSize: 14,
         publicUrl: '/uploads/ref_123/test.png',
         mimeType: 'image/png',
+        storagePath: '/uploads/ref_123/test.png',
+        purpose: 'reference',
+        metadata: null,
+        createdAt: new Date('2024-01-01'),
       })
 
       const formData = new FormData()

@@ -1,4 +1,5 @@
 import type { AccountRow } from '@excuse/db'
+import type { AuthUser } from '@excuse/shared'
 import type { ServerConfig } from '../config'
 import { createAccount, getAccountByEmail, getAccountById, getAccountByUsername } from '@excuse/db'
 import { Elysia, t } from 'elysia'
@@ -6,11 +7,20 @@ import { createAuthPlugin } from '../plugins/auth'
 import { conflict, forbidden, notFound, unauthorized } from '../utils/errors'
 
 /**
- * 从账户行中剥离密码哈希，安全返回给客户端
+ * 从账户行中剥离密码哈希并序列化 Date→string，返回 AuthUser DTO
+ *
+ * 关键：不能直接 spread DB row — createdAt/updatedAt 是 Date 对象，
+ * JSON.stringify(Date) 产生字符串但 JSON.parse 后变回字符串，
+ * 导致类型不匹配（运行时是 string 但 TypeScript 认为是 Date）。
+ * 必须显式 .toISOString() 确保 DTO 类型与 AuthUser 定义一致。
  */
-function sanitizeUser(account: AccountRow) {
-  const { password: _, ...safe } = account
-  return safe
+function sanitizeUser(account: AccountRow): AuthUser {
+  const { password: _, createdAt, updatedAt, ...rest } = account
+  return {
+    ...rest,
+    createdAt: createdAt.toISOString(),
+    updatedAt: updatedAt.toISOString(),
+  }
 }
 
 /**

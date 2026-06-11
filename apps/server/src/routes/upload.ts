@@ -1,3 +1,4 @@
+import type { UploadedFileDTO } from '@excuse/shared'
 import type { ServerConfig } from '../config'
 import { createUploadedFile, deleteUploadedFileById, getUploadedFileById } from '@excuse/db'
 import { AssetStorage } from '@excuse/provider'
@@ -7,6 +8,30 @@ import { forbidden, notFound, unauthorized, validationError } from '../utils/err
 
 const ALLOWED_MIME_TYPES = ['image/png', 'image/jpeg', 'image/webp', 'image/gif']
 const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10MB
+
+/**
+ * DB row → DTO 序列化（Date → string）
+ *
+ * 上传文件 DTO 必须包含 createdAt 等 Date 字段的字符串序列化，
+ * 与 GenerationRecord / AuthUser 保持一致的模式。
+ */
+function serializeUploadedFile(record: {
+  id: string
+  accountId: string
+  fileName: string
+  fileSize: number
+  mimeType: string
+  storagePath: string
+  publicUrl: string
+  purpose: string
+  metadata: Record<string, unknown> | null
+  createdAt: Date
+}): UploadedFileDTO {
+  return {
+    ...record,
+    createdAt: record.createdAt.toISOString(),
+  }
+}
 
 export function createUploadRoutes(config: ServerConfig) {
   const storage = new AssetStorage({
@@ -50,12 +75,7 @@ export function createUploadRoutes(config: ServerConfig) {
 
       return {
         success: true,
-        file: {
-          id: record.id,
-          fileName: record.fileName,
-          publicUrl: record.publicUrl,
-          mimeType: record.mimeType,
-        },
+        file: serializeUploadedFile(record),
       }
     }, {
       body: t.Object({

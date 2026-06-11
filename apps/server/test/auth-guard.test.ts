@@ -30,12 +30,18 @@ const mockGetGenerationRecordById = mock<(id: string) => Promise<unknown | null>
 const mockMarkGenerationFailed = mock<(id: string, error: string) => Promise<void>>(() => Promise.resolve(undefined))
 const mockMarkGenerationProcessing = mock<(id: string, data: Record<string, unknown>) => Promise<void>>(() => Promise.resolve(undefined))
 const mockMarkGenerationSucceeded = mock<(id: string, output: unknown, cost: unknown) => Promise<void>>(() => Promise.resolve(undefined))
-const mockCreateUploadedFile = mock<(values: Record<string, unknown>) => Promise<{ id: string, fileName: string, publicUrl: string, mimeType: string }>>(() =>
+const mockCreateUploadedFile = mock<() => Promise<Record<string, unknown>>>(() =>
   Promise.resolve({
     id: 'file-001',
+    accountId: 'acc-guard-test',
     fileName: 'test.png',
+    fileSize: 1024,
     publicUrl: '/uploads/test.png',
     mimeType: 'image/png',
+    storagePath: '/uploads/test.png',
+    purpose: 'reference',
+    metadata: null,
+    createdAt: new Date('2024-01-01'),
   }),
 )
 const mockNotifyStatus = mock<(payload: Record<string, unknown>) => Promise<void>>(() => Promise.resolve(undefined))
