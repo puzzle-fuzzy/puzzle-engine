@@ -171,8 +171,8 @@ export async function analyzeProject(projectId: string, config: { dashscopeApiKe
   // Re-analysis resets downstream data to ensure consistency
   if (project.status !== 'draft') {
     await deleteCanvasShotsByProject(projectId)
-    await deleteCanvasLocationsByProject(projectId)
-    await deleteCanvasCharactersByProject(projectId)
+    await deleteCanvasLocationsByProject(projectId, { excludeLocked: true })
+    await deleteCanvasCharactersByProject(projectId, { excludeLocked: true })
   }
 
   try {
