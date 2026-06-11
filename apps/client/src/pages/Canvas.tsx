@@ -79,6 +79,7 @@ export default function Canvas() {
 
   async function handleDelete(id: string, e: React.MouseEvent) {
     e.stopPropagation()
+    // eslint-disable-next-line no-alert
     if (!confirm('确认删除该项目？'))
       return
     try {

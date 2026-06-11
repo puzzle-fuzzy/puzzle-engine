@@ -68,8 +68,13 @@ interface Props {
 }
 
 export default function PipelineController({
-  projectId, projectStatus, modelPreferences, onPhaseComplete, onPhaseChange,
-  phaseDone, onPhaseDoneConsumed,
+  projectId,
+  projectStatus,
+  modelPreferences,
+  onPhaseComplete,
+  onPhaseChange,
+  phaseDone,
+  onPhaseDoneConsumed,
 }: Props) {
   const [autoMode, setAutoMode] = useState(false)
   const [running, setRunning] = useState(false)
@@ -110,6 +115,31 @@ export default function PipelineController({
 
   const startIdx = getPhaseIndex(projectStatus)
 
+  // Fire a phase API call (returns immediately in fire-and-forget mode)
+  const triggerPhase = useCallback(async (idx: number) => {
+    const phase = PHASES[idx]
+    if (!phase)
+      return
+
+    setCurrentPhase(idx)
+    setRunning(true)
+    setError(null)
+    onPhaseChange?.(phase.key)
+
+    try {
+      await phase.run(projectId)
+      // API acknowledged (fire-and-forget: returns immediately)
+      // Actual completion is tracked via phaseDone SSE events
+    }
+    catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err)
+      setError(`${phase.label} 触发失败: ${msg}`)
+      setRunning(false)
+      setCurrentPhase(-1)
+      onPhaseChange?.(null)
+    }
+  }, [projectId, onPhaseChange])
+
   // Advance to next phase after current phase completes
   const advanceAfterPhase = useCallback((completedIdx: number) => {
     const nextIdx = completedIdx + 1
@@ -137,38 +167,16 @@ export default function PipelineController({
       setCurrentPhase(-1)
       onPhaseChange?.(null)
     }
-  }, [onPhaseChange])
-
-  // Fire a phase API call (returns immediately in fire-and-forget mode)
-  const triggerPhase = useCallback(async (idx: number) => {
-    const phase = PHASES[idx]
-    if (!phase) return
-
-    setCurrentPhase(idx)
-    setRunning(true)
-    setError(null)
-    onPhaseChange?.(phase.key)
-
-    try {
-      await phase.run(projectId)
-      // API acknowledged (fire-and-forget: returns immediately)
-      // Actual completion is tracked via phaseDone SSE events
-    }
-    catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : String(err)
-      setError(`${phase.label} 触发失败: ${msg}`)
-      setRunning(false)
-      setCurrentPhase(-1)
-      onPhaseChange?.(null)
-    }
-  }, [projectId, onPhaseChange])
+  }, [onPhaseChange, triggerPhase])
 
   // Handle phase completion from SSE events
   useEffect(() => {
-    if (!phaseDone || !running || currentPhase < 0) return
+    if (!phaseDone || !running || currentPhase < 0)
+      return
 
     const phase = PHASES[currentPhase]
-    if (!phase || phase.key !== phaseDone.key) return
+    if (!phase || phase.key !== phaseDone.key)
+      return
 
     onPhaseDoneConsumed()
 
@@ -185,11 +193,12 @@ export default function PipelineController({
 
     // Phase completed successfully, advance
     advanceAfterPhase(currentPhase)
-  }, [phaseDone, running, currentPhase, onPhaseDoneConsumed, onPhaseComplete, advanceAfterPhase])
+  }, [phaseDone, running, currentPhase, onPhaseDoneConsumed, onPhaseComplete, advanceAfterPhase, onPhaseChange])
 
   // Countdown timer for auto mode pauses
   useEffect(() => {
-    if (countdown <= 0) return
+    if (countdown <= 0)
+      return
     const timer = setTimeout(() => {
       const next = countdown - 1
       setCountdown(next)
@@ -202,21 +211,24 @@ export default function PipelineController({
   }, [countdown, projectStatus, triggerPhase])
 
   function handleRunFrom(idx: number) {
-    if (running) return
+    if (running)
+      return
     setAutoMode(false)
     setError(null)
     triggerPhase(idx)
   }
 
   function handleAutoRun() {
-    if (running) return
+    if (running)
+      return
     setAutoMode(true)
     setError(null)
     triggerPhase(startIdx)
   }
 
   function handleSkipAndContinue() {
-    if (running) return
+    if (running)
+      return
     const nextIdx = startIdx + 1
     if (nextIdx < PHASES.length) {
       setAutoMode(false)
@@ -321,7 +333,9 @@ export default function PipelineController({
 
           {running && currentPhaseLabel && (
             <span className="text-xs text-blue-600 font-medium animate-pulse">
-              正在{currentPhaseLabel}...
+              正在
+              {currentPhaseLabel}
+              ...
             </span>
           )}
           {running && !currentPhaseLabel && (

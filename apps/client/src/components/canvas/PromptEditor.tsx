@@ -97,7 +97,7 @@ export function PromptEditor({
     if (atIndex !== -1) {
       const textAfterAt = textBeforeCursor.slice(atIndex + 1)
       // Only show mentions if @ is at start of line, after space, or after [
-      if (atIndex === 0 || /[\s\[]$/.test(newValue[atIndex - 1])) {
+      if (atIndex === 0 || /[\s[]$/.test(newValue[atIndex - 1])) {
         // Close if there's a space after @
         if (textAfterAt.includes(' ') || textAfterAt.includes('\n')) {
           setShowMentions(false)
@@ -128,7 +128,7 @@ export function PromptEditor({
         value={value}
         onChange={handleChange}
         onKeyDown={handleKeyDown}
-        onBlur={() => setTimeout(() => setShowMentions(false), 150)}
+        onBlur={() => setTimeout(setShowMentions, 150, false)}
         placeholder={placeholder}
         rows={rows}
         disabled={disabled}

@@ -126,7 +126,7 @@ describe('billing routes', () => {
       })
 
       // Elysia 会捕获未处理异常并返回 500
-      const { data, error } = await client.api.billing.statistics.get()
+      const { data, error: _error } = await client.api.billing.statistics.get()
 
       // 不应成功返回
       expect(data?.success).not.toBe(true)

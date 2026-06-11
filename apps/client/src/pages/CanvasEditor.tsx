@@ -79,7 +79,9 @@ export default function CanvasEditor() {
         </span>
         {runningPhase && (
           <span className="text-xs px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 animate-pulse">
-            正在执行: {runningPhase}
+            正在执行:
+            {' '}
+            {runningPhase}
           </span>
         )}
       </div>

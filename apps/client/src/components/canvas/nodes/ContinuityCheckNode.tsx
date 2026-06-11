@@ -37,9 +37,9 @@ export default function ContinuityCheckNode({ data }: NodeProps) {
             )
           : (
               <div className="space-y-2 max-h-[300px] overflow-auto">
-                {issues.map((issue: ContinuityIssue, i: number) => (
+                {issues.map((issue: ContinuityIssue) => (
                   <div
-                    key={i}
+                    key={`${issue.severity}-${issue.message}`}
                     className={`rounded border p-2 text-xs ${
                       issue.severity === 'error'
                         ? 'border-red-300 bg-red-50'

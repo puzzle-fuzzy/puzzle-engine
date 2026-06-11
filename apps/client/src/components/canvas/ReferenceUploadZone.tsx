@@ -91,68 +91,72 @@ export function ReferenceUploadZone({
     <div className="space-y-2">
       <label className="text-xs font-medium text-muted-foreground">{label}</label>
 
-      {previewUrl ? (
-        <div className="relative group rounded-lg overflow-hidden border">
-          <img
-            src={previewUrl}
-            alt="参考图"
-            className="w-full h-40 object-cover"
-          />
-          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
-            <button
-              type="button"
+      {previewUrl
+        ? (
+            <div className="relative group rounded-lg overflow-hidden border">
+              <img
+                src={previewUrl}
+                alt="参考图"
+                className="w-full h-40 object-cover"
+              />
+              <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => inputRef.current?.click()}
+                  className="px-3 py-1.5 bg-white text-black rounded text-xs font-medium hover:bg-gray-100"
+                  disabled={uploading}
+                >
+                  替换
+                </button>
+                {onRemove && (
+                  <button
+                    type="button"
+                    onClick={handleRemove}
+                    className="px-3 py-1.5 bg-red-500 text-white rounded text-xs font-medium hover:bg-red-600"
+                    disabled={uploading}
+                  >
+                    删除
+                  </button>
+                )}
+              </div>
+            </div>
+          )
+        : (
+            <div
+              onDrop={handleDrop}
+              onDragOver={handleDragOver}
+              onDragLeave={handleDragLeave}
               onClick={() => inputRef.current?.click()}
-              className="px-3 py-1.5 bg-white text-black rounded text-xs font-medium hover:bg-gray-100"
-              disabled={uploading}
-            >
-              替换
-            </button>
-            {onRemove && (
-              <button
-                type="button"
-                onClick={handleRemove}
-                className="px-3 py-1.5 bg-red-500 text-white rounded text-xs font-medium hover:bg-red-600"
-                disabled={uploading}
-              >
-                删除
-              </button>
-            )}
-          </div>
-        </div>
-      ) : (
-        <div
-          onDrop={handleDrop}
-          onDragOver={handleDragOver}
-          onDragLeave={handleDragLeave}
-          onClick={() => inputRef.current?.click()}
-          className={`
+              className={`
             flex flex-col items-center justify-center h-40 rounded-lg border-2 border-dashed cursor-pointer transition-colors
             ${dragging ? 'border-primary bg-primary/5' : 'border-muted-foreground/25 hover:border-primary/50 hover:bg-muted/50'}
             ${uploading ? 'opacity-50 pointer-events-none' : ''}
           `}
-        >
-          {uploading ? (
-            <p className="text-xs text-muted-foreground">上传中...</p>
-          ) : (
-            <>
-              <svg
-                className="w-8 h-8 text-muted-foreground/50 mb-2"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={1.5}
-                  d="M12 16V4m0 0l-4 4m4-4l4 4M4 20h16"
-                />
-              </svg>
-              <p className="text-xs text-muted-foreground">拖拽图片到此处，或点击上传</p>
-            </>
+            >
+              {uploading
+                ? (
+                    <p className="text-xs text-muted-foreground">上传中...</p>
+                  )
+                : (
+                    <>
+                      <svg
+                        className="w-8 h-8 text-muted-foreground/50 mb-2"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={1.5}
+                          d="M12 16V4m0 0l-4 4m4-4l4 4M4 20h16"
+                        />
+                      </svg>
+                      <p className="text-xs text-muted-foreground">拖拽图片到此处，或点击上传</p>
+                    </>
+                  )}
+            </div>
           )}
-        </div>
-      )}
 
       <input
         ref={inputRef}

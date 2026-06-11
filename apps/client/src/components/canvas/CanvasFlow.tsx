@@ -46,7 +46,8 @@ const PHASE_NODE_TYPE: Record<string, string> = {
 }
 
 function computeLayout(nodes: Node[], edges: Edge[]): Node[] {
-  if (nodes.length === 0) return nodes
+  if (nodes.length === 0)
+    return nodes
 
   const g = new dagre.graphlib.Graph()
   g.setDefaultEdgeLabel(() => ({}))
@@ -63,7 +64,8 @@ function computeLayout(nodes: Node[], edges: Edge[]): Node[] {
 
   return nodes.map((node) => {
     const pos = g.node(node.id)
-    if (!pos) return node
+    if (!pos)
+      return node
     return {
       ...node,
       position: { x: pos.x - NODE_WIDTH / 2, y: pos.y - (node.measured?.height ?? 200) / 2 },
@@ -160,9 +162,9 @@ function CanvasFlowInner(props: {
   const { fitView, getNodes, getEdges } = useReactFlow()
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([])
   const [edges, setEdges] = useEdgesState<Edge>([])
-  const fittedOnce = useRef(false)
-  const savedPositions = useRef(new Map<string, { x: number, y: number }>())
-  const measuredSig = useRef('')
+  const fittedOnceRef = useRef(false)
+  const savedPositionsRef = useRef(new Map<string, { x: number, y: number }>())
+  const measuredSigRef = useRef('')
 
   // Build nodes when project or running phase changes
   useEffect(() => {
@@ -172,7 +174,7 @@ function CanvasFlowInner(props: {
     const current = getNodes()
     const existing = new Map(current.map(n => [n.id, n]))
 
-    const merged = built.map(n => {
+    const merged = built.map((n) => {
       const prev = existing.get(n.id)
       if (prev) {
         return { ...n, position: prev.position, measured: prev.measured }
@@ -184,8 +186,8 @@ function CanvasFlowInner(props: {
     const laidOut = computeLayout(merged, builtEdges)
 
     // Existing nodes keep their saved positions; new nodes get dagre positions
-    const final = laidOut.map(n => {
-      const saved = savedPositions.current.get(n.id)
+    const final = laidOut.map((n) => {
+      const saved = savedPositionsRef.current.get(n.id)
       if (saved) {
         return { ...n, position: saved }
       }
@@ -194,53 +196,60 @@ function CanvasFlowInner(props: {
 
     setNodes(final)
     setEdges(builtEdges)
-  }, [project, runningPhase])
+  }, [project, runningPhase, getNodes, setNodes, setEdges])
 
   // After render: capture measurements and re-layout new nodes once
   useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | undefined
     const raf = requestAnimationFrame(() => {
       const current = getNodes()
-      if (current.length === 0) return
+      if (current.length === 0)
+        return
 
       // Find new nodes that have been measured but don't have saved positions yet
       const newlyMeasured = current.filter(
-        n => !savedPositions.current.has(n.id) && n.measured?.height,
+        n => !savedPositionsRef.current.has(n.id) && n.measured?.height,
       )
 
       if (newlyMeasured.length === 0) {
-        if (!fittedOnce.current) {
-          setTimeout(() => fitView({ padding: 0.15, duration: 300 }), 100)
-          fittedOnce.current = true
+        if (!fittedOnceRef.current) {
+          timer = setTimeout(fitView, 100, { padding: 0.15, duration: 300 })
+          fittedOnceRef.current = true
         }
         return
       }
 
       // Build signature to avoid re-layout loops
       const sig = current.map(n => `${n.id}:${n.measured?.height ?? 0}`).join('|')
-      if (sig === measuredSig.current) return
-      measuredSig.current = sig
+      if (sig === measuredSigRef.current)
+        return
+      measuredSigRef.current = sig
 
       // Re-layout with actual measurements
       const laidOut = computeLayout(current, getEdges())
 
       // Existing nodes keep positions; new nodes get updated positions and are saved
-      const final = laidOut.map(n => {
-        const saved = savedPositions.current.get(n.id)
+      const final = laidOut.map((n) => {
+        const saved = savedPositionsRef.current.get(n.id)
         if (saved) {
           return { ...n, position: saved }
         }
-        savedPositions.current.set(n.id, n.position)
+        savedPositionsRef.current.set(n.id, n.position)
         return n
       })
 
       setNodes(final)
 
-      if (!fittedOnce.current) {
-        setTimeout(() => fitView({ padding: 0.15, duration: 300 }), 100)
-        fittedOnce.current = true
+      if (!fittedOnceRef.current) {
+        timer = setTimeout(fitView, 100, { padding: 0.15, duration: 300 })
+        fittedOnceRef.current = true
       }
     })
-    return () => cancelAnimationFrame(raf)
+    return () => {
+      cancelAnimationFrame(raf)
+      if (timer)
+        clearTimeout(timer)
+    }
   })
 
   const handleNodeClick = useCallback((_: React.MouseEvent, node: Node) => {

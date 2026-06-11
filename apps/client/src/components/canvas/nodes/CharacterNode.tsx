@@ -1,9 +1,9 @@
-import type { CharacterDTO, ProjectDTO } from '@excuse/shared'
+import type { CharacterDTO } from '@excuse/shared'
 import type { NodeProps } from '@xyflow/react'
 import { Handle, Position } from '@xyflow/react'
 
 export default function CharacterNode({ data }: NodeProps) {
-  const { character, project, isRunning } = data as { character: CharacterDTO, project: ProjectDTO, isRunning?: boolean }
+  const { character, isRunning } = data as { character: CharacterDTO, isRunning?: boolean }
   const profile = character.profile
 
   return (

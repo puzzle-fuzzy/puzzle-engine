@@ -41,15 +41,17 @@ export default function ShotNode({ data }: NodeProps) {
           镜头
           {shot.shotIndex + 1}
         </span>
-        {isRunning ? (
-          <span className="text-[10px] rounded-full px-2 py-0.5 bg-yellow-100 text-yellow-700 animate-pulse">
-            生成中...
-          </span>
-        ) : (
-          <span className={`text-[10px] rounded-full px-2 py-0.5 ${SHOT_STATUS_COLORS[shot.status] || ''}`}>
-            {SHOT_STATUS_LABELS[shot.status] || shot.status}
-          </span>
-        )}
+        {isRunning
+          ? (
+              <span className="text-[10px] rounded-full px-2 py-0.5 bg-yellow-100 text-yellow-700 animate-pulse">
+                生成中...
+              </span>
+            )
+          : (
+              <span className={`text-[10px] rounded-full px-2 py-0.5 ${SHOT_STATUS_COLORS[shot.status] || ''}`}>
+                {SHOT_STATUS_LABELS[shot.status] || shot.status}
+              </span>
+            )}
       </div>
       {isRunning && (
         <div className="absolute inset-0 bg-white/30 flex items-center justify-center rounded-lg pointer-events-none">
@@ -105,8 +107,8 @@ export default function ShotNode({ data }: NodeProps) {
           <div>
             <span className="text-muted-foreground text-xs">逐秒时间线：</span>
             <div className="text-xs bg-white rounded p-2 mt-0.5 max-h-[100px] overflow-auto space-y-0.5">
-              {shot.timeline.map((entry, i) => (
-                <div key={i}>
+              {shot.timeline.map(entry => (
+                <div key={entry.time}>
                   <span className="font-mono text-muted-foreground">
                     {entry.time}
                     :

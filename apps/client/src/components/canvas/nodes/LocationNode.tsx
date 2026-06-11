@@ -1,9 +1,9 @@
-import type { LocationDTO, ProjectDTO } from '@excuse/shared'
+import type { LocationDTO } from '@excuse/shared'
 import type { NodeProps } from '@xyflow/react'
 import { Handle, Position } from '@xyflow/react'
 
 export default function LocationNode({ data }: NodeProps) {
-  const { location, project, isRunning } = data as { location: LocationDTO, project: ProjectDTO, isRunning?: boolean }
+  const { location, isRunning } = data as { location: LocationDTO, isRunning?: boolean }
   const profile = location.profile
 
   return (
