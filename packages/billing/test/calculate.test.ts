@@ -281,7 +281,7 @@ describe('calculateCost', () => {
         description: '',
         endpoint: '',
         async: false,
-        pricing: { inputPriceCents: 100, unit: 'other' as any },
+        pricing: { inputPriceCents: 100, unit: 'other' as 'token' | 'image' | 'video' },
         parameters: [],
       }, {})).toThrow(/未知的计费单位/)
     })

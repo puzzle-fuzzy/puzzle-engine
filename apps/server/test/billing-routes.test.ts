@@ -8,15 +8,15 @@ import { extractEdenError, makeTestConfig, signTestToken } from './helpers/test-
  * Mock @excuse/db 和 @excuse/billing，测试 GET /api/billing/statistics
  */
 
-const mockGetCostRecords = mock(() => Promise.resolve([] as any[]))
-const mockAggregateStatistics = mock(() => ({
+const mockGetCostRecords = mock<() => Promise<unknown[]>>(() => Promise.resolve([]))
+const mockAggregateStatistics = mock<() => Record<string, unknown>>(() => ({
   total: 0,
   today: 0,
   week: 0,
   month: 0,
-  byCategory: [] as any[],
-  byModel: [] as any[],
-  dailyTrend: [] as any[],
+  byCategory: [],
+  byModel: [],
+  dailyTrend: [],
 }))
 
 mock.module('@excuse/db', () => ({

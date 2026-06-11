@@ -44,7 +44,7 @@ describe('auth plugin — SSE token fallback (?token=)', () => {
 
     // 签发 token
     const signRes = await client.sign.post({ sub: 'sse-user-123' })
-    const token = (signRes.data as any)?.token
+    const token = (signRes.data as { token?: string } | null)?.token
     expect(token).toBeDefined()
 
     // 通过 query token 认证（模拟 EventSource 场景）
@@ -76,10 +76,10 @@ describe('auth plugin — SSE token fallback (?token=)', () => {
 
     // 签发两个 token，对应不同用户
     const signRes1 = await client.sign.post({ sub: 'header-user' })
-    const headerToken = (signRes1.data as any)?.token
+    const headerToken = (signRes1.data as { token?: string } | null)?.token
 
     const signRes2 = await client.sign.post({ sub: 'query-user' })
-    const queryToken = (signRes2.data as any)?.token
+    const queryToken = (signRes2.data as { token?: string } | null)?.token
 
     // 同时提供 Bearer header 和 query token → Bearer 优先
     const { data } = await client['sse-check'].get({

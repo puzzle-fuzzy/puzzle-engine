@@ -81,9 +81,11 @@ describe('models routes', () => {
     const { data } = await client.api.models.get()
 
     for (const model of data!.models) {
-      expect((model as any).endpoint).toBeUndefined()
-      expect((model as any).inputMapping).toBeUndefined()
-      expect((model as any).requestType).toBeUndefined()
+      // API 响应不应暴露内部字段 endpoint/inputMapping/requestType
+      const raw = model as Record<string, unknown>
+      expect(raw.endpoint).toBeUndefined()
+      expect(raw.inputMapping).toBeUndefined()
+      expect(raw.requestType).toBeUndefined()
     }
   })
 

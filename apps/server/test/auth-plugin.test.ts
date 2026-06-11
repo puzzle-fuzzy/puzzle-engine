@@ -68,7 +68,7 @@ describe('auth plugin (createAuthPlugin)', () => {
 
     // 先签发 token
     const signRes = await client.sign.post({ sub: 'user-abc-123' })
-    const token = (signRes.data as any)?.token
+    const token = (signRes.data as { token?: string } | null)?.token
     expect(token).toBeDefined()
 
     // 带 token 请求
@@ -88,7 +88,7 @@ describe('auth plugin (createAuthPlugin)', () => {
 
     for (const sub of ['user-1', 'a-real-uuid-like-value', 'x']) {
       const signRes = await client.sign.post({ sub })
-      const token = (signRes.data as any)?.token
+      const token = (signRes.data as { token?: string } | null)?.token
 
       const { data } = await client.check.get({
         headers: { Authorization: `Bearer ${token}` },
@@ -136,7 +136,7 @@ describe('auth plugin (createAuthPlugin)', () => {
     const signApp = createTestApp(signConfig)
     const signClient = treaty(signApp)
     const signRes = await signClient.sign.post({ sub: 'user-x' })
-    const token = (signRes.data as any)?.token
+    const token = (signRes.data as { token?: string } | null)?.token
 
     // 用 secret B 验证
     const verifyApp = createTestApp(verifyConfig)

@@ -43,8 +43,11 @@ export async function initTestDb() {
  * afterAll 调用：关闭连接
  */
 export async function teardownTestDb() {
-  const client = (db as any).$client
-  if (client && typeof client.end === 'function') {
+  // Drizzle 的 $client 是 postgres.js 底层连接，类型未暴露在公共 API 中
+  // 通过 Record<string, unknown> 访问以避免 as any
+  const internals = db as unknown as Record<string, unknown>
+  const client = internals.$client as { end: () => Promise<void> } | undefined
+  if (client) {
     await client.end()
   }
 }
@@ -58,7 +61,9 @@ export async function beginTestTransaction(): Promise<{ accountId: string }> {
   await db.execute('BEGIN')
 
   // 注入到 repo 层
-  setDb(db as any)
+  // setDb 接受 Drizzle 实例，PostgresJsDatabase 的泛型推导可能不完全匹配
+  // 通过 unknown 中转避免 as any
+  setDb(db as unknown as Parameters<typeof setDb>[0])
 
   // Seed 测试 account（在事务内，ROLLBACK 时一起清理）
   const [account] = await db
