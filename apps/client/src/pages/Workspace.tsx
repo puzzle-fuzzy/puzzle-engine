@@ -197,7 +197,7 @@ export default function Workspace() {
       }
     }
     catch (error) {
-      console.error('Generate failed:', error)
+      toast.error('生成请求失败')
     }
     finally {
       setLoading(false)

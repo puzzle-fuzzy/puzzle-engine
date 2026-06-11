@@ -1,5 +1,6 @@
 import type { ProjectDTO } from '@excuse/shared'
 import { useEffect, useState } from 'react'
+import { toast } from 'sonner'
 import { useNavigate } from 'react-router'
 import { createCanvasProject, deleteCanvasProject, listCanvasProjects } from '../api/client'
 import { Button } from '../components/ui/button'
@@ -51,7 +52,7 @@ export default function Canvas() {
       setProjects(res.data)
     }
     catch (err) {
-      console.error('Failed to load projects:', err)
+      toast.error('加载项目列表失败')
     }
     finally {
       setLoading(false)
@@ -70,7 +71,7 @@ export default function Canvas() {
       navigate(`/canvas/${res.data.id}`)
     }
     catch (err) {
-      console.error('Failed to create project:', err)
+      toast.error('创建项目失败')
     }
     finally {
       setCreating(false)
@@ -87,7 +88,7 @@ export default function Canvas() {
       setProjects(prev => prev.filter(p => p.id !== id))
     }
     catch (err) {
-      console.error('Failed to delete project:', err)
+      toast.error('删除项目失败')
     }
   }
 

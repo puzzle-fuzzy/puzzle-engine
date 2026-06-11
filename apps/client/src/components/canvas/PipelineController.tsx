@@ -1,5 +1,6 @@
 import type { CanvasModelPreferences, CanvasProjectStatus, ModelConfig, ProjectDTO } from '@excuse/shared'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { toast } from 'sonner'
 import {
   analyzeCanvasProject,
   checkCanvasContinuity,
@@ -95,7 +96,7 @@ export default function PipelineController({
   useEffect(() => {
     fetchModels()
       .then(res => setModels(res.models))
-      .catch(() => {})
+      .catch(() => { toast.error('加载模型列表失败') })
   }, [])
 
   const textModels = useMemo(() => models.filter(m => m.category === 'text'), [models])
@@ -110,6 +111,7 @@ export default function PipelineController({
     }
     catch {
       setPrefs(prefs)
+      toast.error('保存模型偏好失败')
     }
   }
 

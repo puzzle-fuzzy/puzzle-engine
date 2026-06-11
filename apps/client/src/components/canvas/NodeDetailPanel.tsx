@@ -1,5 +1,6 @@
 import type { ProjectDTO } from '@excuse/shared'
 import { useCallback, useState } from 'react'
+import { toast } from 'sonner'
 import { deleteCanvasCharacter, deleteCanvasLocation, deleteCanvasShot, retryCanvasShot, updateCanvasCharacter, updateCanvasLocation, updateCanvasProject, updateCanvasShot, uploadFile } from '../../api/client'
 import { Button } from '../ui/button'
 import { Input } from '../ui/input'
@@ -30,7 +31,7 @@ export default function NodeDetailPanel({ selectedNode, project, onUpdate }: Nod
       onUpdate()
     }
     catch (err) {
-      console.error('Failed to update shot prompt:', err)
+      toast.error('更新镜头 Prompt 失败')
     }
     finally {
       setSaving(false)
@@ -68,7 +69,7 @@ export default function NodeDetailPanel({ selectedNode, project, onUpdate }: Nod
       onUpdate()
     }
     catch (err) {
-      console.error('Failed to update character:', err)
+      toast.error('更新角色失败')
     }
   }, [character, onUpdate])
 
@@ -84,7 +85,7 @@ export default function NodeDetailPanel({ selectedNode, project, onUpdate }: Nod
       onUpdate()
     }
     catch (err) {
-      console.error('Failed to update location:', err)
+      toast.error('更新场景失败')
     }
   }, [location, onUpdate])
 
@@ -105,7 +106,7 @@ export default function NodeDetailPanel({ selectedNode, project, onUpdate }: Nod
       onUpdate()
     }
     catch (err) {
-      console.error('Failed to update shot:', err)
+      toast.error('更新镜头失败')
     }
   }, [shot, onUpdate])
 
@@ -132,7 +133,7 @@ export default function NodeDetailPanel({ selectedNode, project, onUpdate }: Nod
       onUpdate()
     }
     catch (err) {
-      console.error('Failed to update project:', err)
+      toast.error('更新项目信息失败')
     }
     finally {
       setEditSaving(false)
