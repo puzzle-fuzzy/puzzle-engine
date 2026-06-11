@@ -1,10 +1,11 @@
 import type { SSEGenerationStatusEvent, SSENotificationEvent, SSEPipelineNodeEvent } from '@excuse/shared'
 import { getAuthToken } from './client'
 
-type GenerationStatusHandler = (event: SSEGenerationStatusEvent) => void
-type NotificationHandler = (event: SSENotificationEvent) => void
-type PipelineNodeHandler = (event: SSEPipelineNodeEvent) => void
-type EventHandler = GenerationStatusHandler | NotificationHandler | PipelineNodeHandler
+interface SSEEventMap {
+  generation_status: SSEGenerationStatusEvent
+  pipeline_node_update: SSEPipelineNodeEvent
+  notification: SSENotificationEvent
+}
 
 /**
  * SSE 客户端 — 管理与服务器的实时连接
@@ -16,7 +17,7 @@ type EventHandler = GenerationStatusHandler | NotificationHandler | PipelineNode
  */
 class SSEClient {
   private eventSource: EventSource | null = null
-  private handlers = new Map<string, Set<EventHandler>>()
+  private handlers: { [K in keyof SSEEventMap]?: Set<(data: SSEEventMap[K]) => void> } = {}
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null
   private intentionallyClosed = false
 
@@ -26,20 +27,18 @@ class SSEClient {
    */
   connect() {
     if (this.eventSource)
-      return // 已连接
+      return
 
     const token = getAuthToken()
     if (!token)
-      return // 未认证，不连接
+      return
 
     this.intentionallyClosed = false
-    // 通过 Vite dev proxy: /api → localhost:5007
     this.eventSource = new EventSource(`/api/sse?token=${encodeURIComponent(token)}`)
 
-    // 生成状态事件
     this.eventSource.addEventListener('generation_status', (e) => {
       try {
-        const data: SSEGenerationStatusEvent = JSON.parse(e.data)
+        const data = JSON.parse(e.data) as SSEGenerationStatusEvent
         this.emit('generation_status', data)
       }
       catch (err) {
@@ -47,10 +46,9 @@ class SSEClient {
       }
     })
 
-    // 流水线节点更新事件
     this.eventSource.addEventListener('pipeline_node_update', (e) => {
       try {
-        const data: SSEPipelineNodeEvent = JSON.parse(e.data)
+        const data = JSON.parse(e.data) as SSEPipelineNodeEvent
         this.emit('pipeline_node_update', data)
       }
       catch (err) {
@@ -58,10 +56,9 @@ class SSEClient {
       }
     })
 
-    // 通知事件（预留）
     this.eventSource.addEventListener('notification', (e) => {
       try {
-        const data: SSENotificationEvent = JSON.parse(e.data)
+        const data = JSON.parse(e.data) as SSENotificationEvent
         this.emit('notification', data)
       }
       catch (err) {
@@ -69,17 +66,14 @@ class SSEClient {
       }
     })
 
-    // 心跳 — 仅用于确认连接存活
     this.eventSource.addEventListener('heartbeat', () => {
       // no-op: 收到即表示连接正常
     })
 
-    // 连接建立
     this.eventSource.addEventListener('connected', (e) => {
       console.info('[SSE] Connected:', e.data)
     })
 
-    // 错误处理
     this.eventSource.onerror = () => {
       console.warn('[SSE] Connection error, will reconnect...')
       this.cleanupConnection()
@@ -89,9 +83,6 @@ class SSEClient {
     }
   }
 
-  /**
-   * 断开 SSE 连接
-   */
   disconnect() {
     this.intentionallyClosed = true
     this.cancelReconnect()
@@ -99,39 +90,38 @@ class SSEClient {
   }
 
   /**
-   * 订阅事件
+   * 订阅事件 — 完全类型安全
+   * event 名称决定 handler 的参数类型
    * @returns 取消订阅的函数
    */
-  on(event: 'generation_status', handler: GenerationStatusHandler): () => void
-  on(event: 'notification', handler: NotificationHandler): () => void
-  on(event: 'pipeline_node_update', handler: PipelineNodeHandler): () => void
-  on(event: string, handler: EventHandler): () => void {
-    if (!this.handlers.has(event)) {
-      this.handlers.set(event, new Set())
+  on<K extends keyof SSEEventMap>(event: K, handler: (data: SSEEventMap[K]) => void): () => void {
+    const set = this.handlers[event] as Set<(data: SSEEventMap[K]) => void> | undefined
+    if (!set) {
+      const newSet = new Set<(data: SSEEventMap[K]) => void>()
+      this.handlers[event] = newSet as any
+      newSet.add(handler)
     }
-    this.handlers.get(event)!.add(handler)
+    else {
+      set.add(handler)
+    }
     return () => {
-      this.handlers.get(event)?.delete(handler)
+      const existing = this.handlers[event] as Set<(data: SSEEventMap[K]) => void> | undefined
+      existing?.delete(handler)
     }
   }
 
-  /**
-   * 重新连接（如 token 更新后）
-   */
   reconnect() {
     this.disconnect()
     this.connect()
   }
 
-  // ===== 私有方法 =====
-
-  private emit(event: string, data: unknown) {
-    const handlers = this.handlers.get(event)
-    if (!handlers)
+  private emit<K extends keyof SSEEventMap>(event: K, data: SSEEventMap[K]) {
+    const set = this.handlers[event] as Set<(data: SSEEventMap[K]) => void> | undefined
+    if (!set)
       return
-    for (const handler of handlers) {
+    for (const handler of set) {
       try {
-        ;(handler as (data: unknown) => void)(data)
+        handler(data)
       }
       catch (err) {
         console.error(`[SSE] Handler error for event "${event}":`, err)
