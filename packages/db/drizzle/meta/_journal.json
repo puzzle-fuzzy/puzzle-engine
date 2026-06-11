@@ -43,6 +43,13 @@
       "when": 1781177867285,
       "tag": "0005_rainy_madelyne_pryor",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1781179234363,
+      "tag": "0006_lumpy_gateway",
+      "breakpoints": true
     }
   ]
 }

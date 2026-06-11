@@ -1,4 +1,5 @@
-import { boolean, index, jsonb, pgEnum, pgTable, text, timestamp, uuid, varchar } from 'drizzle-orm/pg-core'
+import type { CostDetail, OutputResult } from '../domain-types'
+import { boolean, index, integer, jsonb, pgEnum, pgTable, text, timestamp, uuid, varchar } from 'drizzle-orm/pg-core'
 import { accounts } from './accounts'
 
 /**
@@ -48,13 +49,19 @@ export const generationRecords = pgTable('generation_records', {
   inputParams: jsonb('input_params').notNull().$type<Record<string, unknown>>(),
 
   /** 输出结果（生成的 URL、文本内容等） */
-  outputResult: jsonb('output_result').$type<Record<string, unknown>>(),
+  outputResult: jsonb('output_result').$type<OutputResult>(),
 
   /** 费用明细（token 数量、单价、总费用等） */
-  cost: jsonb('cost').$type<Record<string, unknown>>(),
+  cost: jsonb('cost').$type<CostDetail>(),
 
   /** 失败时的错误信息 */
   errorMessage: text('error_message'),
+
+  /** 重试次数，每次 retry 时递增 */
+  retryCount: integer('retry_count').default(0).notNull(),
+
+  /** 去重键 = model + hash(params)，防止同参数重复提交 */
+  dedupeKey: varchar('dedupe_key', { length: 255 }).unique(),
 
   /** 创建时间 */
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),

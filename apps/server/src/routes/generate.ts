@@ -5,6 +5,7 @@ import {
   cancelGenerationRecord,
   createGenerationRecord,
   deleteGenerationRecord,
+  findGenerationByDedupeKey,
   getGenerationRecordById,
   getUploadedFilesByIds,
   listGenerationRecords,
@@ -55,6 +56,14 @@ export function createGenerateRoutes(config: ServerConfig) {
         return { success: false, error: `Unknown model: ${model}` }
       }
 
+      // 去重：同一 model + 相同参数短时间内不重复提交
+      const dedupeKey = `${model}:${JSON.stringify(parameters)}`
+      const existing = await findGenerationByDedupeKey(dedupeKey)
+      if (existing && (existing.status === 'pending' || existing.status === 'processing')) {
+        const updated = await getGenerationRecordById(existing.id)
+        return { success: true, record: serializeRecord(updated!), duplicated: true }
+      }
+
       // 预估费用
       const estimatedCost = calculateCost(modelConfig, parameters)
 
@@ -70,6 +79,7 @@ export function createGenerateRoutes(config: ServerConfig) {
         status: 'pending',
         inputParams: { ...parameters, referenceFileIds },
         cost: { ...estimatedCost, estimated: true },
+        dedupeKey,
       })
 
       // 解析参考图 URL

@@ -1,5 +1,6 @@
+import type { CostDetail, OutputResult } from '../domain-types'
 import type { GenerationRecordInsert, ListGenerationRecordsFilter } from '../types'
-import { and, desc, eq, inArray, isNotNull } from 'drizzle-orm'
+import { and, desc, eq, inArray, isNotNull, sql } from 'drizzle-orm'
 import { getDb } from '../db'
 import { generationRecords } from '../schema'
 
@@ -70,7 +71,7 @@ export async function markGenerationFailed(id: string, errorMessage: string) {
  */
 export async function markGenerationProcessing(
   id: string,
-  extra?: { taskId?: string, outputResult?: Record<string, unknown> },
+  extra?: { taskId?: string, outputResult?: OutputResult },
 ) {
   await getDb()
     .update(generationRecords)
@@ -88,8 +89,8 @@ export async function markGenerationProcessing(
  */
 export async function markGenerationSucceeded(
   id: string,
-  outputResult: Record<string, unknown>,
-  cost?: Record<string, unknown>,
+  outputResult: OutputResult,
+  cost?: CostDetail,
 ) {
   await getDb()
     .update(generationRecords)
@@ -128,7 +129,7 @@ export async function deleteGenerationRecord(id: string) {
 export async function resetGenerationToPending(id: string) {
   await getDb()
     .update(generationRecords)
-    .set({ status: 'pending', errorMessage: null, updatedAt: new Date() })
+    .set({ status: 'pending', errorMessage: null, retryCount: sql`${generationRecords.retryCount} + 1`, dedupeKey: null, updatedAt: new Date() })
     .where(eq(generationRecords.id, id))
 }
 
@@ -137,6 +138,18 @@ export async function cancelGenerationRecord(id: string) {
     .update(generationRecords)
     .set({ status: 'failed', errorMessage: '用户取消', updatedAt: new Date() })
     .where(eq(generationRecords.id, id))
+}
+
+/**
+ * 按 dedupeKey 查询记录，防止同参数重复提交
+ */
+export async function findGenerationByDedupeKey(dedupeKey: string) {
+  const [record] = await getDb()
+    .select()
+    .from(generationRecords)
+    .where(eq(generationRecords.dedupeKey, dedupeKey))
+    .limit(1)
+  return record ?? null
 }
 
 /**
@@ -158,5 +171,5 @@ export async function getCostRecords(accountId?: string) {
     .from(generationRecords)
     .where(and(...conditions))
 
-  return records.filter(r => r.cost && typeof (r.cost as any).totalPrice === 'number')
+  return records.filter(r => r.cost && typeof r.cost.totalPrice === 'number')
 }
