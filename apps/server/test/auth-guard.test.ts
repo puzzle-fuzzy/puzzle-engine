@@ -88,7 +88,9 @@ mock.module('@excuse/provider', () => ({
     id: 'test-model',
     category: 'text',
     name: 'Test Model',
+    parameters: [{ name: 'prompt', type: 'text', required: true }], // 最小参数声明，让 validateModelParameters 通过
   })),
+  validateModelParameters: mock(() => ({ valid: true, errors: [] })),
 }))
 
 // @excuse/billing

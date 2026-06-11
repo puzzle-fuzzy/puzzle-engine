@@ -16,7 +16,7 @@ import {
   notifyGenerationStatus,
   resetGenerationToPending,
 } from '@excuse/db'
-import { AssetStorage, DashScopeClient, getModelById } from '@excuse/provider'
+import { AssetStorage, DashScopeClient, getModelById, validateModelParameters } from '@excuse/provider'
 import { Elysia, t } from 'elysia'
 import { createAuthPlugin } from '../plugins/auth'
 import { forbidden, notFound, unauthorized, validationError } from '../utils/errors'
@@ -68,6 +68,14 @@ export function createGenerateRoutes(config: ServerConfig) {
       const modelConfig = getModelById(model)
       if (!modelConfig) {
         return validationError(set, `Unknown model: ${model}`)
+      }
+
+      // 参数校验 — 只允许模型配置中声明过的参数进入 provider
+      // 校验失败返回 422 + 字段级错误，可被前端逐项展示
+      const validation = validateModelParameters(modelConfig, parameters)
+      if (!validation.valid) {
+        const detail = validation.errors.map(e => `${e.field}: ${e.message}`).join('; ')
+        return validationError(set, detail)
       }
 
       const category = modelConfig.category

@@ -44,6 +44,7 @@ const mockGetUploadedFilesByIdsForAccount = mock<(ids: string[], accountId: stri
 const mockCancelRecord = mock<(id: string) => Promise<void>>(() => Promise.resolve(undefined))
 const mockResetToPending = mock<(id: string) => Promise<void>>(() => Promise.resolve(undefined))
 const mockFindGenerationByDedupeKeyForAccount = mock<(key: string, accountId: string) => Promise<RecordOrNull>>(() => Promise.resolve(null))
+const mockValidateModelParameters = mock<(modelConfig: unknown, params: Record<string, unknown>) => { valid: boolean, errors: Array<{ field: string, message: string }> }>(() => ({ valid: true, errors: [] }))
 
 mock.module('@excuse/db', () => ({
   createGenerationRecord: mockCreateRecord,
@@ -97,6 +98,7 @@ mock.module('@excuse/provider', () => ({
     }
     return models[id]
   },
+  validateModelParameters: mockValidateModelParameters,
   AssetStorage: class {
     downloadAndMap = mock(() => Promise.resolve(['https://saved.url/img.png']))
   },
@@ -150,6 +152,7 @@ describe('generate routes', () => {
     mockCancelRecord.mockClear()
     mockResetToPending.mockClear()
     mockFindGenerationByDedupeKeyForAccount.mockClear()
+    mockValidateModelParameters.mockClear()
     mockGetUploadedFilesByIdsForAccount.mockClear()
 
     const app = createGenerateRoutes(testConfig)
@@ -184,6 +187,44 @@ describe('generate routes', () => {
       expect(err).toBeTruthy()
       expect(err!.status).toBe(422)
       expect(err!.error).toContain('Unknown model')
+      expect(mockCreateRecord).not.toHaveBeenCalled()
+    })
+
+    it('参数校验失败返回 422 — 必填参数缺失', async () => {
+      // mockReturnValueOnce 只影响本次调用，不影响后续测试
+      mockValidateModelParameters.mockReturnValueOnce({
+        valid: false,
+        errors: [{ field: 'prompt', message: '必填参数 "prompt" 缺失' }],
+      })
+
+      const res = await client.api.generate.post(
+        { model: 'qwen-max', parameters: {} }, // 缺少 prompt
+        { headers: { Authorization: `Bearer ${token}` } },
+      )
+
+      const err = extractEdenError(res)
+      expect(err).toBeTruthy()
+      expect(err!.status).toBe(422)
+      expect(err!.error).toContain('prompt')
+      expect(mockCreateRecord).not.toHaveBeenCalled()
+      expect(mockGenerate).not.toHaveBeenCalled()
+    })
+
+    it('参数校验失败返回 422 — 未知参数', async () => {
+      mockValidateModelParameters.mockReturnValueOnce({
+        valid: false,
+        errors: [{ field: 'illegal_param', message: '未知参数 "illegal_param"' }],
+      })
+
+      const res = await client.api.generate.post(
+        { model: 'qwen-max', parameters: { prompt: '你好', illegal_param: 'nope' } },
+        { headers: { Authorization: `Bearer ${token}` } },
+      )
+
+      const err = extractEdenError(res)
+      expect(err).toBeTruthy()
+      expect(err!.status).toBe(422)
+      expect(err!.error).toContain('illegal_param')
       expect(mockCreateRecord).not.toHaveBeenCalled()
     })
 
