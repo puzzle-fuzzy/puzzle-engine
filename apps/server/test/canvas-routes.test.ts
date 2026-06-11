@@ -103,11 +103,8 @@ mock.module('@excuse/billing', () => ({
 }))
 
 // 不 mock @excuse/shared — 只包含类型 + logger，不影响测试逻辑
-// mock @excuse/shared 会干扰其他并行测试的 logger 导入
-
-mock.module('../src/services/sse-manager', () => ({
-  dispatchToUser: async () => {},
-}))
+// 不 mock ../src/services/sse-manager — fireAndForget 只做 dispatch，
+// 且 mock sse-manager 在并行测试时会干扰 SSE manager 测试的全局 connections Map
 
 // eslint-disable-next-line import/first
 import { createCanvasRoutes } from '../src/routes/canvas'
