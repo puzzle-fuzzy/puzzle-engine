@@ -1,3 +1,5 @@
+import type { DashScopeUsage } from './dashscope-types'
+
 export interface DashScopeConfig {
   apiKey: string
   baseUrl?: string
@@ -20,7 +22,7 @@ export interface TaskStatus {
   taskId: string
   status: 'PENDING' | 'RUNNING' | 'SUCCEEDED' | 'FAILED' | 'UNKNOWN'
   output?: Record<string, unknown>
-  usage?: Record<string, unknown>
+  usage?: DashScopeUsage
   errorCode?: string
   errorMessage?: string
 }
