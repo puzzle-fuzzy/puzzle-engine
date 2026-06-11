@@ -162,20 +162,72 @@ export function createCanvasRoutes(config: ServerConfig) {
 
     // ===== 资源 PATCH =====
     .patch('/characters/:characterId', async ({ params: { characterId }, body }) => {
-      const patch = body as { identityPrompt?: string, negativePrompt?: string, locked?: boolean }
+      const patch = body as {
+        name?: string
+        role?: string
+        description?: string
+        identityPrompt?: string
+        negativePrompt?: string
+        referenceImageUrl?: string
+        locked?: boolean
+      }
       const updated = await svc.updateCharacterData(characterId, patch)
       return { success: true, data: updated }
+    }, {
+      body: t.Object({
+        name: t.Optional(t.String({ maxLength: 200 })),
+        role: t.Optional(t.String({ maxLength: 50 })),
+        description: t.Optional(t.String()),
+        identityPrompt: t.Optional(t.String()),
+        negativePrompt: t.Optional(t.String()),
+        referenceImageUrl: t.Optional(t.String()),
+        locked: t.Optional(t.Boolean()),
+      }),
     })
 
     .patch('/locations/:locationId', async ({ params: { locationId }, body }) => {
-      const patch = body as { scenePrompt?: string, negativePrompt?: string, locked?: boolean }
+      const patch = body as {
+        name?: string
+        type?: string
+        scenePrompt?: string
+        negativePrompt?: string
+        referenceImageUrl?: string
+        locked?: boolean
+      }
       const updated = await svc.updateLocationData(locationId, patch)
       return { success: true, data: updated }
+    }, {
+      body: t.Object({
+        name: t.Optional(t.String({ maxLength: 200 })),
+        type: t.Optional(t.String({ maxLength: 50 })),
+        scenePrompt: t.Optional(t.String()),
+        negativePrompt: t.Optional(t.String()),
+        referenceImageUrl: t.Optional(t.String()),
+        locked: t.Optional(t.Boolean()),
+      }),
     })
 
     .patch('/shots/:shotId', async ({ params: { shotId }, body }) => {
-      const patch = body as { narrative?: string, videoPrompt?: string }
+      const patch = body as {
+        duration?: number
+        locationId?: string
+        characterIdsJson?: string[]
+        narrative?: string
+        cameraJson?: Record<string, unknown>
+        environmentJson?: Record<string, unknown>
+        videoPrompt?: string
+      }
       const updated = await svc.updateShotData(shotId, patch)
       return { success: true, data: updated }
+    }, {
+      body: t.Object({
+        duration: t.Optional(t.Number()),
+        locationId: t.Optional(t.String()),
+        characterIdsJson: t.Optional(t.Array(t.String())),
+        narrative: t.Optional(t.String()),
+        cameraJson: t.Optional(t.Record(t.String(), t.Any())),
+        environmentJson: t.Optional(t.Record(t.String(), t.Any())),
+        videoPrompt: t.Optional(t.String()),
+      }),
     })
 }

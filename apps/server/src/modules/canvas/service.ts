@@ -8,10 +8,15 @@ import {
   createCanvasProject,
   createContinuityReport,
   createGenerationRecord,
+  deleteCanvasCharacterById,
   deleteCanvasCharactersByProject,
+  deleteCanvasLocationById,
   deleteCanvasLocationsByProject,
+  deleteCanvasShotById,
   deleteCanvasShotsByProject,
   getCanvasProjectById,
+  getCanvasCharacterById,
+  getCanvasLocationById,
   getCanvasProjectDetail,
   getGenerationRecordsByTaskIds,
   listCanvasProjectsByAccount,
@@ -331,10 +336,12 @@ export async function generateCharacterRefs(projectId: string, config: { dashsco
         n: 1,
       })
 
-      if (portraitResult.success && (portraitResult.output as any)?.urls?.length) {
-        const urls = (portraitResult.output as any).urls as string[]
-        const savedUrls = await storage.downloadAndMap(urls, `canvas/${char.id}`, 'portrait')
-        await updateCanvasCharacter(char.id, { referenceImageUrl: savedUrls[0] || urls[0] })
+      if (portraitResult.success && portraitResult.output) {
+        const urls = portraitResult.output['urls']
+        if (Array.isArray(urls) && urls.length) {
+          const savedUrls = await storage.downloadAndMap(urls as string[], `canvas/${char.id}`, 'portrait')
+          await updateCanvasCharacter(char.id, { referenceImageUrl: savedUrls[0] || urls[0] })
+        }
       }
 
       const turnaroundResult = await client.generateImage(imageModel, {
@@ -343,10 +350,12 @@ export async function generateCharacterRefs(projectId: string, config: { dashsco
         n: 1,
       })
 
-      if (turnaroundResult.success && (turnaroundResult.output as any)?.urls?.length) {
-        const urls = (turnaroundResult.output as any).urls as string[]
-        const savedUrls = await storage.downloadAndMap(urls, `canvas/${char.id}`, 'turnaround')
-        await updateCanvasCharacter(char.id, { turnaroundSheetUrl: savedUrls[0] || urls[0] })
+      if (turnaroundResult.success && turnaroundResult.output) {
+        const urls = turnaroundResult.output['urls']
+        if (Array.isArray(urls) && urls.length) {
+          const savedUrls = await storage.downloadAndMap(urls as string[], `canvas/${char.id}`, 'turnaround')
+          await updateCanvasCharacter(char.id, { turnaroundSheetUrl: savedUrls[0] || urls[0] })
+        }
       }
 
       notifyNode(accountId, projectId, 'character', char.id, 'completed')
@@ -383,10 +392,12 @@ export async function generateLocationRefs(projectId: string, config: { dashscop
         n: 1,
       })
 
-      if (result.success && (result.output as any)?.urls?.length) {
-        const urls = (result.output as any).urls as string[]
-        const savedUrls = await storage.downloadAndMap(urls, `canvas/${loc.id}`, 'ref')
-        await updateCanvasLocation(loc.id, { referenceImageUrl: savedUrls[0] || urls[0] })
+      if (result.success && result.output) {
+        const urls = result.output['urls']
+        if (Array.isArray(urls) && urls.length) {
+          const savedUrls = await storage.downloadAndMap(urls as string[], `canvas/${loc.id}`, 'ref')
+          await updateCanvasLocation(loc.id, { referenceImageUrl: savedUrls[0] || urls[0] })
+        }
       }
 
       notifyNode(accountId, projectId, 'location', loc.id, 'completed')
@@ -494,13 +505,13 @@ export async function checkContinuity(projectId: string) {
   }))
 
   const normalizedLocations: NormalizedLocation[] = detail.locations.map((l) => {
-    const profile = l.profileJson as any
+    const cameraRules = l.profileJson?.['cameraRules'] as NormalizedLocation['cameraRules'] | undefined
     return {
       id: l.id,
       name: l.name,
       scenePrompt: l.scenePrompt ?? '',
       negativePrompt: l.negativePrompt ?? '',
-      cameraRules: profile?.cameraRules ?? { axisDirection: '', allowedAngles: [], forbiddenAngles: [] },
+      cameraRules: cameraRules ?? { axisDirection: '', allowedAngles: [] as string[], forbiddenAngles: [] as string[] },
     }
   })
 
@@ -563,7 +574,7 @@ export async function rebuildShotPrompts(projectId: string) {
         name: shotLocation.name,
         scenePrompt: shotLocation.scenePrompt ?? '',
         negativePrompt: shotLocation.negativePrompt ?? '',
-        cameraRules: (shotLocation.profileJson as any)?.cameraRules ?? { axisDirection: '', allowedAngles: [], forbiddenAngles: [] },
+        cameraRules: (shotLocation.profileJson?.['cameraRules'] as NormalizedLocation['cameraRules'] | undefined) ?? { axisDirection: '', allowedAngles: [] as string[], forbiddenAngles: [] as string[] },
       },
       timeline: shot.timelineJson ?? undefined,
       environment: shot.environmentJson as NormalizedShot['environment'],
@@ -696,14 +707,69 @@ export async function updateModelPreferences(projectId: string, prefs: CanvasMod
   return getProjectDetail(projectId)
 }
 
-export async function updateCharacterData(characterId: string, patch: { identityPrompt?: string, negativePrompt?: string, locked?: boolean }) {
+export async function updateCharacterData(characterId: string, patch: {
+  name?: string
+  role?: string
+  description?: string
+  identityPrompt?: string
+  negativePrompt?: string
+  referenceImageUrl?: string
+  locked?: boolean
+}) {
   return updateCanvasCharacter(characterId, patch)
 }
 
-export async function updateLocationData(locationId: string, patch: { scenePrompt?: string, negativePrompt?: string, locked?: boolean }) {
+export async function updateLocationData(locationId: string, patch: {
+  name?: string
+  type?: string
+  scenePrompt?: string
+  negativePrompt?: string
+  referenceImageUrl?: string
+  locked?: boolean
+}) {
   return updateCanvasLocation(locationId, patch)
 }
 
-export async function updateShotData(shotId: string, patch: { narrative?: string, videoPrompt?: string }) {
+export async function updateShotData(shotId: string, patch: {
+  duration?: number
+  locationId?: string
+  characterIdsJson?: string[]
+  narrative?: string
+  cameraJson?: Record<string, unknown>
+  environmentJson?: Record<string, unknown>
+  videoPrompt?: string
+}) {
   return updateCanvasShot(shotId, patch)
+}
+
+export async function deleteCharacter(characterId: string) {
+  // Clean up shots referencing this character before deleting
+  const shots = await listCanvasShotsByProject(
+    (await getCanvasCharacterById(characterId))?.projectId ?? '',
+  )
+  const characterIdStr = characterId
+  for (const shot of shots) {
+    if (shot.characterIdsJson.includes(characterIdStr)) {
+      const updatedIds = shot.characterIdsJson.filter(id => id !== characterIdStr)
+      await updateCanvasShot(shot.id, { characterIdsJson: updatedIds })
+    }
+  }
+  await deleteCanvasCharacterById(characterId)
+}
+
+export async function deleteLocation(locationId: string) {
+  // Clean up shots referencing this location before deleting
+  const shots = await listCanvasShotsByProject(
+    (await getCanvasLocationById(locationId))?.projectId ?? '',
+  )
+  for (const shot of shots) {
+    if (shot.locationId === locationId) {
+      await updateCanvasShot(shot.id, { locationId: undefined })
+    }
+  }
+  await deleteCanvasLocationById(locationId)
+}
+
+export async function deleteShot(shotId: string) {
+  await deleteCanvasShotById(shotId)
 }

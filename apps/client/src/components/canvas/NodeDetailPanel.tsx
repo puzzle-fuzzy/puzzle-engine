@@ -55,6 +55,60 @@ export default function NodeDetailPanel({ selectedNode, project, onUpdate }: Nod
     return res.file.publicUrl
   }, [location, onUpdate])
 
+  // 角色编辑状态
+  const [editCharName, setEditCharName] = useState(character?.name ?? '')
+  const [editCharRole, setEditCharRole] = useState(character?.role ?? '')
+  const [editCharDesc, setEditCharDesc] = useState(character?.description ?? '')
+
+  const handleCharacterFieldUpdate = useCallback(async (patch: { name?: string, role?: string, description?: string }) => {
+    if (!character)
+      return
+    try {
+      await updateCanvasCharacter(character.id, patch)
+      onUpdate()
+    }
+    catch (err) {
+      console.error('Failed to update character:', err)
+    }
+  }, [character, onUpdate])
+
+  // 场景编辑状态
+  const [editLocName, setEditLocName] = useState(location?.name ?? '')
+  const [editLocType, setEditLocType] = useState(location?.type ?? '')
+
+  const handleLocationFieldUpdate = useCallback(async (patch: { name?: string, type?: string }) => {
+    if (!location)
+      return
+    try {
+      await updateCanvasLocation(location.id, patch)
+      onUpdate()
+    }
+    catch (err) {
+      console.error('Failed to update location:', err)
+    }
+  }, [location, onUpdate])
+
+  // 镜头编辑状态
+  const [editShotNarrative, setEditShotNarrative] = useState(shot?.narrative ?? '')
+  const [editShotDuration, setEditShotDuration] = useState(shot?.duration ?? 5)
+
+  const handleShotFieldUpdate = useCallback(async (patch: {
+    duration?: number
+    locationId?: string | undefined
+    characterIdsJson?: string[]
+    narrative?: string
+  }) => {
+    if (!shot)
+      return
+    try {
+      await updateCanvasShot(shot.id, patch)
+      onUpdate()
+    }
+    catch (err) {
+      console.error('Failed to update shot:', err)
+    }
+  }, [shot, onUpdate])
+
   const isProjectNode = selectedNode.type === 'storyInput' || selectedNode.type === 'analysis'
   const [editTitle, setEditTitle] = useState(project.title ?? '')
   const [editStoryText, setEditStoryText] = useState(project.storyText)
@@ -130,21 +184,71 @@ export default function NodeDetailPanel({ selectedNode, project, onUpdate }: Nod
 
           <div className="space-y-1">
             <label className="text-xs font-medium text-muted-foreground">叙事描述</label>
-            <p className="text-xs">{shot.narrative}</p>
+            <textarea
+              value={editShotNarrative}
+              onChange={(e) => setEditShotNarrative(e.target.value)}
+              onBlur={() => handleShotFieldUpdate({ narrative: editShotNarrative })}
+              className="flex min-h-16 w-full rounded-lg border border-input bg-background px-3 py-2 text-xs shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              rows={3}
+            />
           </div>
 
-          <div className="grid grid-cols-2 gap-2 text-xs">
-            <div>
-              <span className="text-muted-foreground">时长:</span>
-              {' '}
-              {shot.duration}
-              s
+          <div className="space-y-1">
+            <label className="text-xs font-medium text-muted-foreground">时长（秒）</label>
+            <Input
+              type="number"
+              value={editShotDuration}
+              onChange={(e) => setEditShotDuration(Number(e.target.value))}
+              onBlur={() => editShotDuration > 0 && handleShotFieldUpdate({ duration: editShotDuration })}
+              min={1}
+              max={30}
+            />
+          </div>
+
+          {project.locations.length > 0 && (
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-muted-foreground">场景</label>
+              <select
+                value={shot.locationId || ''}
+                onChange={(e) => handleShotFieldUpdate({ locationId: e.target.value || undefined })}
+                className="w-full rounded-lg border border-input bg-background px-3 py-1.5 text-xs shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                <option value="">无场景</option>
+                {project.locations.map(loc => (
+                  <option key={loc.id} value={loc.id}>{loc.name}</option>
+                ))}
+              </select>
             </div>
-            <div>
-              <span className="text-muted-foreground">状态:</span>
-              {' '}
-              {shot.status}
+          )}
+
+          {project.characters.length > 0 && (
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-muted-foreground">出场角色</label>
+              <div className="flex flex-wrap gap-1.5">
+                {project.characters.map(ch => (
+                  <label key={ch.id} className="flex items-center gap-1 text-xs cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={shot.characterIds.includes(ch.id)}
+                      onChange={(e) => {
+                        const ids = e.target.checked
+                          ? [...shot.characterIds, ch.id]
+                          : shot.characterIds.filter((id: string) => id !== ch.id)
+                        handleShotFieldUpdate({ characterIdsJson: ids })
+                      }}
+                      className="rounded border-input"
+                    />
+                    {ch.name}
+                  </label>
+                ))}
+              </div>
             </div>
+          )}
+
+          <div className="text-xs">
+            <span className="text-muted-foreground">状态:</span>
+            {' '}
+            {shot.status}
           </div>
 
           {shot.videoUrl && (
@@ -162,6 +266,39 @@ export default function NodeDetailPanel({ selectedNode, project, onUpdate }: Nod
 
       {character && (
         <>
+          <div className="grid grid-cols-2 gap-2">
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-muted-foreground">名称</label>
+              <Input
+                value={editCharName}
+                onChange={(e) => setEditCharName(e.target.value)}
+                onBlur={() => handleCharacterFieldUpdate({ name: editCharName })}
+                placeholder="角色名称"
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-muted-foreground">角色定位</label>
+              <Input
+                value={editCharRole}
+                onChange={(e) => setEditCharRole(e.target.value)}
+                onBlur={() => handleCharacterFieldUpdate({ role: editCharRole })}
+                placeholder="如：主角、配角"
+              />
+            </div>
+          </div>
+
+          <div className="space-y-1">
+            <label className="text-xs font-medium text-muted-foreground">描述</label>
+            <textarea
+              value={editCharDesc}
+              onChange={(e) => setEditCharDesc(e.target.value)}
+              onBlur={() => handleCharacterFieldUpdate({ description: editCharDesc })}
+              className="flex min-h-16 w-full rounded-lg border border-input bg-background px-3 py-2 text-xs shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              placeholder="角色描述"
+              rows={3}
+            />
+          </div>
+
           <div className="space-y-1">
             <label className="text-xs font-medium text-muted-foreground">身份 Prompt</label>
             <p className="text-xs bg-muted/50 rounded p-2 font-mono whitespace-pre-wrap">
@@ -174,17 +311,32 @@ export default function NodeDetailPanel({ selectedNode, project, onUpdate }: Nod
             onUpload={handleCharacterUpload}
             label="角色参考图"
           />
-
-          <div className="text-xs">
-            <span className="text-muted-foreground">角色定位:</span>
-            {' '}
-            {character.role}
-          </div>
         </>
       )}
 
       {location && (
         <>
+          <div className="grid grid-cols-2 gap-2">
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-muted-foreground">名称</label>
+              <Input
+                value={editLocName}
+                onChange={(e) => setEditLocName(e.target.value)}
+                onBlur={() => handleLocationFieldUpdate({ name: editLocName })}
+                placeholder="场景名称"
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-muted-foreground">类型</label>
+              <Input
+                value={editLocType}
+                onChange={(e) => setEditLocType(e.target.value)}
+                onBlur={() => handleLocationFieldUpdate({ type: editLocType })}
+                placeholder="如：室内、室外"
+              />
+            </div>
+          </div>
+
           <div className="space-y-1">
             <label className="text-xs font-medium text-muted-foreground">场景 Prompt</label>
             <p className="text-xs bg-muted/50 rounded p-2 font-mono whitespace-pre-wrap">
@@ -197,12 +349,6 @@ export default function NodeDetailPanel({ selectedNode, project, onUpdate }: Nod
             onUpload={handleLocationUpload}
             label="场景参考图"
           />
-
-          <div className="text-xs">
-            <span className="text-muted-foreground">类型:</span>
-            {' '}
-            {location.type}
-          </div>
         </>
       )}
 

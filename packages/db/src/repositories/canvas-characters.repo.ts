@@ -42,3 +42,7 @@ export async function updateCanvasCharacter(
     .returning()
   return updated ?? null
 }
+
+export async function deleteCanvasCharacterById(id: string) {
+  await getDb().delete(canvasCharacters).where(eq(canvasCharacters.id, id))
+}

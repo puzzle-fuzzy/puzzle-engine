@@ -42,3 +42,7 @@ export async function updateCanvasLocation(
     .returning()
   return updated ?? null
 }
+
+export async function deleteCanvasLocationById(id: string) {
+  await getDb().delete(canvasLocations).where(eq(canvasLocations.id, id))
+}

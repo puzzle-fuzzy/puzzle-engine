@@ -264,8 +264,12 @@ export async function updateCanvasModelPreferences(
 }
 
 export async function updateCanvasCharacter(characterId: string, patch: {
+  name?: string
+  role?: string
+  description?: string
   identityPrompt?: string
   negativePrompt?: string
+  referenceImageUrl?: string
   locked?: boolean
 }): Promise<{ success: boolean, data: unknown }> {
   return unwrapEden<{ success: boolean, data: unknown }>(
@@ -274,8 +278,11 @@ export async function updateCanvasCharacter(characterId: string, patch: {
 }
 
 export async function updateCanvasLocation(locationId: string, patch: {
+  name?: string
+  type?: string
   scenePrompt?: string
   negativePrompt?: string
+  referenceImageUrl?: string
   locked?: boolean
 }): Promise<{ success: boolean, data: unknown }> {
   return unwrapEden<{ success: boolean, data: unknown }>(
@@ -284,7 +291,12 @@ export async function updateCanvasLocation(locationId: string, patch: {
 }
 
 export async function updateCanvasShot(shotId: string, patch: {
+  duration?: number
+  locationId?: string
+  characterIdsJson?: string[]
   narrative?: string
+  cameraJson?: Record<string, unknown>
+  environmentJson?: Record<string, unknown>
   videoPrompt?: string
 }): Promise<{ success: boolean, data: unknown }> {
   return unwrapEden<{ success: boolean, data: unknown }>(
