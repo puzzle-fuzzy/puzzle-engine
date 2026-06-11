@@ -171,6 +171,7 @@ export default function Assets() {
               <video
                 src={getAssetUrls(previewRecord)[0]}
                 controls
+                loop
                 className="max-h-[70vh] rounded-lg"
               />
             )}

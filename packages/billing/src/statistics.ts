@@ -50,8 +50,8 @@ export function aggregateStatistics(records: CostRecord[]): BillingStatistics {
     const modelTotal = modelMap.get(record.model) || 0
     modelMap.set(record.model, modelTotal + price)
 
-    // 按日期聚合（最近 30 天）
-    const dayKey = recordDate.toISOString().slice(0, 10)
+    // 按日期聚合（最近 30 天，使用本地日期确保今日数据不遗漏）
+    const dayKey = `${recordDate.getFullYear()}-${String(recordDate.getMonth() + 1).padStart(2, '0')}-${String(recordDate.getDate()).padStart(2, '0')}`
     const dayTotal = dailyMap.get(dayKey) || 0
     dailyMap.set(dayKey, dayTotal + price)
   }
@@ -77,7 +77,7 @@ export function aggregateStatistics(records: CostRecord[]): BillingStatistics {
   for (let i = 29; i >= 0; i--) {
     const date = new Date(todayStart)
     date.setDate(date.getDate() - i)
-    const key = date.toISOString().slice(0, 10)
+    const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
     dailyTrend.push({
       date: key,
       total: roundTo4(dailyMap.get(key) || 0),

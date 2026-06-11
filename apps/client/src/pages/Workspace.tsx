@@ -229,23 +229,8 @@ export default function Workspace() {
         referenceFileIds: referenceFileIds.length > 0 ? referenceFileIds : undefined,
       })
       if (result.success && result.id) {
-        // 将新记录插入到列表顶部，SSE 后续会推送状态变更
-        setRecords(prev => [
-          {
-            id: result.id!,
-            taskId: result.taskId!,
-            model: selectedModel.id,
-            category: result.category as GenerationRecord['category'],
-            status: result.status as GenerationRecord['status'],
-            inputParams: { ...parameters, referenceFileIds },
-            cost: result.cost as Record<string, unknown> ?? null,
-            outputResult: (result as any).outputResult ?? null,
-            errorMessage: null,
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-          } as GenerationRecord,
-          ...prev,
-        ])
+        // 生成成功后重新拉取完整数据，避免手工拼凑不完整的记录
+        await loadRecords()
       }
     }
     catch (error) {
@@ -265,22 +250,7 @@ export default function Workspace() {
         parameters: record.inputParams as Record<string, unknown>,
       })
       if (result.success && result.id) {
-        setRecords(prev => [
-          {
-            id: result.id!,
-            taskId: result.taskId!,
-            model: record.model,
-            category: result.category as GenerationRecord['category'],
-            status: result.status as GenerationRecord['status'],
-            inputParams: record.inputParams,
-            cost: result.cost as Record<string, unknown> ?? null,
-            outputResult: (result as any).outputResult ?? null,
-            errorMessage: null,
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-          } as GenerationRecord,
-          ...prev,
-        ])
+        await loadRecords()
       }
     }
     catch {}
