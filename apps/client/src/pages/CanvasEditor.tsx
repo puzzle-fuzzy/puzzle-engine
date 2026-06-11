@@ -4,6 +4,7 @@ import { useParams } from 'react-router'
 import { getCanvasProject } from '../api/client'
 import { sseClient } from '../api/sse'
 import CanvasFlow from '../components/canvas/CanvasFlow'
+import NodeDetailPanel from '../components/canvas/NodeDetailPanel'
 import PipelineController from '../components/canvas/PipelineController'
 
 export default function CanvasEditor() {
@@ -81,7 +82,7 @@ export default function CanvasEditor() {
           <div className="absolute right-4 top-4 bottom-4 w-[360px] bg-background border rounded-lg shadow-lg overflow-auto">
             <div className="sticky top-0 bg-background border-b px-4 py-2 flex items-center justify-between">
               <span className="text-sm font-medium">
-                {selectedNode.type}
+                节点详情
               </span>
               <button
                 onClick={() => setSelectedNode(null)}
@@ -90,15 +91,11 @@ export default function CanvasEditor() {
                 关闭
               </button>
             </div>
-            <div className="p-4 text-xs">
-              <p className="text-muted-foreground">
-                节点 ID:
-                {selectedNode.id}
-              </p>
-              <p className="text-muted-foreground mt-1">
-                点击节点可在画布中查看详情。编辑功能后续实现。
-              </p>
-            </div>
+            <NodeDetailPanel
+              selectedNode={selectedNode}
+              project={project}
+              onUpdate={loadProject}
+            />
           </div>
         )}
       </div>

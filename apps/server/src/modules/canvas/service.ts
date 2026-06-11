@@ -1,11 +1,11 @@
-import type { CanvasProjectRow } from '@excuse/db'
-import type { CharacterProfile, ContinuityIssue, LocationProfile, NovelAnalysis, ProjectDTO, ShotDraft } from '@excuse/shared'
-import { DashScopeClient } from '@excuse/provider'
-import { AssetStorage } from '@excuse/provider'
+import type { CharacterProfile, LocationProfile, NovelAnalysis, ShotDraft } from '@excuse/shared'
+import type { NormalizedCharacter, NormalizedLocation, NormalizedShot } from './continuity'
+import { calculateCost } from '@excuse/billing'
 import {
   batchCreateCanvasShots,
   createCanvasCharacter,
   createCanvasLocation,
+  createCanvasProject,
   createContinuityReport,
   createGenerationRecord,
   deleteCanvasCharactersByProject,
@@ -20,18 +20,15 @@ import {
   updateCanvasProject,
   updateCanvasShot,
 } from '@excuse/db'
-import { createCanvasProject } from '@excuse/db'
+import { AssetStorage, DashScopeClient, getModelById } from '@excuse/provider'
 import { dispatchToUser } from '../../services/sse-manager'
-import { buildAnalysisPrompt, buildCharacterPrompt, buildLocationPrompt, buildStoryboardPrompt } from './prompts'
-import { type NormalizedCharacter, type NormalizedLocation, type NormalizedShot } from './continuity'
-import { buildShotVideoPrompt } from './prompt-builder'
 import { validateShotContinuity } from './continuity'
 import { parseLLMJson } from './json-helper'
 import { mapProjectDetail } from './mapper'
-import { calculateCost } from '@excuse/billing'
-import { getModelById } from '@excuse/provider'
+import { buildShotVideoPrompt } from './prompt-builder'
+import { buildAnalysisPrompt, buildCharacterPrompt, buildLocationPrompt, buildStoryboardPrompt } from './prompts'
 
-function createClient(config: { dashscopeApiKey: string; dashscopeBaseUrl?: string }) {
+function createClient(config: { dashscopeApiKey: string, dashscopeBaseUrl?: string }) {
   return new DashScopeClient({ apiKey: config.dashscopeApiKey, baseUrl: config.dashscopeBaseUrl })
 }
 
@@ -41,7 +38,7 @@ function notifyNode(accountId: string, projectId: string, nodeType: string, node
 
 // ===== 项目 CRUD =====
 
-export async function createProject(accountId: string, input: { title?: string; storyText: string }) {
+export async function createProject(accountId: string, input: { title?: string, storyText: string }) {
   const project = await createCanvasProject({
     accountId,
     title: input.title ?? null,
@@ -53,7 +50,8 @@ export async function createProject(accountId: string, input: { title?: string; 
 
 export async function getProjectDetail(projectId: string) {
   const detail = await getCanvasProjectDetail(projectId)
-  if (!detail) return null
+  if (!detail)
+    return null
   return mapProjectDetail(detail.project, detail.characters, detail.locations, detail.shots, detail.latestContinuity)
 }
 
@@ -75,9 +73,10 @@ export async function saveCanvasLayout(projectId: string, layout: Record<string,
 
 // ===== 流水线步骤 =====
 
-export async function analyzeProject(projectId: string, config: { dashscopeApiKey: string; dashscopeBaseUrl?: string }) {
+export async function analyzeProject(projectId: string, config: { dashscopeApiKey: string, dashscopeBaseUrl?: string }) {
   const project = await getCanvasProjectById(projectId)
-  if (!project) throw new Error('项目不存在')
+  if (!project)
+    throw new Error('项目不存在')
 
   notifyNode(project.accountId, projectId, 'analysis', projectId, 'running')
 
@@ -113,9 +112,10 @@ export async function analyzeProject(projectId: string, config: { dashscopeApiKe
   }
 }
 
-export async function generateCharacters(projectId: string, config: { dashscopeApiKey: string; dashscopeBaseUrl?: string }) {
+export async function generateCharacters(projectId: string, config: { dashscopeApiKey: string, dashscopeBaseUrl?: string }) {
   const project = await getCanvasProjectById(projectId)
-  if (!project || !project.analysisJson) throw new Error('项目不存在或未分析')
+  if (!project || !project.analysisJson)
+    throw new Error('项目不存在或未分析')
 
   const analysis = project.analysisJson as unknown as NovelAnalysis
   const accountId = project.accountId
@@ -164,9 +164,10 @@ export async function generateCharacters(projectId: string, config: { dashscopeA
   return getProjectDetail(projectId)
 }
 
-export async function generateLocations(projectId: string, config: { dashscopeApiKey: string; dashscopeBaseUrl?: string }) {
+export async function generateLocations(projectId: string, config: { dashscopeApiKey: string, dashscopeBaseUrl?: string }) {
   const project = await getCanvasProjectById(projectId)
-  if (!project || !project.analysisJson) throw new Error('项目不存在或未分析')
+  if (!project || !project.analysisJson)
+    throw new Error('项目不存在或未分析')
 
   const analysis = project.analysisJson as unknown as NovelAnalysis
   const accountId = project.accountId
@@ -212,16 +213,18 @@ export async function generateLocations(projectId: string, config: { dashscopeAp
   return getProjectDetail(projectId)
 }
 
-export async function generateCharacterRefs(projectId: string, config: { dashscopeApiKey: string; dashscopeBaseUrl?: string; storageRoot: string; oss?: any }) {
+export async function generateCharacterRefs(projectId: string, config: { dashscopeApiKey: string, dashscopeBaseUrl?: string, storageRoot: string, oss?: any }) {
   const detail = await getCanvasProjectDetail(projectId)
-  if (!detail) throw new Error('项目不存在')
+  if (!detail)
+    throw new Error('项目不存在')
 
   const client = createClient(config)
   const storage = new AssetStorage({ storageRoot: config.storageRoot, oss: config.oss })
   const accountId = detail.project.accountId
 
   for (const char of detail.characters) {
-    if (char.locked || char.identityPrompt) continue
+    if (char.locked || char.identityPrompt)
+      continue
 
     notifyNode(accountId, projectId, 'character', char.id, 'running')
 
@@ -261,16 +264,18 @@ export async function generateCharacterRefs(projectId: string, config: { dashsco
   return getProjectDetail(projectId)
 }
 
-export async function generateLocationRefs(projectId: string, config: { dashscopeApiKey: string; dashscopeBaseUrl?: string; storageRoot: string; oss?: any }) {
+export async function generateLocationRefs(projectId: string, config: { dashscopeApiKey: string, dashscopeBaseUrl?: string, storageRoot: string, oss?: any }) {
   const detail = await getCanvasProjectDetail(projectId)
-  if (!detail) throw new Error('项目不存在')
+  if (!detail)
+    throw new Error('项目不存在')
 
   const client = createClient(config)
   const storage = new AssetStorage({ storageRoot: config.storageRoot, oss: config.oss })
   const accountId = detail.project.accountId
 
   for (const loc of detail.locations) {
-    if (loc.locked || !loc.scenePrompt || loc.referenceImageUrl) continue
+    if (loc.locked || !loc.scenePrompt || loc.referenceImageUrl)
+      continue
 
     notifyNode(accountId, projectId, 'location', loc.id, 'running')
 
@@ -297,12 +302,14 @@ export async function generateLocationRefs(projectId: string, config: { dashscop
   return getProjectDetail(projectId)
 }
 
-export async function generateStoryboard(projectId: string, config: { dashscopeApiKey: string; dashscopeBaseUrl?: string }) {
+export async function generateStoryboard(projectId: string, config: { dashscopeApiKey: string, dashscopeBaseUrl?: string }) {
   const detail = await getCanvasProjectDetail(projectId)
-  if (!detail) throw new Error('项目不存在')
+  if (!detail)
+    throw new Error('项目不存在')
 
   const project = detail.project
-  if (!project.analysisJson) throw new Error('项目未分析')
+  if (!project.analysisJson)
+    throw new Error('项目未分析')
 
   const analysis = project.analysisJson as unknown as NovelAnalysis
   const accountId = project.accountId
@@ -363,7 +370,8 @@ export async function generateStoryboard(projectId: string, config: { dashscopeA
 
 export async function checkContinuity(projectId: string) {
   const detail = await getCanvasProjectDetail(projectId)
-  if (!detail) throw new Error('项目不存在')
+  if (!detail)
+    throw new Error('项目不存在')
 
   const accountId = detail.project.accountId
 
@@ -387,7 +395,7 @@ export async function checkContinuity(projectId: string) {
     negativePrompt: c.negativePrompt ?? '',
   }))
 
-  const normalizedLocations: NormalizedLocation[] = detail.locations.map(l => {
+  const normalizedLocations: NormalizedLocation[] = detail.locations.map((l) => {
     const profile = l.profileJson as any
     return {
       id: l.id,
@@ -416,7 +424,8 @@ export async function checkContinuity(projectId: string) {
 
 export async function rebuildShotPrompts(projectId: string) {
   const detail = await getCanvasProjectDetail(projectId)
-  if (!detail) throw new Error('项目不存在')
+  if (!detail)
+    throw new Error('项目不存在')
 
   const accountId = detail.project.accountId
   const characterMap = new Map(detail.characters.map(c => [c.id, c]))
@@ -429,7 +438,8 @@ export async function rebuildShotPrompts(projectId: string) {
 
     const shotLocation = shot.locationId ? locationMap.get(shot.locationId) : undefined
 
-    if (!shotLocation) continue
+    if (!shotLocation)
+      continue
 
     const { videoPrompt, negativePrompt } = buildShotVideoPrompt({
       shot: {
@@ -473,9 +483,10 @@ export async function rebuildShotPrompts(projectId: string) {
   return getProjectDetail(projectId)
 }
 
-export async function generateVideos(projectId: string, config: { dashscopeApiKey: string; dashscopeBaseUrl?: string }) {
+export async function generateVideos(projectId: string, config: { dashscopeApiKey: string, dashscopeBaseUrl?: string }) {
   const detail = await getCanvasProjectDetail(projectId)
-  if (!detail) throw new Error('项目不存在')
+  if (!detail)
+    throw new Error('项目不存在')
 
   const accountId = detail.project.accountId
   const client = createClient(config)
@@ -484,7 +495,8 @@ export async function generateVideos(projectId: string, config: { dashscopeApiKe
   await updateCanvasProject(projectId, { status: 'generating' })
 
   for (const shot of detail.shots) {
-    if (!shot.videoPrompt) continue
+    if (!shot.videoPrompt)
+      continue
 
     notifyNode(accountId, projectId, 'shot', shot.id, 'running')
 
@@ -494,6 +506,9 @@ export async function generateVideos(projectId: string, config: { dashscopeApiKe
         .filter(Boolean) as string[]
 
       const model = referenceUrls.length > 0 ? 'happyhorse-1.0-r2v' : 'happyhorse-1.0-t2v'
+      const modelConfig = getModelById(model)
+      const fallbackId = modelConfig?.fallbackModel
+
       const result = await client.submitVideoTask(model, {
         prompt: shot.videoPrompt.slice(0, 2500),
         negative_prompt: shot.negativePrompt || '',
@@ -501,10 +516,14 @@ export async function generateVideos(projectId: string, config: { dashscopeApiKe
         duration: shot.duration,
       }, referenceUrls.length > 0 ? referenceUrls : undefined)
 
+      let actualModel = model
+      let actualTaskId = result.providerTaskId
+      let actualSuccess = result.success
+
       if (!result.success || !result.providerTaskId) {
-        // Fallback: try t2v if r2v failed
-        if (model === 'happyhorse-1.0-r2v') {
-          const fallbackResult = await client.submitVideoTask('happyhorse-1.0-t2v', {
+        // Try declarative fallback model
+        if (fallbackId) {
+          const fallbackResult = await client.submitVideoTask(fallbackId, {
             prompt: shot.videoPrompt.slice(0, 2500),
             negative_prompt: shot.negativePrompt || '',
             resolution: '720P',
@@ -512,43 +531,30 @@ export async function generateVideos(projectId: string, config: { dashscopeApiKe
           })
 
           if (fallbackResult.success && fallbackResult.providerTaskId) {
-            await updateCanvasShot(shot.id, {
-              videoTaskId: fallbackResult.providerTaskId,
-              status: 'generating',
-            })
-
-            // Also create a generation_record for Worker polling
-            const modelConfig = getModelById('happyhorse-1.0-t2v')!
-            const cost = calculateCost(modelConfig, { duration: shot.duration })
-            await createGenerationRecord({
-              accountId,
-              taskId: fallbackResult.providerTaskId,
-              model: 'happyhorse-1.0-t2v',
-              category: 'video',
-              status: 'processing',
-              inputParams: { source: 'canvas', projectId, shotId: shot.id, prompt: shot.videoPrompt },
-              cost,
-            })
-            continue
+            actualModel = fallbackId
+            actualTaskId = fallbackResult.providerTaskId
+            actualSuccess = true
           }
         }
 
-        await updateCanvasShot(shot.id, { status: 'failed', errorMessage: result.error || '视频提交失败' })
-        notifyNode(accountId, projectId, 'shot', shot.id, 'failed', undefined, result.error)
-        continue
+        if (!actualSuccess || !actualTaskId) {
+          await updateCanvasShot(shot.id, { status: 'failed', errorMessage: result.error || '视频提交失败' })
+          notifyNode(accountId, projectId, 'shot', shot.id, 'failed', undefined, result.error)
+          continue
+        }
       }
 
       await updateCanvasShot(shot.id, {
-        videoTaskId: result.providerTaskId,
+        videoTaskId: actualTaskId,
         status: 'generating',
       })
 
-      const modelConfig = getModelById(model)!
-      const cost = calculateCost(modelConfig, { duration: shot.duration })
+      const usedModelConfig = getModelById(actualModel)!
+      const cost = calculateCost(usedModelConfig, { duration: shot.duration })
       await createGenerationRecord({
         accountId,
-        taskId: result.providerTaskId,
-        model,
+        taskId: actualTaskId!,
+        model: actualModel,
         category: 'video',
         status: 'processing',
         inputParams: { source: 'canvas', projectId, shotId: shot.id, prompt: shot.videoPrompt },
@@ -566,14 +572,14 @@ export async function generateVideos(projectId: string, config: { dashscopeApiKe
 
 // ===== 资源 PATCH =====
 
-export async function updateCharacterData(characterId: string, patch: { identityPrompt?: string; negativePrompt?: string; locked?: boolean }) {
+export async function updateCharacterData(characterId: string, patch: { identityPrompt?: string, negativePrompt?: string, locked?: boolean }) {
   return updateCanvasCharacter(characterId, patch)
 }
 
-export async function updateLocationData(locationId: string, patch: { scenePrompt?: string; negativePrompt?: string; locked?: boolean }) {
+export async function updateLocationData(locationId: string, patch: { scenePrompt?: string, negativePrompt?: string, locked?: boolean }) {
   return updateCanvasLocation(locationId, patch)
 }
 
-export async function updateShotData(shotId: string, patch: { narrative?: string; videoPrompt?: string }) {
+export async function updateShotData(shotId: string, patch: { narrative?: string, videoPrompt?: string }) {
   return updateCanvasShot(shotId, patch)
 }

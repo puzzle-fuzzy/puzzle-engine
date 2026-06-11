@@ -2,14 +2,15 @@ import { mkdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { cors } from '@elysia/cors'
 import { staticPlugin } from '@elysia/static'
+import { openapi } from '@elysiajs/openapi'
 import { logger } from '@excuse/shared'
 import { Elysia } from 'elysia'
 import { loadConfig } from './config'
 import { createAuthPlugin } from './plugins/auth'
 import { loggerPlugin } from './plugins/logger'
 import { createAuthRoutes } from './routes/auth'
-import { createCanvasRoutes } from './routes/canvas'
 import { billingRoutes } from './routes/billing'
+import { createCanvasRoutes } from './routes/canvas'
 import { createGenerateRoutes } from './routes/generate'
 import { healthRoutes } from './routes/health'
 import { modelsRoutes } from './routes/models'
@@ -24,6 +25,16 @@ const uploadsDir = join(import.meta.dir, '..', config.storageRoot)
 mkdirSync(uploadsDir, { recursive: true })
 
 const app = new Elysia()
+  .use(openapi({
+    documentation: {
+      info: {
+        title: 'Excuse API',
+        version: '0.1.0',
+        description: 'AI 内容生成平台 — 创意流水线 API 文档',
+      },
+    },
+    path: '/api/docs',
+  }))
   .use(loggerPlugin)
   .use(cors({
     origin: [config.frontendUrl, 'http://localhost:8007'],

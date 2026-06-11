@@ -68,6 +68,7 @@
         "@elysia/cors": "^1.4.2",
         "@elysia/jwt": "^1.4.2",
         "@elysia/static": "^1.3.1",
+        "@elysiajs/openapi": "^1.4.15",
         "@excuse/billing": "workspace:*",
         "@excuse/db": "workspace:*",
         "@excuse/provider": "workspace:*",
@@ -246,6 +247,8 @@
     "@elysia/jwt": ["@elysia/jwt@1.4.2", "https://registry.npmmirror.com/@elysia/jwt/-/jwt-1.4.2.tgz", { "dependencies": { "jose": "^6.0.11" }, "peerDependencies": { "elysia": ">= 1.4.27" } }, "sha512-KhLe6XxI+NHoYZiHqPhWg8SU0v+pegsxXsZSa/CXic/BrjlFbO26uTERtOQNlnByp/IGUB4qpLF6kQhvfYvGyg=="],
 
     "@elysia/static": ["@elysia/static@1.4.11", "https://registry.npmmirror.com/@elysia/static/-/static-1.4.11.tgz", { "peerDependencies": { "elysia": ">= 1.4.0" } }, "sha512-L3PN8V+cgz9Oz9kTow7ed3DHHCTHb9ZqZZDLxmKhrIKcFmWvjqzTm9TcMR2aLKjjls+QMSGuB7ZyaO+usIXovA=="],
+
+    "@elysiajs/openapi": ["@elysiajs/openapi@1.4.15", "https://registry.npmmirror.com/@elysiajs/openapi/-/openapi-1.4.15.tgz", { "peerDependencies": { "elysia": ">= 1.4.0" } }, "sha512-HDtGIrWfFJk6UJS7qbgRmjifbSqnnRGDM3CsU/GVJkxLbEVEkNuQDf+Quh9fGbytSrJ8g4+tX9eVjshYhCH29w=="],
 
     "@emnapi/core": ["@emnapi/core@1.10.0", "https://registry.npmmirror.com/@emnapi/core/-/core-1.10.0.tgz", { "dependencies": { "@emnapi/wasi-threads": "1.2.1", "tslib": "^2.4.0" } }, "sha512-yq6OkJ4p82CAfPl0u9mQebQHKPJkY7WrIuk205cTYnYe+k2Z8YBh11FrbRG/H6ihirqcacOgl2BIO8oyMQLeXw=="],
 

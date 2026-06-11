@@ -57,6 +57,8 @@ export interface ModelConfig {
   inputMapping?: Record<string, InputMapping>
   /** referenceUrls 数组映射到 input.media[] 时使用的 type（仅 r2v 等模型需要） */
   referenceMediaType?: string
+  /** 失败时的降级模型 ID（如 r2v → t2v） */
+  fallbackModel?: string
 }
 
 export const MODEL_CATEGORIES = [

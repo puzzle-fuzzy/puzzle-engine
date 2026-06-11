@@ -189,101 +189,80 @@
 
 > 基于 `angry-mushroom` 项目对比分析（详见 `docs/项目对比分析-excuse-vs-angry-mushroom.md`），我们工程底座扎实但业务骨架空洞，以下是从 angry-mushroom 业务侧需要补齐的内容。
 
-### 5.1 小说到视频的 6 步流水线
+### 5.1 小说到视频的完整流水线 ✅ 已实现
 
-**angry-mushroom 做法：**
-- 8 张表支撑完整流水线：story_projects、story_characters、story_locations、story_shots、story_scenes、continuity_reports、character_references、generation_records
-- 6 步顺序工作流：故事输入 → AI 分析（提取角色/场景）→ 角色生成（外貌+身份 prompt）→ 场景生成（视觉规则+场景 prompt）→ 分镜生成（逐秒时间线+镜头方向）→ 连续性检查 → prompt 重建 → 视频生成
-- 自动生成模式（`autoGenerate`）：一键跑完全流水线，含参考图生成，步骤间有延迟避免 API 限流
+**实际实现（2026-06-11）：**
+- 5 张领域表：`canvas_projects`、`canvas_characters`、`canvas_locations`、`canvas_shots`、`canvas_continuity_reports`
+- 9 步流水线（比原计划的 6 步更细粒度）：analyze → characters → locations → characterRefs → locationRefs → storyboard → continuity → rebuildPrompts → generateVideos
+- 后端 `apps/server/src/modules/canvas/service.ts`：独立函数式实现，每步一个 async 函数
+- 后端 `apps/server/src/routes/canvas.ts`：REST 路由，每步一个 POST 端点
+- 前端 React Flow 画布：`Canvas.tsx`（项目列表）+ `CanvasEditor.tsx`（画布编辑器）+ 7 种自定义节点
+- 前端 `PipelineController`：自动/手动模式，3 秒暂停点
+- SSE 实时推送：`pipeline_node_update` 事件
+- Worker 集成：`inputParams.source === 'canvas'` 标记，`canvasMeta` 推送
+- 完整测试覆盖：`canvas-json-helper`、`canvas-continuity`、`canvas-prompt-builder`、`canvas-mapper`、`canvas-prompts` + Worker canvas 测试
 
-**我们要做的：**
-- [ ] 新增 `story_projects` 表：id, accountId, title, storyText, analysisJson, status(draft/analyzing/characters/locations/storyboard/generating/completed), createdAt, updatedAt
-- [ ] 新增 `story_characters` 表：id, projectId, name, appearance, identityPrompt, negativePrompt, locked, createdAt
-- [ ] 新增 `story_locations` 表：id, projectId, name, sceneProfile(视觉规则：色板/灯光/建筑/摄影规则), scenePrompt, negativePrompt, locked, createdAt
-- [ ] 新增 `story_shots` 表：id, projectId, sceneId, shotOrder, timeline(逐秒), cameraDirection, narrative, identityPrompt, negativePrompt, continuityJson, status, dashscopeTaskId, resultUrl, createdAt
-- [ ] 新增 `character_references` 表：id, characterId, imageUrl, source(generated/uploaded), createdAt
-- [ ] 后端新增 `novel-video` 模块：projects CRUD + 6 步 pipeline 路由
-- [ ] 前端新增 `Explore` 页面：6 步工作流 UI，每步独立状态展示，支持锁定角色/场景不被重新生成覆盖
+**与原计划的差异：**
+- 表名从 `story_*` 改为 `canvas_*`，字段更丰富（含 profileJson、cameraJson、continuityJson 等）
+- 不使用单独的 `character_references` 表，参考图 URL 直接存在 `canvas_characters` 的 `referenceImageUrl`/`turnaroundSheetUrl` 字段
+- 不使用 `Explore` 页面名称，改为 React Flow 画布的 `Canvas` + `CanvasEditor`
+- 自动生成模式由前端 `PipelineController` 客户端驱动（逐个 POST），而非后端 `autoGenerate` 端点
+- 不使用 `packages/pipeline` 通用引擎，而是领域专用 service 函数
 
-### 5.2 连续性检查系统
+### 5.2 连续性检查系统 ✅ 已实现
 
-**angry-mushroom 做法：**
-- `continuity.ts` 实现确定性（非 AI）验证规则，检查分镜间的视觉一致性
-- 检查项：缺失场景/角色引用、禁止摄影角度、180 度规则违反（角色朝向突变）、动作/情绪不一致
-- 检查结果存入 `continuity_reports` 表
+**实际实现：**
+- `apps/server/src/modules/canvas/continuity.ts`：6 条确定性规则
+- `canvas_continuity_reports` 表：使用 `issuesJson`（jsonb 数组）而非按 issue 存行
+- 检查规则：MISSING_SCENE、MISSING_CHARACTER、FORBIDDEN_CAMERA_ANGLE、FACING_CHANGE、ACTION_MISMATCH、EMOTION_MISMATCH
+- API：`POST /api/canvas/projects/:id/continuity`
+- 前端 `ContinuityCheckNode`：按 severity 着色（error 红、warning 黄），点击高亮对应 Shot
 
-**我们要做的：**
-- [ ] 新增 `continuity_reports` 表：id, projectId, shotId, issueType, severity(error/warning), description, suggestion, createdAt
-- [ ] `@excuse/server` 新增 `continuity` 服务，实现规则：
-  - 角色朝向一致性（180 度规则：同场景连续镜头中角色面朝方向不能翻转）
-  - 禁止角度检测（每个场景可定义 forbiddenAngles，分镜中不得违反）
-  - 引用完整性（分镜引用的角色/场景必须存在且已生成 prompt）
-  - 动作/情绪连续性（连续镜头间角色的动作和情绪应该过渡自然）
-- [ ] API：`POST /api/projects/:id/continuity/check`
-- [ ] 前端在分镜步骤后展示连续性问题列表，按 severity 着色
+### 5.3 Prompt 构建体系 ✅ 已实现
 
-### 5.3 Prompt 构建体系
+**实际实现：**
+- `apps/server/src/modules/canvas/prompts.ts`：4 个 prompt 函数（buildAnalysisPrompt、buildCharacterPrompt、buildLocationPrompt、buildStoryboardPrompt）
+- `apps/server/src/modules/canvas/prompt-builder.ts`：buildShotVideoPrompt 组装函数
+- 每步的 system prompt 包含严格的 JSON 输出格式要求和约束规则
+- video prompt 组装顺序：角色一致性 → 场景 → 叙事 → 逐秒时间线 → 情感 → 朝向 → 环境 → 摄像机 → 质量规则
+- Negative prompt 体系：角色负面 + 场景负面 + 通用质量负面
 
-**angry-mushroom 做法：**
-- `prompt-builder.ts` 将角色身份 + 场景设定 + 镜头语言 + 连续性约束组合成结构化英文 prompt + negative prompt
-- `prompts/` 目录存放各步骤的 system prompt 模板（角色生成、场景生成、分镜生成各有专用 prompt）
-- 分镜 prompt 包含严格的画面一致性要求（角色外貌/服装/发色/体型必须一致）
+### 5.4 视频生成 Fallback 机制 ⚠️ 部分实现
 
-**我们要做的：**
-- [ ] 新增 `packages/provider/src/prompts/` 目录，按功能分文件存放 system prompt 模板
-- [ ] 新增 `prompt-builder.ts`：组合函数，将角色 identityPrompt + 场景 scenePrompt + 镜头 camera + 连续性约束 → 最终 video prompt
-- [ ] 角色 prompt 模板：给定角色名和故事背景，生成外貌、服装、配饰的英文视觉描述
-- [ ] 场景 prompt 模板：给定场景名，生成色板、灯光、建筑风格、摄影规则
-- [ ] 分镜 prompt 模板：给定角色+场景+故事段落，生成逐秒时间线、镜头运动、景别
-- [ ] Negative prompt 体系：每个生成步骤都配套 negative prompt（排除元素、画质要求）
+**实际实现：**
+- `service.ts` 的 `generateVideos` 中实现了 r2v → t2v fallback
+- Fallback 逻辑硬编码在 service 层，不是声明式配置
 
-### 5.4 视频生成 Fallback 机制
+**仍需改进：**
+- [ ] `model-configs.ts` 新增声明式 `fallbackModel` 字段
+- [ ] 将 fallback 逻辑从 service 提取到 provider 层
 
-**angry-mushroom 做法：**
-- r2v（参考图生成视频）失败时自动 fallback 到 t2v（纯文本生成视频）
-- Worker 层面实现，捕获 r2v 异常后用 t2v 重试
+### 5.5 前端交互体验提升 ⚠️ 部分实现
 
-**我们要做的：**
-- [ ] `@excuse/provider` 的 DashScopeClient 新增 fallback 配置：`fallbackModel` 字段
-- [ ] Worker `task-processor.ts`：视频任务失败时检查是否有 fallbackModel，有则用 fallback 重试
-- [ ] `model-configs.ts` 中 r2v 模型声明 fallback 为对应 t2v 模型
-- [ ] 生成记录中标记实际使用的模型（可能是 fallback 模型），确保计费准确
+**已完成：**
+- [x] React Flow 无限画布：7 种自定义节点（StoryInput、Analysis、Character、Location、Shot、ContinuityCheck）
+- [x] 角色/场景锁定功能：`locked` 字段 + 前端锁定开关，重新生成时跳过已锁定项
+- [x] 视频内联预览播放：ShotNode 中 `<video>` 播放器
+- [x] PipelineController：9 阶段进度条 + 自动/手动模式 + 3 秒倒计时暂停
+- [x] NodeDetailPanel：点击节点展开详情编辑面板
+- [x] DevMode 开关：展示所有中间数据（rawJson、LLM 原始输出等）
 
-### 5.5 前端交互体验提升
+**仍需实现：**
+- [ ] Canvas 编辑器新增 `PromptEditor` 组件：支持 `@` 触发下拉菜单选择角色/场景/镜头，插入引用标签（如 `[Character:小明]`）
+- [ ] Canvas 编辑器新增 `ReferenceUploadZone` 组件：拖拽区域 + 文件预览 + 删除按钮，支持手动上传角色/场景参考图
 
-**angry-mushroom 做法：**
-- `PromptEditor` 组件：支持 @mention 插入角色/场景引用标签的富文本编辑器
-- `ReferenceUploadZone` 组件：拖拽上传文件，支持预览和删除
-- Explore 页面 6 步工作流：每步卡片式布局，独立状态（pending/processing/completed），角色/场景可锁定，自动生成模式开关
+### 5.6 Mapper 层 ✅ 已实现
 
-**我们要做的：**
-- [ ] Workspace 页面新增 `PromptEditor` 组件：支持 `@` 触发下拉菜单选择角色/场景/镜头，插入引用标签（如 `[Character:小明]`）
-- [ ] Workspace 页面新增 `ReferenceUploadZone` 组件：拖拽区域 + 文件预览 + 删除按钮，支持图片/视频文件
-- [ ] Explore 页面工作流 UI：卡片式布局，每步有状态指示器（待处理/处理中/完成/失败），支持手动触发和自动模式切换
-- [ ] 角色/场景卡片支持锁定（`locked` 状态），重新生成时跳过已锁定项
-- [ ] 视频生成记录支持内联预览播放
+**实际实现：**
+- `apps/server/src/modules/canvas/mapper.ts`：mapCharacter、mapLocation、mapShot、mapProjectDetail
+- JSON 字段解析带 try/catch fallback，Date → ISO string 序列化
+- 路由层只使用 mapper 返回的 DTO 类型
 
-### 5.6 Mapper 层
-
-**angry-mushroom 做法：**
-- `mapper.ts` 将 DB 查询结果（含 JSON 字符串列）转为干净的 TypeScript 接口
-- JSON 字段解析带 try/catch fallback，避免损坏数据导致整条记录解析失败
+### 5.7 OpenAPI 文档自动生成 ❌ 未实现
 
 **我们要做的：**
-- [ ] `@excuse/db` 新增 `mappers/` 目录，按表分文件（accounts.mapper.ts、generation-records.mapper.ts 等）
-- [ ] 每个 mapper 负责处理 JSON 字符串解析、Date 序列化、枚举类型转换
-- [ ] JSON 字段解析统一用 try/catch 包裹，失败返回 null 而非抛异常
-- [ ] 路由层只使用 mapper 返回的干净类型，不再直接操作 Drizzle row 类型
-
-### 5.7 OpenAPI 文档自动生成
-
-**angry-mushroom 做法：**
-- 使用 `@elysiajs/openapi` 自动生成 OpenAPI/Swagger 文档
-- 开发者可在 `/api/openapi` 浏览所有路由定义
-
-**我们要做的：**
-- [ ] 安装 `@elysiajs/openapi` 插件
-- [ ] Server 入口注册 OpenAPI 插件，配置 `/api/docs` 路径
+- [ ] 安装 `@elysiajs/swagger` 插件
+- [ ] Server 入口注册 Swagger 插件，配置 `/api/docs` 路径
 - [ ] 确保所有路由的 Elysia schema（`t.Object` 等）正确映射到 OpenAPI 定义
 - [ ] 开发环境可通过 `/api/docs` 在线调试 API
 
@@ -394,27 +373,29 @@
 
 ### Phase 4 — 运维可观测（1-2 周）
 1. Prometheus metrics
-2. OpenAPI spec（@elysiajs/openapi）
+2. OpenAPI spec（@elysiajs/swagger）
 3. 数据保留策略
 4. 生产部署方案（Dockerfile + nginx + compose.prod）
 
-### Phase 5 — 业务域增强（3-4 周）★ angry-mushroom 对照
-1. 新增 5 张流水线表（story_projects/characters/locations/shots/character_references）
-2. 后端 novel-video 模块：6 步 pipeline 路由
-3. Prompt 构建体系（prompts/ 目录 + prompt-builder）
-4. 连续性检查系统（确定性规则引擎）
-5. 视频生成 fallback 机制（r2v → t2v）
-6. Mapper 层（DB 行 → 干净类型接口）
-7. OpenAPI 文档自动生成（@elysiajs/openapi）
+### Phase 5 — 业务域增强 ✅ 大部分已完成
+1. ~~新增 5 张流水线表~~ ✅ canvas_projects/characters/locations/shots/continuity_reports
+2. ~~后端 canvas 模块：9 步 pipeline 路由~~ ✅ apps/server/src/modules/canvas/
+3. ~~Prompt 构建体系~~ ✅ prompts.ts + prompt-builder.ts
+4. ~~连续性检查系统~~ ✅ continuity.ts（6 条规则 + 测试）
+5. ~~视频生成 fallback 机制~~ ⚠️ service 层硬编码，需改为声明式 fallbackModel
+6. ~~Mapper 层~~ ✅ mapper.ts
+7. OpenAPI 文档自动生成 ❌ 待实现 @elysiajs/swagger
 
-### Phase 6 — 前端体验升级（2-3 周）★ angry-mushroom 对照
-1. PromptEditor 组件（@mention 引用插入）
-2. ReferenceUploadZone 组件（拖拽上传）
-3. Explore 页面 6 步工作流 UI
-4. 角色/场景锁定功能
-5. 视频内联预览播放
+### Phase 6 — 前端体验升级 ⚠️ 部分完成
+1. ~~React Flow 无限画布~~ ✅ CanvasFlow + 7 种节点 + dagre 自动布局
+2. ~~角色/场景锁定功能~~ ✅ locked 字段 + 前端开关
+3. ~~视频内联预览播放~~ ✅ ShotNode video player
+4. ~~PipelineController 进度条~~ ✅ 自动/手动模式 + 3 秒暂停
+5. PromptEditor 组件（@mention 引用插入）❌ 待实现
+6. ReferenceUploadZone 组件（拖拽上传）❌ 待实现
 
 ### Phase 7 — 功能增强（渐进迭代）
 1. 通知系统
 2. OpenAI 兼容网关（按需）
 3. 文档补全
+4. 声明式 fallbackModel（从 Phase 5 遗留）

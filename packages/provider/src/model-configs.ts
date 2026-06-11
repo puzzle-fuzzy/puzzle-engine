@@ -274,6 +274,7 @@ export const MODELS: Record<string, ModelConfig> = {
     inputMapping: VIDEO_MEDIA_MAPPING,
     // referenceUrls → input.media[{ type: "reference_image", url }]
     referenceMediaType: 'reference_image',
+    fallbackModel: 'happyhorse-1.0-t2v',
     parameters: [
       { name: 'prompt', type: 'text', required: true, description: '文本提示词' },
       { name: 'resolution', type: 'select', defaultValue: '1080P', description: '视频分辨率', options: [
@@ -414,6 +415,7 @@ export const MODELS: Record<string, ModelConfig> = {
     inputMapping: VIDEO_MEDIA_MAPPING,
     // referenceUrls → input.media[{ type: "reference_image", url }]
     referenceMediaType: 'reference_image',
+    fallbackModel: 'wan2.7-t2v',
     parameters: [
       { name: 'prompt', type: 'text', required: true, description: '文本提示词' },
       { name: 'negative_prompt', type: 'text', description: '反向提示词' },
