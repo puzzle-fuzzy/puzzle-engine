@@ -1,4 +1,6 @@
+import { Pencil, Trash2, Upload } from 'lucide-react'
 import { useCallback, useRef, useState } from 'react'
+import { Button } from '@/components/ui/button'
 
 interface ReferenceUploadZoneProps {
   currentUrl: string | null
@@ -30,7 +32,6 @@ export function ReferenceUploadZone({
     setUploading(true)
 
     try {
-      // Show local preview immediately
       const localUrl = URL.createObjectURL(file)
       setPreviewUrl(localUrl)
 
@@ -67,7 +68,6 @@ export function ReferenceUploadZone({
     const file = e.target.files?.[0]
     if (file)
       handleFile(file)
-    // Reset input so same file can be re-selected
     e.target.value = ''
   }, [handleFile])
 
@@ -96,27 +96,29 @@ export function ReferenceUploadZone({
             <div className="relative group rounded-lg overflow-hidden border">
               <img
                 src={previewUrl}
-                alt="参考图"
+                alt={label}
                 className="w-full h-40 object-cover"
               />
               <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
-                <button
-                  type="button"
+                <Button
+                  variant="secondary"
+                  size="xs"
                   onClick={() => inputRef.current?.click()}
-                  className="px-3 py-1.5 bg-white text-black rounded text-xs font-medium hover:bg-gray-100"
                   disabled={uploading}
                 >
+                  <Pencil className="w-3 h-3 mr-1" />
                   替换
-                </button>
+                </Button>
                 {onRemove && (
-                  <button
-                    type="button"
+                  <Button
+                    variant="destructive"
+                    size="xs"
                     onClick={handleRemove}
-                    className="px-3 py-1.5 bg-red-500 text-white rounded text-xs font-medium hover:bg-red-600"
                     disabled={uploading}
                   >
+                    <Trash2 className="w-3 h-3 mr-1" />
                     删除
-                  </button>
+                  </Button>
                 )}
               </div>
             </div>
@@ -139,19 +141,7 @@ export function ReferenceUploadZone({
                   )
                 : (
                     <>
-                      <svg
-                        className="w-8 h-8 text-muted-foreground/50 mb-2"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={1.5}
-                          d="M12 16V4m0 0l-4 4m4-4l4 4M4 20h16"
-                        />
-                      </svg>
+                      <Upload className="w-8 h-8 text-muted-foreground/50 mb-2" />
                       <p className="text-xs text-muted-foreground">拖拽图片到此处，或点击上传</p>
                     </>
                   )}
@@ -167,7 +157,7 @@ export function ReferenceUploadZone({
       />
 
       {error && (
-        <p className="text-xs text-red-600">{error}</p>
+        <p className="text-xs text-destructive">{error}</p>
       )}
     </div>
   )

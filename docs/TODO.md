@@ -248,7 +248,7 @@
 
 **仍需实现：**
 - [x] Canvas 编辑器新增 `PromptEditor` 组件：支持 `@` 触发下拉菜单选择角色/场景/镜头，插入引用标签（如 `[Character:小明]`、`[Shot:1]`）
-- [ ] Canvas 编辑器新增 `ReferenceUploadZone` 组件：拖拽区域 + 文件预览 + 删除按钮，支持手动上传角色/场景参考图
+- [x] Canvas 编辑器新增 `ReferenceUploadZone` 组件：拖拽区域 + 文件预览 + 删除按钮，支持手动上传角色/场景参考图
 
 ### 5.6 Mapper 层 ✅ 已实现
 
@@ -391,7 +391,7 @@
 3. ~~视频内联预览播放~~ ✅ ShotNode video player
 4. ~~PipelineController 进度条~~ ✅ 自动/手动模式 + 3 秒暂停
 5. PromptEditor 组件（@mention 引用插入）✅ 已实现
-6. ReferenceUploadZone 组件（拖拽上传）❌ 待实现
+6. ReferenceUploadZone 组件（拖拽上传）✅ 已实现
 
 ### Phase 7 — 功能增强（渐进迭代）
 1. 通知系统
