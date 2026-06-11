@@ -2,17 +2,16 @@ import pino from 'pino'
 
 export type Logger = pino.Logger
 
-/**
- * 创建应用 Logger
- *
- * - 生产环境：JSON 结构化日志（NDJSON，方便日志采集）
- * - 开发环境：pino-pretty 彩色可读输出
- * - 内置 redact 脱敏：自动隐藏 password / token / secret / apiKey 等字段
- */
-export function createLogger(name: string, options?: pino.LoggerOptions): Logger {
+/** 浏览器环境：pino 降级为 console 输出（无 transport、无 redact） */
+function createBrowserLogger(name: string): Logger {
+  return pino({ name, level: 'debug' })
+}
+
+/** Node.js 环境：完整 pino + pino-pretty / redact */
+function createNodeLogger(name: string, options?: pino.LoggerOptions): Logger {
   const isDev = process.env.NODE_ENV !== 'production'
 
-  const transport = isDev
+  const transport = isDev && typeof pino.transport === 'function'
     ? pino.transport({
         target: 'pino-pretty',
         options: {
@@ -27,7 +26,6 @@ export function createLogger(name: string, options?: pino.LoggerOptions): Logger
     {
       name,
       level: process.env.LOG_LEVEL ?? (isDev ? 'debug' : 'info'),
-      // 脱敏：匹配到的字段自动替换为 [Redacted]
       redact: {
         paths: [
           'password',
@@ -48,6 +46,18 @@ export function createLogger(name: string, options?: pino.LoggerOptions): Logger
     },
     transport,
   )
+}
+
+/**
+ * 创建应用 Logger
+ *
+ * - Node.js: JSON 结构化日志 + pino-pretty(开发) + redact 脱敏
+ * - 浏览器: pino 降级为 console 输出
+ */
+export function createLogger(name: string, options?: pino.LoggerOptions): Logger {
+  return typeof window !== 'undefined'
+    ? createBrowserLogger(name)
+    : createNodeLogger(name, options)
 }
 
 /** 全局单例 Logger，用于整个应用 */
