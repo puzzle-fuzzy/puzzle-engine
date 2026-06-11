@@ -12,6 +12,9 @@
     "paths": {
       "@/*": [
         "./src/*"
+      ],
+      "ali-oss": [
+        "../../types/ali-oss"
       ]
     },
     "types": ["vite/client"],

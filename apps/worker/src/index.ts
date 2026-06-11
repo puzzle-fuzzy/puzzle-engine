@@ -1,7 +1,8 @@
+import type { TaskResult } from './task-processor'
 import { pollPendingVideoTasks } from '@excuse/db'
 import { createLogger } from '@excuse/shared'
 import { loadConfig } from './config'
-import { type TaskResult, createTaskProcessor } from './task-processor'
+import { createTaskProcessor } from './task-processor'
 
 const config = loadConfig()
 const processor = createTaskProcessor(config)
@@ -58,6 +59,7 @@ for (const signal of ['SIGINT', 'SIGTERM'] as const) {
  *   - 其他错误: 记录日志后继续下一轮轮询
  *   - 半完成状态: pollPendingVideoTasks 会重新捞取 processing 但 provider 已返回结果的任务
  */
+async function main() {
   logger.info({ pollIntervalMs: config.pollIntervalMs }, '🤖 Worker started')
 
   while (running) {

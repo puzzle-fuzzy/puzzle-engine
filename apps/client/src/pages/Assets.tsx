@@ -226,9 +226,8 @@ function getAssetUrls(record: GenerationRecord): string[] {
     return output.savedUrls
   if (isVideoOutput(output) && output.savedUrls.length > 0)
     return output.savedUrls
+  // Image output may have raw `urls` before download-and-save completed
   if (isImageOutput(output) && output.urls?.length)
-    return output.urls
-  if (isVideoOutput(output) && output.urls?.length)
     return output.urls
   return []
 }

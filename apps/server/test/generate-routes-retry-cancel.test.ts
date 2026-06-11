@@ -1,6 +1,6 @@
+import type { GenerationRecordRow } from '@excuse/db'
 import { treaty } from '@elysia/eden'
 import { beforeAll, beforeEach, describe, expect, it, mock } from 'bun:test'
-import { makeFailedRecord, makeProcessingRecord, makeTestConfig, signTestToken } from './helpers/test-factory'
 
 /**
  * Generate 路由 retry / cancel 端点测试
@@ -8,22 +8,38 @@ import { makeFailedRecord, makeProcessingRecord, makeTestConfig, signTestToken }
  * 测试 POST /api/records/:id/retry 和 POST /api/records/:id/cancel
  */
 
+// ─── Mock 类型 ───────────────────────────────────────────────
+
+import { makeFailedRecord, makeProcessingRecord, makeTestConfig, signTestToken } from './helpers/test-factory'
+
+interface MockProviderResult {
+  success: boolean
+  error?: string
+  output?: Record<string, unknown>
+  usage?: Record<string, unknown>
+  providerTaskId?: string
+}
+
 // ─── Mocks ───────────────────────────────────────────────
 
-const mockCreateRecord = mock(() => Promise.resolve(null))
-const mockListRecords = mock(() => Promise.resolve([]))
-const mockGetRecordById = mock(() => Promise.resolve(null))
-const mockDeleteRecord = mock(() => Promise.resolve(undefined))
-const mockMarkFailed = mock(() => Promise.resolve(undefined))
-const mockMarkProcessing = mock(() => Promise.resolve(undefined))
-const mockMarkSucceeded = mock(() => Promise.resolve(undefined))
-const mockCalculateCost = mock(() => ({ unit: 'token', totalPriceCents: 1, totalPrice: 0.01 }))
-const mockGenerate = mock(() => Promise.resolve({ success: false, error: 'mock error' }))
-const mockNotifyStatus = mock(() => Promise.resolve(undefined))
-const mockGetUploadedFilesByIdsForAccount = mock(() => Promise.resolve([]))
-const mockCancelRecord = mock(() => Promise.resolve(undefined))
-const mockResetToPending = mock(() => Promise.resolve(undefined))
-const mockFindGenerationByDedupeKeyForAccount = mock(() => Promise.resolve(null))
+type RecordOrNull = GenerationRecordRow | null
+
+const mockCreateRecord = mock<() => Promise<RecordOrNull>>(() => Promise.resolve(null))
+const mockListRecords = mock<(filter: Record<string, unknown>) => Promise<GenerationRecordRow[]>>(() => Promise.resolve([]))
+const mockGetRecordById = mock<(id: string) => Promise<RecordOrNull>>(() => Promise.resolve(null))
+const mockDeleteRecord = mock<(id: string) => Promise<void>>(() => Promise.resolve(undefined))
+const mockMarkFailed = mock<(id: string, error: string) => Promise<void>>(() => Promise.resolve(undefined))
+const mockMarkProcessing = mock<(id: string, data: Record<string, unknown>) => Promise<void>>(() => Promise.resolve(undefined))
+const mockMarkSucceeded = mock<(id: string, output: unknown, cost: unknown) => Promise<void>>(() => Promise.resolve(undefined))
+const mockCalculateCost = mock<() => Record<string, unknown>>(() => ({ unit: 'token', totalPriceCents: 1, totalPrice: 0.01 }))
+const mockGenerate = mock<(model: string, params: Record<string, unknown>, refs?: string[]) => Promise<MockProviderResult>>(() =>
+  Promise.resolve({ success: false, error: 'mock error' }),
+)
+const mockNotifyStatus = mock<(payload: Record<string, unknown>) => Promise<void>>(() => Promise.resolve(undefined))
+const mockGetUploadedFilesByIdsForAccount = mock<(ids: string[], accountId: string) => Promise<unknown[]>>(() => Promise.resolve([]))
+const mockCancelRecord = mock<(id: string) => Promise<void>>(() => Promise.resolve(undefined))
+const mockResetToPending = mock<(id: string) => Promise<void>>(() => Promise.resolve(undefined))
+const mockFindGenerationByDedupeKeyForAccount = mock<(key: string, accountId: string) => Promise<RecordOrNull>>(() => Promise.resolve(null))
 
 mock.module('@excuse/db', () => ({
   createGenerationRecord: mockCreateRecord,
@@ -46,7 +62,7 @@ mock.module('@excuse/provider', () => ({
     cancelTask = mock(() => Promise.resolve(undefined))
   },
   getModelById: (id: string) => {
-    const models: Record<string, any> = {
+    const models: Record<string, unknown> = {
       'qwen-max': {
         id: 'qwen-max',
         category: 'text',

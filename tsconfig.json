@@ -9,8 +9,11 @@
 
     // Bundler mode
     "moduleResolution": "bundler",
-    "types": ["bun"],
+    "paths": {
+      "ali-oss": ["./types/ali-oss"]
+    },
     "typeRoots": ["./types", "./node_modules/@types"],
+    "types": ["bun"],
     "allowImportingTsExtensions": true,
     "allowJs": true,
 

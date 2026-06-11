@@ -53,7 +53,7 @@ const mockUpdateCanvasShot = mock(() => Promise.resolve({ id: 'shot-001', update
 const mockDeleteCanvasCharacterById = mock(() => Promise.resolve(undefined))
 const mockDeleteCanvasLocationById = mock(() => Promise.resolve(undefined))
 const mockDeleteCanvasShotById = mock(() => Promise.resolve(undefined))
-const mockGetCanvasProjectByIdForAccount = mock(() => Promise.resolve(makeProjectRow()))
+const mockGetCanvasProjectByIdForAccount = mock<() => Promise<ReturnType<typeof makeProjectRow> | null>>(() => Promise.resolve(makeProjectRow()))
 const mockGetCanvasCharacterForAccount = mock(() => Promise.resolve({ id: 'char-001' }))
 const mockGetCanvasLocationForAccount = mock(() => Promise.resolve({ id: 'loc-001' }))
 const mockGetCanvasShotForAccount = mock(() => Promise.resolve({ id: 'shot-001' }))

@@ -313,12 +313,12 @@ export async function updateCanvasShot(shotId: string, patch: {
   locationId?: string
   characterIdsJson?: string[]
   narrative?: string
-  cameraJson?: Record<string, unknown>
-  environmentJson?: Record<string, unknown>
+  cameraJson?: { shotSize: string, angle: string, movement: string, lens: string }
+  environmentJson?: { backgroundMotion?: string, lighting?: string, mood?: string, style?: string }
   videoPrompt?: string
 }): Promise<{ success: boolean, data: unknown }> {
   return unwrapEden<{ success: boolean, data: unknown }>(
-    await api.api.canvas.shots({ shotId }).patch(patch as any),
+    await api.api.canvas.shots({ shotId }).patch(patch),
   )
 }
 

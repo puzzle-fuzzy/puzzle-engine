@@ -1,6 +1,6 @@
+import type { GenerationRecordRow } from '@excuse/db'
 import { treaty } from '@elysia/eden'
 import { beforeAll, beforeEach, describe, expect, it, mock } from 'bun:test'
-import { makeRecord, makeTestConfig, signTestToken } from './helpers/test-factory'
 
 /**
  * 生成路由单元测试
@@ -11,21 +11,7 @@ import { makeRecord, makeTestConfig, signTestToken } from './helpers/test-factor
 
 // ─── Mock 类型 ───────────────────────────────────────────────
 
-/** 生成记录 mock 行结构（覆盖所有测试用例的形状变体） */
-interface MockGenRecord {
-  id: string
-  accountId: string
-  taskId: string
-  model: string
-  category: string
-  status: string
-  inputParams: Record<string, unknown>
-  outputResult: Record<string, unknown> | null
-  cost: Record<string, unknown> | null
-  errorMessage: string | null
-  createdAt: Date
-  updatedAt: Date
-}
+import { makeRecord, makeTestConfig, signTestToken } from './helpers/test-factory'
 
 /** Provider 返回结构（涵盖同步/异步/成功/失败所有变体） */
 interface MockProviderResult {
@@ -38,9 +24,11 @@ interface MockProviderResult {
 
 // ─── Mocks ───────────────────────────────────────────────
 
-const mockCreateRecord = mock<() => Promise<MockGenRecord | null>>(() => Promise.resolve(null))
-const mockListRecords = mock<(filter: Record<string, unknown>) => Promise<MockGenRecord[]>>(() => Promise.resolve([]))
-const mockGetRecordById = mock<(id: string) => Promise<MockGenRecord | null>>(() => Promise.resolve(null))
+type RecordOrNull = GenerationRecordRow | null
+
+const mockCreateRecord = mock<() => Promise<RecordOrNull>>(() => Promise.resolve(null))
+const mockListRecords = mock<(filter: Record<string, unknown>) => Promise<GenerationRecordRow[]>>(() => Promise.resolve([]))
+const mockGetRecordById = mock<(id: string) => Promise<RecordOrNull>>(() => Promise.resolve(null))
 const mockDeleteRecord = mock<(id: string) => Promise<void>>(() => Promise.resolve(undefined))
 const mockMarkFailed = mock<(id: string, error: string) => Promise<void>>(() => Promise.resolve(undefined))
 const mockMarkProcessing = mock<(id: string, data: Record<string, unknown>) => Promise<void>>(() => Promise.resolve(undefined))
@@ -50,11 +38,11 @@ const mockGenerate = mock<(model: string, params: Record<string, unknown>, refs?
   Promise.resolve({ success: false, error: 'mock error' }),
 )
 
-const mockNotifyStatus = mock(() => Promise.resolve(undefined))
-const mockGetUploadedFilesByIdsForAccount = mock(() => Promise.resolve([]))
-const mockCancelRecord = mock(() => Promise.resolve(undefined))
-const mockResetToPending = mock(() => Promise.resolve(undefined))
-const mockFindGenerationByDedupeKeyForAccount = mock(() => Promise.resolve(null))
+const mockNotifyStatus = mock<(payload: Record<string, unknown>) => Promise<void>>(() => Promise.resolve(undefined))
+const mockGetUploadedFilesByIdsForAccount = mock<(ids: string[], accountId: string) => Promise<unknown[]>>(() => Promise.resolve([]))
+const mockCancelRecord = mock<(id: string) => Promise<void>>(() => Promise.resolve(undefined))
+const mockResetToPending = mock<(id: string) => Promise<void>>(() => Promise.resolve(undefined))
+const mockFindGenerationByDedupeKeyForAccount = mock<(key: string, accountId: string) => Promise<RecordOrNull>>(() => Promise.resolve(null))
 
 mock.module('@excuse/db', () => ({
   createGenerationRecord: mockCreateRecord,
@@ -76,7 +64,7 @@ mock.module('@excuse/provider', () => ({
     generate = mockGenerate
   },
   getModelById: (id: string) => {
-    const models: Record<string, any> = {
+    const models: Record<string, unknown> = {
       'qwen-max': {
         id: 'qwen-max',
         category: 'text',

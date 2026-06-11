@@ -7,7 +7,7 @@ import { beforeEach, describe, expect, it, mock } from 'bun:test'
  * Mock @excuse/provider 的 MODELS，验证 GET /api/models/ 返回格式
  */
 
-const MOCK_MODELS: Record<string, any> = {
+const MOCK_MODELS: Record<string, Record<string, unknown>> = {
   'qwen-max': {
     id: 'qwen-max',
     name: '千问 Max',
@@ -90,16 +90,17 @@ describe('models routes', () => {
   it('pricing 包含 unit/inputPriceCents/outputPriceCents 信息', async () => {
     const { data } = await client.api.models.get()
 
-    const textModel = data!.models.find(m => m.id === 'qwen-max')
+    const models = data!.models as Array<Record<string, unknown>>
+    const textModel = models.find((m): m is Record<string, unknown> => m.id === 'qwen-max')
     expect(textModel).toBeDefined()
-    expect(textModel!.pricing.unit).toBe('token')
-    expect(textModel!.pricing.inputPriceCents).toBe(240)
-    expect(textModel!.pricing.outputPriceCents).toBe(960)
+    expect((textModel!.pricing as Record<string, unknown>).unit).toBe('token')
+    expect((textModel!.pricing as Record<string, unknown>).inputPriceCents).toBe(240)
+    expect((textModel!.pricing as Record<string, unknown>).outputPriceCents).toBe(960)
 
-    const imageModel = data!.models.find(m => m.id === 'qwen-image-2.0-pro')
-    expect(imageModel!.pricing.unit).toBe('image')
+    const imageModel = models.find((m): m is Record<string, unknown> => m.id === 'qwen-image-2.0-pro')
+    expect((imageModel!.pricing as Record<string, unknown>).unit).toBe('image')
 
-    const videoModel = data!.models.find(m => m.id === 'happyhorse-1.0-t2v')
-    expect(videoModel!.pricing.inputPrice1080Cents).toBe(160)
+    const videoModel = models.find((m): m is Record<string, unknown> => m.id === 'happyhorse-1.0-t2v')
+    expect((videoModel!.pricing as Record<string, unknown>).inputPrice1080Cents).toBe(160)
   })
 })

@@ -55,7 +55,10 @@ function createNodeLogger(name: string, options?: pino.LoggerOptions): Logger {
  * - 浏览器: pino 降级为 console 输出
  */
 export function createLogger(name: string, options?: pino.LoggerOptions): Logger {
-  return typeof globalThis !== 'undefined' && typeof (globalThis as any).window !== 'undefined'
+  const isBrowser = typeof globalThis !== 'undefined'
+    && 'window' in globalThis
+    && typeof (globalThis as Record<string, unknown>).window !== 'undefined'
+  return isBrowser
     ? createBrowserLogger(name)
     : createNodeLogger(name, options)
 }

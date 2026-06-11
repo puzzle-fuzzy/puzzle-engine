@@ -12,9 +12,10 @@ mock.module('@excuse/db', () => ({
 const { addConnection, dispatchToUser, getOnlineUserCount, removeConnection } = await import('../src/services/sse-manager')
 
 // 追踪所有测试中添加的连接，确保 afterEach 清理干净
-const addedConnections: Array<{ userId: string, sender: () => void }> = []
+type Sender = (event: string, data: unknown) => void
+const addedConnections: Array<{ userId: string, sender: Sender }> = []
 
-function trackedAdd(userId: string, sender: () => void) {
+function trackedAdd(userId: string, sender: Sender) {
   addConnection(userId, sender)
   addedConnections.push({ userId, sender })
 }
@@ -28,22 +29,22 @@ afterEach(() => {
 
 describe('SSE Manager — connection lifecycle', () => {
   it('adds a connection for a user', () => {
-    const sender = () => {}
+    const sender: Sender = () => {}
     trackedAdd('user-1', sender)
     expect(getOnlineUserCount()).toBe(1)
   })
 
   it('supports multiple connections for same user', () => {
-    const sender1 = () => {}
-    const sender2 = () => {}
+    const sender1: Sender = () => {}
+    const sender2: Sender = () => {}
     trackedAdd('user-1', sender1)
     trackedAdd('user-1', sender2)
     expect(getOnlineUserCount()).toBe(1) // same user
   })
 
   it('removes user entry when last connection is removed', () => {
-    const sender1 = () => {}
-    const sender2 = () => {}
+    const sender1: Sender = () => {}
+    const sender2: Sender = () => {}
     trackedAdd('user-1', sender1)
     trackedAdd('user-1', sender2)
     removeConnection('user-1', sender1)
@@ -55,15 +56,19 @@ describe('SSE Manager — connection lifecycle', () => {
   })
 
   it('removeConnection is no-op for non-existent user', () => {
-    expect(() => removeConnection('nobody', () => {})).not.toThrow()
+    expect(() => removeConnection('nobody', (() => {}) as Sender)).not.toThrow()
   })
 })
 
 describe('SSE Manager — dispatchToUser', () => {
   it('dispatches to all connections of a user', () => {
     const received: Array<{ event: string, data: unknown }> = []
-    const sender1 = (event: string, data: unknown) => received.push({ event, data })
-    const sender2 = (event: string, data: unknown) => received.push({ event, data })
+    const sender1: Sender = (event, data) => {
+      received.push({ event, data })
+    }
+    const sender2: Sender = (event, data) => {
+      received.push({ event, data })
+    }
 
     trackedAdd('user-dispatch', sender1)
     trackedAdd('user-dispatch', sender2)

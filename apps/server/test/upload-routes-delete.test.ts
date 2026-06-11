@@ -8,13 +8,27 @@ import { makeTestConfig, makeUploadedFile, signTestToken } from './helpers/test-
  * 使用原生 Request + Elysia handle() 绕过 Eden 对 DELETE 的序列化问题。
  */
 
+// ─── Mock 类型 ───────────────────────────────────────────────
+
+interface MockUploadedFile {
+  id: string
+  accountId: string
+  fileName: string
+  fileSize: number
+  mimeType: string
+  storagePath: string
+  publicUrl: string
+  purpose: string
+  createdAt: Date
+}
+
 // ─── Mocks ───────────────────────────────────────────────
 
-const mockGetAccountByEmail = mock(() => Promise.resolve(null))
-const mockGetAccountByUsername = mock(() => Promise.resolve(null))
-const mockGetAccountById = mock(() => Promise.resolve(null))
-const mockCreateAccount = mock(() => Promise.resolve(null))
-const mockCreateUploadedFile = mock(() =>
+const mockGetAccountByEmail = mock<() => Promise<unknown | null>>(() => Promise.resolve(null))
+const mockGetAccountByUsername = mock<() => Promise<unknown | null>>(() => Promise.resolve(null))
+const mockGetAccountById = mock<() => Promise<unknown | null>>(() => Promise.resolve(null))
+const mockCreateAccount = mock<(values: Record<string, unknown>) => Promise<unknown | null>>(() => Promise.resolve(null))
+const mockCreateUploadedFile = mock<(values: Record<string, unknown>) => Promise<{ id: string, fileName: string, publicUrl: string, mimeType: string }>>(() =>
   Promise.resolve({
     id: 'file-001',
     fileName: 'test.png',
@@ -22,8 +36,8 @@ const mockCreateUploadedFile = mock(() =>
     mimeType: 'image/png',
   }),
 )
-const mockGetUploadedFileById = mock(() => Promise.resolve(null))
-const mockDeleteUploadedFileById = mock(() => Promise.resolve(undefined))
+const mockGetUploadedFileById = mock<(id: string) => Promise<MockUploadedFile | null>>(() => Promise.resolve(null))
+const mockDeleteUploadedFileById = mock<(id: string) => Promise<void>>(() => Promise.resolve(undefined))
 
 mock.module('@excuse/db', () => ({
   getAccountByEmail: mockGetAccountByEmail,

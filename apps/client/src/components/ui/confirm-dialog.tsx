@@ -17,8 +17,8 @@ interface ConfirmDialogProps {
   cancelText?: string
   /** 确认按钮样式，默认 destructive */
   variant?: 'destructive' | 'default'
-  /** 确认回调 */
-  onConfirm: () => void
+  /** 确认回调（支持异步） */
+  onConfirm: () => void | Promise<void>
 }
 
 /**
@@ -41,10 +41,7 @@ export function ConfirmDialog({
   async function handleConfirm() {
     try {
       setLoading(true)
-      const result = onConfirm()
-      if (result && typeof result === 'object' && 'then' in result) {
-        await result
-      }
+      await onConfirm()
       onOpenChange(false)
     }
     finally {

@@ -11,11 +11,22 @@ import { makeAccount, makeTestConfig } from './helpers/test-factory'
 
 // ─── Mock @excuse/db ───────────────────────────────
 
-const mockGetAccountByEmail = mock(() => Promise.resolve(null))
-const mockGetAccountByUsername = mock(() => Promise.resolve(null))
-const mockGetAccountById = mock(() => Promise.resolve(null))
-const mockCreateAccount = mock(() => Promise.resolve(null))
-const mockCreateUploadedFile = mock(() =>
+interface MockAccountRow {
+  id: string
+  username: string
+  email: string
+  password: string
+  avatar: string | null
+  isActive: boolean
+  createdAt: Date
+  updatedAt: Date
+}
+
+const mockGetAccountByEmail = mock<() => Promise<MockAccountRow | null>>(() => Promise.resolve(null))
+const mockGetAccountByUsername = mock<() => Promise<MockAccountRow | null>>(() => Promise.resolve(null))
+const mockGetAccountById = mock<() => Promise<MockAccountRow | null>>(() => Promise.resolve(null))
+const mockCreateAccount = mock<(values: Record<string, unknown>) => Promise<MockAccountRow | null>>(() => Promise.resolve(null))
+const mockCreateUploadedFile = mock<(values: Record<string, unknown>) => Promise<{ id: string, fileName: string, publicUrl: string, mimeType: string }>>(() =>
   Promise.resolve({
     id: 'file-001',
     fileName: 'test.png',

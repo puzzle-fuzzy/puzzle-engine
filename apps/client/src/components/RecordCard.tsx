@@ -6,7 +6,7 @@ import {
   Copy,
   Download,
   FileText,
-  RotateRcw,
+  RotateCw,
   Trash2,
 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
@@ -283,7 +283,7 @@ export default function RecordCard({
               size="sm"
               onClick={() => onRegenerate(record)}
             >
-              <RotateRcw className="size-3" />
+              <RotateCw className="size-3" />
               重新生成
             </Button>
           )}

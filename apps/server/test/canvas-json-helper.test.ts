@@ -52,7 +52,7 @@ describe('parseLLMJson', () => {
 
   it('should handle nested JSON objects', () => {
     const input = '{"outer":{"inner":{"deep":true}},"arr":[1,2]}'
-    const result = parseLLMJson(input)
+    const result = parseLLMJson<{ outer: { inner: { deep: boolean } }, arr: number[] }>(input)
     expect(result.outer.inner.deep).toBe(true)
     expect(result.arr).toEqual([1, 2])
   })

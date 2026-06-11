@@ -1,6 +1,6 @@
+import type { AccountRow } from '@excuse/db'
 import { treaty } from '@elysia/eden'
 import { beforeEach, describe, expect, it, mock } from 'bun:test'
-import { makeAccount, makeTestConfig } from './helpers/test-factory'
 
 /**
  * 路由认证守卫测试
@@ -12,22 +12,26 @@ import { makeAccount, makeTestConfig } from './helpers/test-factory'
  * 只测试认证守卫层的行为。
  */
 
+// ─── Mock 类型 ──────────────────────────────────────────────
+
+import { makeAccount, makeTestConfig } from './helpers/test-factory'
+
 // ─── Mock 依赖 ─────────────────────────────────────
 
 // @excuse/db — 账户查询 + 生成记录 + 上传文件
-const mockGetAccountByEmail = mock(() => Promise.resolve(null as any))
-const mockGetAccountByUsername = mock(() => Promise.resolve(null as any))
-const mockGetAccountById = mock(() => Promise.resolve(null as any))
-const mockCreateAccount = mock(() => Promise.resolve(null as any))
-const mockCreateGenerationRecord = mock(() =>
+const mockGetAccountByEmail = mock<() => Promise<AccountRow | null>>(() => Promise.resolve(null))
+const mockGetAccountByUsername = mock<() => Promise<AccountRow | null>>(() => Promise.resolve(null))
+const mockGetAccountById = mock<() => Promise<AccountRow | null>>(() => Promise.resolve(null))
+const mockCreateAccount = mock<(values: Record<string, unknown>) => Promise<AccountRow | null>>(() => Promise.resolve(null))
+const mockCreateGenerationRecord = mock<(values: Record<string, unknown>) => Promise<{ id: string, taskId: string }>>(() =>
   Promise.resolve({ id: 'rec-001', taskId: 'task-001' }),
 )
-const mockListGenerationRecords = mock(() => Promise.resolve([]))
-const mockGetGenerationRecordById = mock(() => Promise.resolve(null))
-const mockMarkGenerationFailed = mock(() => Promise.resolve(undefined))
-const mockMarkGenerationProcessing = mock(() => Promise.resolve(undefined))
-const mockMarkGenerationSucceeded = mock(() => Promise.resolve(undefined))
-const mockCreateUploadedFile = mock(() =>
+const mockListGenerationRecords = mock<(filter: Record<string, unknown>) => Promise<unknown[]>>(() => Promise.resolve([]))
+const mockGetGenerationRecordById = mock<(id: string) => Promise<unknown | null>>(() => Promise.resolve(null))
+const mockMarkGenerationFailed = mock<(id: string, error: string) => Promise<void>>(() => Promise.resolve(undefined))
+const mockMarkGenerationProcessing = mock<(id: string, data: Record<string, unknown>) => Promise<void>>(() => Promise.resolve(undefined))
+const mockMarkGenerationSucceeded = mock<(id: string, output: unknown, cost: unknown) => Promise<void>>(() => Promise.resolve(undefined))
+const mockCreateUploadedFile = mock<(values: Record<string, unknown>) => Promise<{ id: string, fileName: string, publicUrl: string, mimeType: string }>>(() =>
   Promise.resolve({
     id: 'file-001',
     fileName: 'test.png',
@@ -35,12 +39,12 @@ const mockCreateUploadedFile = mock(() =>
     mimeType: 'image/png',
   }),
 )
-const mockNotifyStatus = mock(() => Promise.resolve(undefined))
-const mockGetUploadedFilesByIdsForAccount = mock(() => Promise.resolve([]))
-const mockDeleteGenerationRecord = mock(() => Promise.resolve(undefined))
-const mockCancelGenerationRecord = mock(() => Promise.resolve(undefined))
-const mockResetGenerationToPending = mock(() => Promise.resolve(undefined))
-const mockFindGenerationByDedupeKeyForAccount = mock(() => Promise.resolve(null))
+const mockNotifyStatus = mock<(payload: Record<string, unknown>) => Promise<void>>(() => Promise.resolve(undefined))
+const mockGetUploadedFilesByIdsForAccount = mock<(ids: string[], accountId: string) => Promise<unknown[]>>(() => Promise.resolve([]))
+const mockDeleteGenerationRecord = mock<(id: string) => Promise<void>>(() => Promise.resolve(undefined))
+const mockCancelGenerationRecord = mock<(id: string) => Promise<void>>(() => Promise.resolve(undefined))
+const mockResetGenerationToPending = mock<(id: string) => Promise<void>>(() => Promise.resolve(undefined))
+const mockFindGenerationByDedupeKeyForAccount = mock<(key: string, accountId: string) => Promise<unknown | null>>(() => Promise.resolve(null))
 
 mock.module('@excuse/db', () => ({
   getAccountByEmail: mockGetAccountByEmail,
@@ -63,7 +67,7 @@ mock.module('@excuse/db', () => ({
 }))
 
 // @excuse/provider — DashScope + AssetStorage
-const mockGenerate = mock(() =>
+const mockGenerate = mock<(model: string, params: Record<string, unknown>, refs?: string[]) => Promise<{ success: boolean, error?: string }>>(() =>
   Promise.resolve({ success: false, error: 'mocked out' }),
 )
 const mockDownloadAndMap = mock(() =>
@@ -209,7 +213,7 @@ describe('route auth guards', () => {
       // 应该通过了认证守卫（即使 API 调用失败，也不再是"请先登录"错误）
       // createGenerationRecord 应被调用，且 accountId 应为 token 中的 userId
       expect(mockCreateGenerationRecord).toHaveBeenCalledTimes(1)
-      const createArg = mockCreateGenerationRecord.mock.calls[0][0] as any
+      const createArg = mockCreateGenerationRecord.mock.calls[0][0]
       expect(createArg.accountId).toBe('acc-guard-test')
     })
   })
@@ -236,7 +240,7 @@ describe('route auth guards', () => {
       })
 
       expect(mockListGenerationRecords).toHaveBeenCalledTimes(1)
-      const filterArg = mockListGenerationRecords.mock.calls[0][0] as any
+      const filterArg = mockListGenerationRecords.mock.calls[0][0]
       expect(filterArg.accountId).toBe('acc-guard-test')
     })
   })

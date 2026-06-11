@@ -33,7 +33,7 @@ export function makeAccount(overrides: Partial<AccountRow> = {}): AccountRow {
 
 /** 构造成功状态的 GenerationRecordRow 测试数据 */
 export function makeRecord(overrides: Partial<GenerationRecordRow> = {}): GenerationRecordRow {
-  return {
+  const base = {
     id: 'rec-001',
     accountId: 'acc-001',
     taskId: 'gen_123_abc',
@@ -41,14 +41,15 @@ export function makeRecord(overrides: Partial<GenerationRecordRow> = {}): Genera
     category: 'text',
     status: 'succeeded',
     inputParams: {},
-    outputResult: {},
-    cost: { totalPriceCents: 1, totalPrice: 0.01 },
+    outputResult: { type: 'text', text: 'hello' },
+    cost: { unit: 'token', totalPriceCents: 1, totalPrice: 0.01 },
     errorMessage: null,
     dedupeKey: null,
     createdAt: new Date('2024-01-01'),
     updatedAt: new Date('2024-01-01'),
     ...overrides,
   }
+  return base as GenerationRecordRow
 }
 
 /** 构造 failed 状态的 GenerationRecordRow */
@@ -73,7 +74,7 @@ export function makeProcessingRecord(overrides: Partial<GenerationRecordRow> = {
     taskId: 'gen_proc_task',
     status: 'processing',
     inputParams: { prompt: 'test' },
-    outputResult: {},
+    outputResult: { type: 'processing', taskId: 'gen_proc_task', status: 'processing' },
     cost: null,
     errorMessage: null,
     dedupeKey: null,
@@ -94,6 +95,7 @@ export function makeUploadedFile(overrides: Partial<UploadedFileRow> = {}): Uplo
     storagePath: 'ref_123/test.png',
     publicUrl: '/uploads/ref_123/test.png',
     purpose: 'reference',
+    metadata: null,
     createdAt: new Date('2024-01-01'),
     ...overrides,
   }

@@ -200,7 +200,7 @@ function CanvasFlowInner(props: {
 
   // After render: capture measurements and re-layout new nodes once
   useEffect(() => {
-    let timer: ReturnType<typeof setTimeout> | undefined
+    let timer: number | undefined
     const raf = requestAnimationFrame(() => {
       const current = getNodes()
       if (current.length === 0)
