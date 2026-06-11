@@ -1,7 +1,7 @@
 import type { SSEGenerationStatusEvent, SSENotificationEvent, SSEPipelineNodeEvent } from '@excuse/shared'
 import { fetchEventSource } from '@microsoft/fetch-event-source'
 import { parseSSEGenerationStatusEvent, parseSSENotificationEvent, parseSSEPipelineNodeEvent } from '@excuse/shared'
-import { getAuthToken } from './client'
+import { getAuthToken, setAuthToken } from './client'
 
 /**
  * SSE 事件类型映射 — 服务器推送的事件名与 payload 结构
@@ -90,7 +90,9 @@ class SSEClient {
 
         if (err instanceof UnauthorizedError) {
           this.cleanupConnection()
-          console.warn('[SSE] Authentication failed, stopping reconnect')
+          // 401/403: 清理登录态，防止后续请求继续使用失效 token
+          setAuthToken(null)
+          console.warn('[SSE] Authentication failed, clearing auth state and stopping reconnect')
           throw err
         }
 
