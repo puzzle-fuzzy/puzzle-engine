@@ -103,7 +103,7 @@ export async function markGenerationSucceeded(
 }
 
 /**
- * 轮询所有待处理的视频任务（Worker 专用）
+ * 轮询所有待处理的视频任务（Worker 专用），限制 50 条防止大量数据
  */
 export async function pollPendingVideoTasks() {
   return getDb()
@@ -115,6 +115,7 @@ export async function pollPendingVideoTasks() {
         eq(generationRecords.category, 'video'),
       ),
     )
+    .limit(50)
 }
 
 /**

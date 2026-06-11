@@ -29,6 +29,13 @@
       "when": 1781176668277,
       "tag": "0003_red_bullseye",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1781176886198,
+      "tag": "0004_smooth_fenris",
+      "breakpoints": true
     }
   ]
 }

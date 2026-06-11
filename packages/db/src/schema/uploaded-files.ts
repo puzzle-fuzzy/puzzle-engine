@@ -1,4 +1,4 @@
-import { bigint, jsonb, pgTable, text, timestamp, uuid, varchar } from 'drizzle-orm/pg-core'
+import { bigint, index, jsonb, pgTable, text, timestamp, uuid, varchar } from 'drizzle-orm/pg-core'
 import { accounts } from './accounts'
 
 /**
@@ -41,4 +41,6 @@ export const uploadedFiles = pgTable('uploaded_files', {
 
   /** 上传时间 */
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
-})
+}, (table) => [
+  index('idx_uploaded_files_account').on(table.accountId),
+])

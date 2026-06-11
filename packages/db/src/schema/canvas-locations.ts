@@ -1,4 +1,4 @@
-import { boolean, jsonb, pgTable, text, timestamp, uuid, varchar } from 'drizzle-orm/pg-core'
+import { boolean, index, jsonb, pgTable, text, timestamp, uuid, varchar } from 'drizzle-orm/pg-core'
 import { canvasProjects } from './canvas-projects'
 
 export const canvasLocations = pgTable('canvas_locations', {
@@ -13,4 +13,6 @@ export const canvasLocations = pgTable('canvas_locations', {
   locked: boolean('locked').default(false).notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
-})
+}, (table) => [
+  index('idx_canvas_locations_project').on(table.projectId),
+])

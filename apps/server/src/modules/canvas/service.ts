@@ -136,7 +136,9 @@ async function reconcileProjectShots(projectId: string) {
 }
 
 export async function getProjectDetail(projectId: string) {
-  await reconcileProjectShots(projectId)
+  const project = await getCanvasProjectById(projectId)
+  if (project && (project.status === 'generating' || project.status === 'refs_all_ready'))
+    await reconcileProjectShots(projectId)
   const detail = await getCanvasProjectDetail(projectId)
   if (!detail)
     return null
