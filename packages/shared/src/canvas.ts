@@ -1,12 +1,20 @@
-import type { ShotCamera, ShotContinuity, ShotEnvironment, ShotTimelineEntry } from '@excuse/db'
-// ===== 画布流水线领域类型 =====
+import type {
+  CanvasModelPreferences,
+  CharacterProfile,
+  ContinuityIssue,
+  LocationProfile,
+  NovelAnalysis,
+  ShotCamera,
+  ShotContinuity,
+  ShotEnvironment,
+  ShotTimelineEntry,
+} from '@excuse/db'
 
-/** 用户可选择的模型类别偏好 */
-export interface CanvasModelPreferences {
-  textModel?: string
-  imageModel?: string
-  videoModel?: string
-}
+// 域类型从 @excuse/db import type 重导出（编译期擦除，零运行时影响）
+export type { CanvasModelPreferences, NovelAnalysis, CharacterProfile, LocationProfile, ContinuityIssue }
+export type { ShotCamera, ShotContinuity, ShotEnvironment, ShotTimelineEntry }
+
+// ===== 画布流水线领域类型 =====
 
 /** 画布项目状态 */
 export type CanvasProjectStatus
@@ -18,54 +26,7 @@ export type CanvasProjectStatus
 export type CanvasShotStatus = 'draft' | 'ready' | 'generating' | 'completed' | 'failed'
 
 // ===== LLM 输出类型 =====
-
-/** 故事分析结果 */
-export interface NovelAnalysis {
-  summary: string
-  mainConflict: string
-  timeline: string[]
-  characterNames: string[]
-  sceneNames: string[]
-}
-
-/** 角色档案（LLM 输出） */
-export interface CharacterProfile {
-  name: string
-  role: string
-  age: string
-  gender: string
-  bodyShape: string
-  height: string
-  face: { shape: string, eyes: string, eyebrows: string, nose: string, mouth: string, skin: string }
-  hair: { color: string, style: string, length: string }
-  costume: { mainColor: string, style: string, material: string, details: string[] }
-  accessories: string[]
-  identityPrompt: string
-  negativePrompt: string
-}
-
-/** 场景档案（LLM 输出） */
-export interface LocationProfile {
-  name: string
-  type: 'interior' | 'exterior' | 'mixed'
-  location: string
-  era: string
-  atmosphere: string
-  visualRules: {
-    colorPalette: string[]
-    lighting: string
-    architecture: string
-    floor: string
-    backgroundElements: string[]
-  }
-  cameraRules: {
-    axisDirection: string
-    allowedAngles: string[]
-    forbiddenAngles: string[]
-  }
-  scenePrompt: string
-  negativePrompt: string
-}
+// NovelAnalysis / CharacterProfile / LocationProfile / ContinuityIssue 已从 @excuse/db 重导出
 
 /** 分镜草稿（LLM 输出） */
 export interface ShotDraft {
@@ -74,28 +35,10 @@ export interface ShotDraft {
   locationId: string | null
   characterIds: string[]
   narrative: string
-  camera: { shotSize: string, angle: string, movement: string, lens: string }
-  continuity: {
-    screenDirection: string
-    characterFacing: Record<string, string>
-    actionStart: string
-    actionEnd: string
-    emotionStart: string
-    emotionEnd: string
-  }
-  timeline?: Array<{ time: string, action: string }>
-  environment?: { backgroundMotion?: string, lighting?: string, mood?: string, style?: string }
-}
-
-/** 连续性问题 */
-export interface ContinuityIssue {
-  severity: 'error' | 'warning'
-  shotId?: string
-  shotIndex?: number
-  code: 'MISSING_SCENE' | 'MISSING_CHARACTER' | 'FORBIDDEN_CAMERA_ANGLE'
-    | 'FACING_CHANGE' | 'ACTION_MISMATCH' | 'EMOTION_MISMATCH'
-  message: string
-  suggestion?: string
+  camera: ShotCamera
+  continuity: ShotContinuity
+  timeline?: ShotTimelineEntry[]
+  environment?: ShotEnvironment
 }
 
 // ===== SSE 事件 =====

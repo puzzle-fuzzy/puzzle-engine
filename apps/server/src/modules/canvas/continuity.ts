@@ -1,4 +1,4 @@
-import type { ContinuityIssue } from '@excuse/shared'
+import type { ContinuityIssue, ShotCamera, ShotContinuity, ShotEnvironment, ShotTimelineEntry } from '@excuse/shared'
 
 export interface NormalizedShot {
   id: string
@@ -7,17 +7,10 @@ export interface NormalizedShot {
   characterIds: string[]
   narrative: string
   duration: number
-  camera: { shotSize: string, angle: string, movement: string, lens: string }
-  continuity: {
-    screenDirection: string
-    characterFacing: Record<string, string>
-    actionStart: string
-    actionEnd: string
-    emotionStart: string
-    emotionEnd: string
-  }
-  timeline?: Array<{ time: string, action: string }>
-  environment?: { backgroundMotion?: string, lighting?: string, mood?: string, style?: string }
+  camera: ShotCamera
+  continuity: ShotContinuity
+  timeline?: ShotTimelineEntry[]
+  environment?: ShotEnvironment
 }
 
 export interface NormalizedCharacter {

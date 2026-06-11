@@ -39,6 +39,11 @@ function makeLocation(overrides: Partial<NormalizedLocation> = {}): NormalizedLo
     name: 'Dark Forest',
     scenePrompt: 'A mysterious dark forest with tall ancient trees',
     negativePrompt: 'bright, sunny',
+    cameraRules: {
+      axisDirection: 'left_to_right',
+      allowedAngles: ['front', 'side'],
+      forbiddenAngles: [],
+    },
     ...overrides,
   }
 }

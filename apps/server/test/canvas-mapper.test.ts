@@ -237,7 +237,7 @@ describe('mapShot', () => {
   it('should handle null optional fields', () => {
     const row = makeShotRow({
       locationId: null,
-      characterIdsJson: null,
+      characterIdsJson: [],
       timelineJson: null,
       environmentJson: null,
       videoPrompt: null,

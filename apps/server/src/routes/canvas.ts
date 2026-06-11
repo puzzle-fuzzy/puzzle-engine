@@ -1,4 +1,5 @@
 import type { ServerConfig } from '../config'
+import type { ShotCamera, ShotEnvironment } from '@excuse/db'
 import { updateCanvasProject } from '@excuse/db'
 import { createLogger } from '@excuse/shared'
 import { Elysia, t } from 'elysia'
@@ -213,8 +214,8 @@ export function createCanvasRoutes(config: ServerConfig) {
         locationId?: string
         characterIdsJson?: string[]
         narrative?: string
-        cameraJson?: Record<string, unknown>
-        environmentJson?: Record<string, unknown>
+        cameraJson?: ShotCamera
+        environmentJson?: ShotEnvironment
         videoPrompt?: string
       }
       const updated = await svc.updateShotData(shotId, patch)

@@ -1,10 +1,10 @@
-import type { NovelAnalysis, ProjectDTO } from '@excuse/shared'
+import type { ProjectDTO } from '@excuse/shared'
 import type { NodeProps } from '@xyflow/react'
 import { Handle, Position } from '@xyflow/react'
 
 export default function AnalysisNode({ data }: NodeProps) {
   const { project, isRunning } = data as { project: ProjectDTO, isRunning?: boolean }
-  const analysis = project.analysis as NovelAnalysis | null
+  const analysis = project.analysis
 
   return (
     <div className={`rounded-lg border-2 bg-emerald-50 shadow-md w-[340px] relative ${isRunning ? 'border-yellow-400 ring-2 ring-yellow-200' : 'border-emerald-400'}`}>

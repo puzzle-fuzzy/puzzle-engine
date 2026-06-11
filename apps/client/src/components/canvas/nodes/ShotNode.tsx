@@ -21,9 +21,9 @@ const SHOT_STATUS_LABELS: Record<string, string> = {
 export default function ShotNode({ data }: NodeProps) {
   const { shot, project, isRunning } = data as { shot: ShotDTO, project: ProjectDTO, isRunning?: boolean }
 
-  const camera = shot.camera as Record<string, string>
-  const continuity = shot.continuity as Record<string, unknown>
-  const environment = shot.environment as Record<string, string> | null
+  const camera = shot.camera
+  const continuity = shot.continuity
+  const environment = shot.environment
 
   // Find related character/location names
   const charNames = shot.characterIds
