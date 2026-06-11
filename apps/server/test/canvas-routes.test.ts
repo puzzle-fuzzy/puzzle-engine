@@ -95,11 +95,11 @@ mock.module('@excuse/provider', () => ({
     generate = async () => ({ success: true, output: { text: 'mock' } })
   },
   AssetStorage: class { downloadAndMap = async (urls: string[]) => urls },
-  getModelById: () => ({ id: 'mock', category: 'text', pricing: { inputPrice: 1, unit: 'token' } }),
+  getModelById: () => ({ id: 'mock', category: 'text', pricing: { inputPriceCents: 100, unit: 'token' } }),
 }))
 
 mock.module('@excuse/billing', () => ({
-  calculateCost: () => ({ unit: 'token', totalPrice: 0.01 }),
+  calculateCost: () => ({ unit: 'token', totalPriceCents: 1, totalPrice: 0.01 }),
 }))
 
 // 不 mock @excuse/shared — 只包含类型 + logger，不影响测试逻辑

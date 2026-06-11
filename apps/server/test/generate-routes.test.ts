@@ -18,7 +18,7 @@ const mockDeleteRecord = mock(() => Promise.resolve(undefined))
 const mockMarkFailed = mock(() => Promise.resolve(undefined))
 const mockMarkProcessing = mock(() => Promise.resolve(undefined))
 const mockMarkSucceeded = mock(() => Promise.resolve(undefined))
-const mockCalculateCost = mock(() => ({ unit: 'token', totalPrice: 0.01 }))
+const mockCalculateCost = mock(() => ({ unit: 'token', totalPriceCents: 1, totalPrice: 0.01 }))
 const mockGenerate = mock(() => Promise.resolve({ success: false, error: 'mock error' }))
 
 const mockNotifyStatus = mock(() => Promise.resolve(undefined))
@@ -50,7 +50,7 @@ mock.module('@excuse/provider', () => ({
         id: 'qwen-max',
         category: 'text',
         type: 'generation',
-        pricing: { inputPrice: 2.4, outputPrice: 9.6, unit: 'token' },
+        pricing: { inputPriceCents: 240, outputPriceCents: 960, unit: 'token' },
         parameters: [],
         requestType: 'chat',
         inputMapping: { prompt: { target: 'prompt' } },
@@ -59,7 +59,7 @@ mock.module('@excuse/provider', () => ({
         id: 'qwen-image-2.0-pro',
         category: 'image',
         type: 'generation',
-        pricing: { inputPrice: 0.25, unit: 'image' },
+        pricing: { inputPriceCents: 25, unit: 'image' },
         parameters: [],
         requestType: 'image',
         inputMapping: { prompt: { target: 'prompt' } },
@@ -68,7 +68,7 @@ mock.module('@excuse/provider', () => ({
         id: 'wan2.1-i2v-t2v-720p',
         category: 'video',
         type: 'generation',
-        pricing: { inputPrice: 0.5, unit: 'video' },
+        pricing: { inputPriceCents: 50, unit: 'video' },
         parameters: [],
         requestType: 'video-t2v',
         inputMapping: { prompt: { target: 'prompt' } },
@@ -115,7 +115,7 @@ function makeRecord(overrides: Record<string, any> = {}) {
     status: 'succeeded',
     inputParams: {},
     outputResult: {},
-    cost: { totalPrice: 0.01 },
+    cost: { totalPriceCents: 1, totalPrice: 0.01 },
     errorMessage: null,
     createdAt: new Date('2024-01-01'),
     updatedAt: new Date('2024-01-01'),
@@ -204,7 +204,7 @@ describe('generate routes', () => {
         output: { text: '你好' },
         usage: { inputTokens: 10, outputTokens: 20 },
       })
-      mockCalculateCost.mockReturnValue({ unit: 'token', totalPrice: 0.01 })
+      mockCalculateCost.mockReturnValue({ unit: 'token', totalPriceCents: 1, totalPrice: 0.01 })
 
       const { data } = await client.api.generate.post(
         { model: 'qwen-max', parameters: { prompt: '你好' } },
@@ -260,7 +260,7 @@ describe('generate routes', () => {
         providerTaskId: 'dashscope-task-123',
         output: {},
       })
-      mockCalculateCost.mockReturnValue({ unit: 'video', totalPrice: 0 })
+      mockCalculateCost.mockReturnValue({ unit: 'video', totalPriceCents: 0, totalPrice: 0 })
 
       const { data } = await client.api.generate.post(
         { model: 'wan2.1-i2v-t2v-720p', parameters: { prompt: '一段视频' } },

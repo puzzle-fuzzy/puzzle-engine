@@ -78,7 +78,7 @@ mock.module('@excuse/provider', () => ({
 
 // @excuse/billing
 mock.module('@excuse/billing', () => ({
-  calculateCost: mock(() => ({ totalPrice: 0.01, estimated: true })),
+  calculateCost: mock(() => ({ totalPriceCents: 1, totalPrice: 0.01, estimated: true })),
 }))
 
 // ─── 在 mock 之后 import（Bun 会自动提升 mock.module 到 import 之前）──────
