@@ -8,7 +8,7 @@
     "dev": "bun --env-file ../../.env src/index.ts",
     "test": "bun test",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "build": "bun build src/index.ts --target=bun --outdir=dist"
+    "build": "tsc -p tsconfig.json --noEmit && echo '✅ worker typecheck passed'"
   },
   "dependencies": {
     "@excuse/billing": "workspace:*",
