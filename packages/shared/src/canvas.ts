@@ -1,4 +1,5 @@
 import type {
+  CanvasLayoutDto as CanvasLayoutDtoFromDB,
   CanvasModelPreferences,
   CanvasProjectStatus as CanvasProjectStatusFromDB,
   CanvasShotStatus as CanvasShotStatusFromDB,
@@ -15,6 +16,7 @@ import type {
 // 域类型从 @excuse/db import type 重导出（编译期擦除，零运行时影响）
 export type { CanvasModelPreferences, CharacterProfile, ContinuityIssue, LocationProfile, NovelAnalysis }
 export type { ShotCamera, ShotContinuity, ShotEnvironment, ShotTimelineEntry }
+export type CanvasLayoutDto = CanvasLayoutDtoFromDB
 
 // ===== 画布状态类型（从 DB pgEnum 推导，消除重复定义） =====
 
@@ -52,7 +54,9 @@ export interface SSEPipelineNodeEvent {
   error?: string
 }
 
-// ===== DTO 类型（API 响应） =====
+// ===== 画布布局类型（前端 UI 状态，后端不解释） =====
+
+// ===== SSE 事件 =====
 
 export interface CharacterDTO {
   id: string
@@ -118,7 +122,7 @@ export interface ProjectDTO {
   locations: LocationDTO[]
   shots: ShotDTO[]
   continuityIssues: ContinuityIssue[]
-  canvasLayout: Record<string, unknown> | null
+  canvasLayout: CanvasLayoutDto | null
   createdAt: string
   updatedAt: string
 }

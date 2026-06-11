@@ -1,6 +1,12 @@
 // ===== Canvas Domain Types =====
 // 纯数据接口，无运行时依赖，供 DB schema $type() 和 @excuse/shared import type 使用
 
+/**
+ * 画布布局 — 前端 React Flow 节点位置/视口状态
+ * 后端只存储和透传，不解释内部结构
+ */
+export type CanvasLayoutDto = Record<string, unknown>
+
 /** 用户可选择的模型类别偏好 */
 export interface CanvasModelPreferences {
   textModel?: string

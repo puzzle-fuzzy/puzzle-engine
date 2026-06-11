@@ -177,7 +177,7 @@ export async function softDeleteProject(projectId: string) {
   return softDeleteCanvasProject(projectId)
 }
 
-export async function saveCanvasLayout(projectId: string, layout: Record<string, unknown>) {
+export async function saveCanvasLayout(projectId: string, layout: import('@excuse/shared').CanvasLayoutDto) {
   return updateCanvasProject(projectId, { canvasLayout: layout })
 }
 

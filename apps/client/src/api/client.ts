@@ -287,7 +287,7 @@ export async function generateCanvasVideos(projectId: string): Promise<{ success
   )
 }
 
-export async function saveCanvasLayout(projectId: string, layout: Record<string, unknown>): Promise<{ success: boolean }> {
+export async function saveCanvasLayout(projectId: string, layout: import('@excuse/shared').CanvasLayoutDto): Promise<{ success: boolean }> {
   return unwrapEden<{ success: boolean }>(
     await api.api.canvas.projects({ projectId }).layout.post(layout),
   )
