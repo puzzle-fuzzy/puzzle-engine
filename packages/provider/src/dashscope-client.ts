@@ -305,7 +305,7 @@ export class DashScopeClient {
       const data = await response.json() as DashScopeVideoSubmitResponse
 
       if (response.status !== 200) {
-        return { success: false, error: `模型 ${modelConfig.name}（${modelConfig.id}）: ${parseDashScopeError(data)}` }
+        return { success: false, error: `模型 ${modelConfig.name}（${modelConfig.id}）: ${parseDashScopeError(data as Record<string, unknown>)}` }
       }
 
       const taskId = data.output?.task_id ?? data.request_id
@@ -375,7 +375,7 @@ export class DashScopeClient {
       // 任务失败时用友好的中文消息
       const errorCode = output.code ?? data.code
       const errorMessage = taskStatus === 'FAILED'
-        ? parseDashScopeError(data)
+        ? parseDashScopeError(data as Record<string, unknown>)
         : output.message ?? data.message
 
       return {
