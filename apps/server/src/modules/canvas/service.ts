@@ -13,7 +13,9 @@ import {
   deleteCanvasShotsByProject,
   getCanvasProjectById,
   getCanvasProjectDetail,
+  getGenerationRecordsByTaskIds,
   listCanvasProjectsByAccount,
+  listCanvasShotsByProject,
   softDeleteCanvasProject,
   updateCanvasCharacter,
   updateCanvasLocation,
@@ -59,7 +61,56 @@ export async function createProject(accountId: string, input: { title?: string, 
   return mapProjectDetail(project, [], [], [], null)
 }
 
+/**
+ * 回填历史数据：将 canvas_shots 中停留在 'generating' 的镜头
+ * 从 generation_records 同步真实状态和视频 URL。
+ */
+async function reconcileProjectShots(projectId: string) {
+  const shots = await listCanvasShotsByProject(projectId)
+  const staleShots = shots.filter(s => s.status === 'generating' && s.videoTaskId)
+
+  if (staleShots.length === 0)
+    return
+
+  const taskIds = staleShots.map(s => s.videoTaskId!).filter(Boolean)
+  const records = await getGenerationRecordsByTaskIds(taskIds)
+  const recordMap = new Map(records.map(r => [r.taskId, r]))
+
+  let anyUpdated = false
+  for (const shot of staleShots) {
+    const record = recordMap.get(shot.videoTaskId!)
+    if (!record)
+      continue
+
+    if (record.status === 'succeeded') {
+      const output = (record.outputResult as Record<string, unknown>) ?? {}
+      const savedUrls = output.savedUrls as string[] | undefined
+      await updateCanvasShot(shot.id, {
+        status: 'completed',
+        videoUrl: savedUrls?.[0] || undefined,
+      })
+      anyUpdated = true
+    }
+    else if (record.status === 'failed') {
+      await updateCanvasShot(shot.id, {
+        status: 'failed',
+        errorMessage: record.errorMessage || undefined,
+      })
+      anyUpdated = true
+    }
+  }
+
+  if (anyUpdated) {
+    const updatedShots = await listCanvasShotsByProject(projectId)
+    const stillGenerating = updatedShots.some(s => s.status === 'generating')
+    if (!stillGenerating && updatedShots.length > 0) {
+      await updateCanvasProject(projectId, { status: 'completed' })
+    }
+  }
+}
+
 export async function getProjectDetail(projectId: string) {
+  await reconcileProjectShots(projectId)
   const detail = await getCanvasProjectDetail(projectId)
   if (!detail)
     return null
@@ -608,6 +659,10 @@ export async function generateVideos(projectId: string, config: { dashscopeApiKe
 
   if (hasAnyVideo) {
     await updateCanvasProject(projectId, { status: 'completed' })
+  }
+  else {
+    // All submissions failed — revert to prompts_ready so user can retry
+    await updateCanvasProject(projectId, { status: 'prompts_ready' })
   }
 
   return getProjectDetail(projectId)

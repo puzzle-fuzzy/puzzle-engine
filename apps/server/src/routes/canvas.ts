@@ -1,4 +1,5 @@
 import type { ServerConfig } from '../config'
+import { updateCanvasProject } from '@excuse/db'
 import { createLogger } from '@excuse/shared'
 import { Elysia, t } from 'elysia'
 import * as svc from '../modules/canvas/service'
@@ -26,6 +27,10 @@ function fireAndForget(
     })
     .catch((err) => {
       logger.error({ err, projectId, phaseKey }, `${phaseKey} failed`)
+      // Update DB status to 'failed' so the project doesn't stay stuck
+      updateCanvasProject(projectId, { status: 'failed' }).catch(dbErr =>
+        logger.error({ err: dbErr, projectId }, 'Failed to update project status to failed'),
+      )
       if (userId) {
         dispatchToUser(userId, 'pipeline_node_update', {
           projectId,

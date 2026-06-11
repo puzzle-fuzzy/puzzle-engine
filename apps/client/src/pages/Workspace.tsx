@@ -17,7 +17,7 @@ import {
   X,
   XCircle,
 } from 'lucide-react'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   deleteRecord,
   fetchModels,
@@ -114,14 +114,13 @@ export default function Workspace() {
   const [expandedPrompts, setExpandedPrompts] = useState<Set<string>>(() => new Set())
   const [copiedId, setCopiedId] = useState<string | null>(null)
   const [groupByProject, setGroupByProject] = useState(false)
-  const [projectMap, setProjectMap] = useState<Map<string, ProjectDTO>>(new Map())
+  const [projectMap, setProjectMap] = useState<Map<string, ProjectDTO>>(() => new Map())
   // 每个媒体参数的上传状态：paramName → { uploading, uploadedUrl, uploadedName }
   const [mediaUploadState, setMediaUploadState] = useState<Record<string, {
     uploading: boolean
     uploadedUrl?: string
     uploadedName?: string
   }>>({})
-  const recordsEndRef = useRef<HTMLDivElement>(null)
 
   // 加载模型列表
   useEffect(() => {
@@ -173,7 +172,6 @@ export default function Workspace() {
       setRecords((prev) => {
         const existingIndex = prev.findIndex(r => r.id === event.id)
         if (existingIndex >= 0) {
-          // 更新已有记录的状态
           const next = [...prev]
           next[existingIndex] = {
             ...next[existingIndex],
@@ -184,18 +182,13 @@ export default function Workspace() {
           }
           return next
         }
-        // 新记录不在列表中，插入到顶部
-        return [event as unknown as GenerationRecord, ...prev]
+        loadRecords()
+        return prev
       })
     })
 
     return unsubscribe
-  }, [])
-
-  // 自动滚动到底部
-  useEffect(() => {
-    recordsEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [records.length])
+  }, [loadRecords])
 
   // 获取参数默认值
   function getParamDefault(param: ModelParameter): unknown {
@@ -621,7 +614,9 @@ export default function Workspace() {
             <div className="mt-2 flex flex-wrap gap-1">
               {visibleParams.map(([key, val]) => (
                 <Badge key={key} variant="outline" className="text-[10px]">
-                  {key}: {String(val).slice(0, 30)}
+                  {key}
+                  :
+                  {String(val).slice(0, 30)}
                 </Badge>
               ))}
             </div>
@@ -710,7 +705,9 @@ export default function Workspace() {
                   }
                   return (
                     <Badge key={key} variant="outline" className="text-[10px]">
-                      {key}: {u.slice(0, 30)}
+                      {key}
+                      :
+                      {u.slice(0, 30)}
                     </Badge>
                   )
                 })}
@@ -1009,7 +1006,6 @@ export default function Workspace() {
 
               {/* 默认平铺模式 */}
               {!groupedRecords && records.map(record => renderRecordCard(record))}
-              <div ref={recordsEndRef} />
             </div>
           </ScrollArea>
         </div>

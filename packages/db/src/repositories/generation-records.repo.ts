@@ -4,8 +4,17 @@ import { getDb } from '../db'
 import { generationRecords } from '../schema'
 
 /**
- * 创建生成记录
+ * 按 taskId 批量查询生成记录（用于 canvas shot 回填）
  */
+export async function getGenerationRecordsByTaskIds(taskIds: string[]) {
+  if (taskIds.length === 0)
+    return []
+  return getDb()
+    .select()
+    .from(generationRecords)
+    .where(inArray(generationRecords.taskId, taskIds))
+}
+
 export async function createGenerationRecord(values: GenerationRecordInsert) {
   const [record] = await getDb().insert(generationRecords).values(values).returning()
   return record!

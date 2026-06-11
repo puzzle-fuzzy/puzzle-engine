@@ -2,12 +2,18 @@ import type { GenerationNotifyPayload } from '@excuse/shared'
 import type { WorkerConfig } from './config'
 import { calculateCost } from '@excuse/billing'
 import {
+  listCanvasShotsByProject,
   markGenerationFailed,
   markGenerationProcessing,
   markGenerationSucceeded,
   notifyGenerationStatus,
+  updateCanvasProject,
+  updateCanvasShot,
 } from '@excuse/db'
 import { AssetStorage, DashScopeClient, getModelById } from '@excuse/provider'
+import { createLogger } from '@excuse/shared'
+
+const logger = createLogger('worker-processor')
 
 /**
  * 单条 generation record 的处理结果
@@ -138,6 +144,17 @@ export function createTaskProcessor(config: WorkerConfig, deps?: Partial<TaskPro
           canvasMeta,
         })
 
+        // Update canvas shot status + videoUrl
+        if (canvasMeta) {
+          await updateCanvasShot(canvasMeta.shotId, {
+            status: 'completed',
+            videoUrl: savedUrls[0] || undefined,
+          }).catch(err => logger.error({ err, shotId: canvasMeta.shotId }, 'Failed to update canvas shot'))
+          await checkProjectCompletion(canvasMeta.projectId).catch(err =>
+            logger.error({ err, projectId: canvasMeta.projectId }, 'Failed to check project completion'),
+          )
+        }
+
         return { action: 'completed', taskId }
       }
 
@@ -155,6 +172,18 @@ export function createTaskProcessor(config: WorkerConfig, deps?: Partial<TaskPro
           errorMessage: errMsg,
           canvasMeta,
         })
+
+        // Update canvas shot status
+        if (canvasMeta) {
+          await updateCanvasShot(canvasMeta.shotId, {
+            status: 'failed',
+            errorMessage: errMsg,
+          }).catch(err => logger.error({ err, shotId: canvasMeta.shotId }, 'Failed to update canvas shot'))
+          await checkProjectCompletion(canvasMeta.projectId).catch(err =>
+            logger.error({ err, projectId: canvasMeta.projectId }, 'Failed to check project completion'),
+          )
+        }
+
         return { action: 'completed', taskId }
       }
 
@@ -188,4 +217,25 @@ export function extractVideoUrl(output: Record<string, unknown> | undefined): st
     return results[0].url || results[0].b64_image
   }
   return undefined
+}
+
+export function extractVideoDuration(output: Record<string, unknown> | undefined): number | undefined {
+  if (!output)
+    return undefined
+  const duration = (output as any).video_duration ?? (output as any).duration
+  if (typeof duration === 'number')
+    return duration
+  return undefined
+}
+
+/**
+ * Check if all canvas shots for a project have finished (no 'generating' shots left).
+ * If so, update the project status to 'completed'.
+ */
+async function checkProjectCompletion(projectId: string) {
+  const shots = await listCanvasShotsByProject(projectId)
+  const stillGenerating = shots.some(s => s.status === 'generating')
+  if (!stillGenerating && shots.length > 0) {
+    await updateCanvasProject(projectId, { status: 'completed' })
+  }
 }
