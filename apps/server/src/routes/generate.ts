@@ -1,6 +1,7 @@
 import type { GenerationCategory, GenerationRecordRow, GenerationStatus, OutputResult } from '@excuse/db'
 import type { ServerConfig } from '../config'
 import { calculateCost } from '@excuse/billing'
+import { extractImageUrls, parseProviderOutput } from '../modules/generation/output-parser'
 import {
   cancelGenerationRecord,
   createGenerationRecord,
@@ -18,6 +19,7 @@ import {
 import { AssetStorage, DashScopeClient, getModelById } from '@excuse/provider'
 import { Elysia, t } from 'elysia'
 import { createAuthPlugin } from '../plugins/auth'
+import { forbidden, notFound, unauthorized, validationError } from '../utils/errors'
 
 /**
  * 生成任务路由 — CRUD + retry/cancel
@@ -55,15 +57,15 @@ export function createGenerateRoutes(config: ServerConfig) {
   return new Elysia({ prefix: '/api' })
     .use(createAuthPlugin(config))
     // 发起生成
-    .post('/generate', async ({ body, userId }) => {
+    .post('/generate', async ({ body, userId, set }) => {
       if (!userId) {
-        return { success: false, error: '请先登录' }
+        return unauthorized(set)
       }
       const { model, parameters, referenceFileIds } = body
 
       const modelConfig = getModelById(model)
       if (!modelConfig) {
-        return { success: false, error: `Unknown model: ${model}` }
+        return validationError(set, `Unknown model: ${model}`)
       }
 
       const category = modelConfig.category
@@ -99,7 +101,7 @@ export function createGenerateRoutes(config: ServerConfig) {
       if (referenceFileIds?.length) {
         const files = await getUploadedFilesByIdsForAccount(referenceFileIds, userId)
         if (files.length !== referenceFileIds.length) {
-          return { success: false, error: '部分参考文件不存在或不属于当前用户' }
+          return forbidden(set, '部分参考文件不存在或不属于当前用户')
         }
         referenceUrls = files.map(f => f.publicUrl)
       }
@@ -123,6 +125,7 @@ export function createGenerateRoutes(config: ServerConfig) {
 
         // 重新查询以获取更新后的记录
         const updated = await getGenerationRecordById(record.id)
+        // Provider 失败不是 HTTP 错误 — 业务层面的失败，返回 200 + record
         return { success: false, record: serializeRecord(updated ?? record) }
       }
 
@@ -130,7 +133,7 @@ export function createGenerateRoutes(config: ServerConfig) {
         // 异步任务（视频生成）— 保存 providerTaskId，Worker 会轮询
         await markGenerationProcessing(record.id, {
           taskId: result.providerTaskId,
-          outputResult: (result.output ?? { type: 'processing', status: 'processing' }) as unknown as OutputResult,
+          outputResult: parseProviderOutput(result.output),
         })
 
         // 通知 SSE 客户端状态变为 processing
@@ -148,11 +151,11 @@ export function createGenerateRoutes(config: ServerConfig) {
       }
 
       // 同步任务完成（文本/图片）— 下载并保存结果
-      let outputResult: OutputResult = (result.output ?? { type: 'text', text: '' }) as unknown as OutputResult
-      if (modelConfig.category === 'image' && result.output && 'urls' in result.output) {
-        const urls = Array.isArray(result.output.urls) ? result.output.urls : []
-        const savedUrls = await storage.downloadAndMap(urls, taskId, 'img')
-        outputResult = { type: 'image', savedUrls, urls }
+      let outputResult: OutputResult = parseProviderOutput(result.output)
+      const imageUrls = extractImageUrls(result.output)
+      if (modelConfig.category === 'image' && imageUrls.length > 0) {
+        const savedUrls = await storage.downloadAndMap(imageUrls, taskId, 'img')
+        outputResult = { type: 'image', savedUrls, urls: imageUrls }
       }
 
       // 计算实际费用
@@ -183,9 +186,9 @@ export function createGenerateRoutes(config: ServerConfig) {
     })
 
     // 获取生成记录列表
-    .get('/records', async ({ query, userId }) => {
+    .get('/records', async ({ query, userId, set }) => {
       if (!userId) {
-        return { success: false, error: '请先登录' }
+        return unauthorized(set)
       }
 
       const VALID_CATEGORIES = ['text', 'image', 'video'] as const
@@ -217,19 +220,19 @@ export function createGenerateRoutes(config: ServerConfig) {
     })
 
     // 获取单条记录详情
-    .get('/records/:id', async ({ params, userId }) => {
+    .get('/records/:id', async ({ params, userId, set }) => {
       if (!userId) {
-        return { success: false, error: '请先登录' }
+        return unauthorized(set)
       }
 
       const record = await getGenerationRecordById(params.id)
 
       if (!record) {
-        return { success: false, error: 'Record not found' }
+        return notFound(set, '记录不存在')
       }
 
       if (record.accountId !== userId) {
-        return { success: false, error: '无权查看该记录' }
+        return forbidden(set, '无权查看该记录')
       }
 
       return { success: true, record: serializeRecord(record) }
@@ -240,17 +243,17 @@ export function createGenerateRoutes(config: ServerConfig) {
     })
 
     // 删除单条记录
-    .delete('/records/:id', async ({ params, userId }) => {
+    .delete('/records/:id', async ({ params, userId, set }) => {
       if (!userId) {
-        return { success: false, error: '请先登录' }
+        return unauthorized(set)
       }
 
       const record = await getGenerationRecordById(params.id)
       if (!record) {
-        return { success: false, error: '记录不存在' }
+        return notFound(set, '记录不存在')
       }
       if (record.accountId !== userId) {
-        return { success: false, error: '无权删除该记录' }
+        return forbidden(set, '无权删除该记录')
       }
 
       await deleteGenerationRecord(params.id)
@@ -262,22 +265,22 @@ export function createGenerateRoutes(config: ServerConfig) {
     })
 
     // 重试失败任务 — 重走完整的 provider 调用流程（参数校验 → 调用 → 结果处理）
-    .post('/records/:id/retry', async ({ params, userId }) => {
+    .post('/records/:id/retry', async ({ params, userId, set }) => {
       if (!userId)
-        return { success: false, error: '请先登录' }
+        return unauthorized(set)
 
       const record = await getGenerationRecordById(params.id)
       if (!record)
-        return { success: false, error: '记录不存在' }
+        return notFound(set, '记录不存在')
       if (record.accountId !== userId)
-        return { success: false, error: '无权操作该记录' }
+        return forbidden(set, '无权操作该记录')
       if (record.status !== 'failed')
-        return { success: false, error: '只能重试失败的任务' }
+        return validationError(set, '只能重试失败的任务')
 
       // Re-submit to DashScope with the same parameters
       const modelConfig = getModelById(record.model)
       if (!modelConfig)
-        return { success: false, error: `Unknown model: ${record.model}` }
+        return validationError(set, `Unknown model: ${record.model}`)
 
       const retryCategory = modelConfig.category
 
@@ -289,7 +292,7 @@ export function createGenerateRoutes(config: ServerConfig) {
       if (referenceFileIds?.length) {
         const files = await getUploadedFilesByIdsForAccount(referenceFileIds, userId)
         if (files.length !== referenceFileIds.length) {
-          return { success: false, error: '部分参考文件不存在或不属于当前用户' }
+          return forbidden(set, '部分参考文件不存在或不属于当前用户')
         }
         referenceUrls = files.map(f => f.publicUrl)
       }
@@ -321,7 +324,7 @@ export function createGenerateRoutes(config: ServerConfig) {
       if (result.providerTaskId) {
         await markGenerationProcessing(record.id, {
           taskId: result.providerTaskId,
-          outputResult: (result.output ?? { type: 'processing', status: 'processing' }) as unknown as OutputResult,
+          outputResult: parseProviderOutput(result.output),
         })
         await notifyGenerationStatus({
           accountId: userId,
@@ -336,11 +339,11 @@ export function createGenerateRoutes(config: ServerConfig) {
       }
 
       // Sync task succeeded (text/image retry)
-      let outputResult: OutputResult = (result.output ?? { type: 'text', text: '' }) as unknown as OutputResult
-      if (modelConfig.category === 'image' && result.output && 'urls' in result.output) {
-        const urls = Array.isArray(result.output.urls) ? result.output.urls : []
-        const savedUrls = await storage.downloadAndMap(urls, newTaskId, 'img')
-        outputResult = { type: 'image', savedUrls, urls }
+      let outputResult: OutputResult = parseProviderOutput(result.output)
+      const retryImageUrls = extractImageUrls(result.output)
+      if (modelConfig.category === 'image' && retryImageUrls.length > 0) {
+        const savedUrls = await storage.downloadAndMap(retryImageUrls, newTaskId, 'img')
+        outputResult = { type: 'image', savedUrls, urls: retryImageUrls }
       }
       const actualCost = calculateCost(modelConfig, parameters, result.usage)
       await markGenerationSucceeded(record.id, outputResult, actualCost)
@@ -363,17 +366,17 @@ export function createGenerateRoutes(config: ServerConfig) {
     })
 
     // 取消进行中的任务 — 同时通知 provider 取消（best-effort）+ 更新 DB + SSE 推送
-    .post('/records/:id/cancel', async ({ params, userId }) => {
+    .post('/records/:id/cancel', async ({ params, userId, set }) => {
       if (!userId)
-        return { success: false, error: '请先登录' }
+        return unauthorized(set)
 
       const record = await getGenerationRecordById(params.id)
       if (!record)
-        return { success: false, error: '记录不存在' }
+        return notFound(set, '记录不存在')
       if (record.accountId !== userId)
-        return { success: false, error: '无权操作该记录' }
+        return forbidden(set, '无权操作该记录')
       if (record.status !== 'pending' && record.status !== 'processing')
-        return { success: false, error: '只能取消等待中或处理中的任务' }
+        return validationError(set, '只能取消等待中或处理中的任务')
 
       // 尝试在 provider 侧取消（best-effort：即使 provider 取消失败，DB 和 SSE 仍标记为已取消）
       if (record.taskId) {

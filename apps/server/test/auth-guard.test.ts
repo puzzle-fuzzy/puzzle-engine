@@ -1,6 +1,7 @@
 import type { AccountRow } from '@excuse/db'
 import { treaty } from '@elysia/eden'
 import { beforeEach, describe, expect, it, mock } from 'bun:test'
+import { extractEdenError, makeAccount, makeTestConfig } from './helpers/test-factory'
 
 /**
  * 路由认证守卫测试
@@ -13,8 +14,6 @@ import { beforeEach, describe, expect, it, mock } from 'bun:test'
  */
 
 // ─── Mock 类型 ──────────────────────────────────────────────
-
-import { makeAccount, makeTestConfig } from './helpers/test-factory'
 
 // ─── Mock 依赖 ─────────────────────────────────────
 
@@ -173,26 +172,29 @@ describe('route auth guards', () => {
 
   describe('POST /api/generate — auth guard', () => {
     it('should reject request without token', async () => {
-      const { data } = await generateClient.api.generate.post({
+      const res = await generateClient.api.generate.post({
         model: 'test-model',
         parameters: { prompt: 'test' },
       })
 
-      expect(data?.success).toBe(false)
-      expect(data?.error).toContain('登录')
+      const err = extractEdenError(res)
+      expect(err).toBeTruthy()
+      expect(err!.status).toBe(401)
+      expect(err!.error).toContain('登录')
       // 不应调用 API
       expect(mockGenerate).not.toHaveBeenCalled()
       expect(mockCreateGenerationRecord).not.toHaveBeenCalled()
     })
 
     it('should reject request with invalid token', async () => {
-      const { data } = await generateClient.api.generate.post(
+      const res = await generateClient.api.generate.post(
         { model: 'test-model', parameters: { prompt: 'test' } },
         { headers: { Authorization: 'Bearer invalid.token.here' } },
       )
 
-      expect(data?.success).toBe(false)
-      expect(data?.error).toContain('登录')
+      const err = extractEdenError(res)
+      expect(err).toBeTruthy()
+      expect(err!.error).toContain('登录')
     })
 
     it('should accept request with valid token and pass userId', async () => {
@@ -224,10 +226,12 @@ describe('route auth guards', () => {
 
   describe('GET /api/records — auth guard', () => {
     it('should reject request without token', async () => {
-      const { data } = await generateClient.api.records.get()
+      const res = await generateClient.api.records.get()
 
-      expect(data?.success).toBe(false)
-      expect(data?.error).toContain('登录')
+      const err = extractEdenError(res)
+      expect(err).toBeTruthy()
+      expect(err!.status).toBe(401)
+      expect(err!.error).toContain('登录')
       expect(mockListGenerationRecords).not.toHaveBeenCalled()
     })
 
@@ -261,6 +265,8 @@ describe('route auth guards', () => {
         body: formData,
       }))
 
+      // 现在 upload 路由返回 401 状态码
+      expect(response.status).toBe(401)
       const data = await response.json() as { success: boolean, error?: string }
       expect(data.success).toBe(false)
       expect(data.error).toContain('登录')
@@ -282,8 +288,6 @@ describe('route auth guards', () => {
       })
 
       // 使用原生 Request 直接调用 Elysia handle
-      // 注意：Elysia handle() 对 multipart/form-data 的 body 解析有限制，
-      // 但认证守卫会在 body 解析之前执行，所以仍能验证 auth guard 行为
       const uploadApp = createUploadRoutes(testConfig)
       const formData = new FormData()
       formData.append('file', new File(['test content'], 'test.png', { type: 'image/png' }))
@@ -295,7 +299,7 @@ describe('route auth guards', () => {
       }))
 
       const text = await response.text()
-      let data: any
+      let data: Record<string, unknown>
       try {
         data = JSON.parse(text)
       }
@@ -304,8 +308,7 @@ describe('route auth guards', () => {
       }
 
       // 关键断言：认证守卫通过了 — 没有返回 "请先登录"
-      // （可能因 Elysia in-process FormData 限制返回其他错误，但不是认证错误）
-      const errorStr = String(data?.error ?? data?.raw ?? '')
+      const errorStr = String(data.error ?? data.raw ?? '')
       expect(errorStr).not.toContain('登录')
       expect(errorStr).not.toContain('请先')
     })

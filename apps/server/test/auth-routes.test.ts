@@ -1,6 +1,7 @@
 import type { ServerConfig } from '../src/config'
 import { treaty } from '@elysia/eden'
 import { beforeAll, beforeEach, describe, expect, it, mock } from 'bun:test'
+import { extractEdenError } from './helpers/test-factory'
 
 /**
  * 认证路由单元测试
@@ -141,14 +142,16 @@ describe('auth routes', () => {
     it('should reject duplicate email', async () => {
       mockGetAccountByEmail.mockResolvedValue(makeAccount())
 
-      const { data } = await client.api.auth.register.post({
+      const res = await client.api.auth.register.post({
         username: 'newuser',
         email: 'test@example.com',
         password: 'testpassword123',
       })
 
-      expect(data?.success).toBe(false)
-      expect(data?.error).toContain('邮箱')
+      const err = extractEdenError(res)
+      expect(err).toBeTruthy()
+      expect(err!.status).toBe(409)
+      expect(err!.error).toContain('邮箱')
       // 不应尝试创建账户
       expect(mockCreateAccount).not.toHaveBeenCalled()
     })
@@ -157,14 +160,16 @@ describe('auth routes', () => {
       mockGetAccountByEmail.mockResolvedValue(null)
       mockGetAccountByUsername.mockResolvedValue(makeAccount())
 
-      const { data } = await client.api.auth.register.post({
+      const res = await client.api.auth.register.post({
         username: 'testuser',
         email: 'new@example.com',
         password: 'testpassword123',
       })
 
-      expect(data?.success).toBe(false)
-      expect(data?.error).toContain('用户名')
+      const err = extractEdenError(res)
+      expect(err).toBeTruthy()
+      expect(err!.status).toBe(409)
+      expect(err!.error).toContain('用户名')
       expect(mockCreateAccount).not.toHaveBeenCalled()
     })
 
@@ -219,13 +224,15 @@ describe('auth routes', () => {
     it('should reject non-existent email', async () => {
       mockGetAccountByEmail.mockResolvedValue(null)
 
-      const { data } = await client.api.auth.login.post({
+      const res = await client.api.auth.login.post({
         email: 'nobody@example.com',
         password: 'testpassword123',
       })
 
-      expect(data?.success).toBe(false)
-      expect(data?.error).toContain('邮箱或密码错误')
+      const err = extractEdenError(res)
+      expect(err).toBeTruthy()
+      expect(err!.status).toBe(401)
+      expect(err!.error).toContain('邮箱或密码错误')
     })
 
     it('should reject wrong password', async () => {
@@ -233,13 +240,15 @@ describe('auth routes', () => {
         makeAccount({ password: testPasswordHash }),
       )
 
-      const { data } = await client.api.auth.login.post({
+      const res = await client.api.auth.login.post({
         email: 'test@example.com',
         password: 'wrongpassword',
       })
 
-      expect(data?.success).toBe(false)
-      expect(data?.error).toContain('邮箱或密码错误')
+      const err = extractEdenError(res)
+      expect(err).toBeTruthy()
+      expect(err!.status).toBe(401)
+      expect(err!.error).toContain('邮箱或密码错误')
     })
 
     it('should reject inactive account even with correct password', async () => {
@@ -247,13 +256,15 @@ describe('auth routes', () => {
         makeAccount({ password: testPasswordHash, isActive: false }),
       )
 
-      const { data } = await client.api.auth.login.post({
+      const res = await client.api.auth.login.post({
         email: 'test@example.com',
         password: 'testpassword123',
       })
 
-      expect(data?.success).toBe(false)
-      expect(data?.error).toContain('禁用')
+      const err = extractEdenError(res)
+      expect(err).toBeTruthy()
+      expect(err!.status).toBe(403)
+      expect(err!.error).toContain('禁用')
     })
   })
 
@@ -292,19 +303,23 @@ describe('auth routes', () => {
     })
 
     it('should reject without token', async () => {
-      const { data } = await client.api.auth.me.get()
+      const res = await client.api.auth.me.get()
 
-      expect(data?.success).toBe(false)
-      expect(data?.error).toContain('未登录')
+      const err = extractEdenError(res)
+      expect(err).toBeTruthy()
+      expect(err!.status).toBe(401)
+      expect(err!.error).toContain('未登录')
     })
 
     it('should reject with invalid token', async () => {
-      const { data } = await client.api.auth.me.get({
+      const res = await client.api.auth.me.get({
         headers: { Authorization: 'Bearer this.is.invalid' },
       })
 
-      expect(data?.success).toBe(false)
-      expect(data?.error).toContain('未登录')
+      const err = extractEdenError(res)
+      expect(err).toBeTruthy()
+      expect(err!.status).toBe(401)
+      expect(err!.error).toContain('未登录')
     })
 
     it('should reject when user no longer exists in DB', async () => {
@@ -323,12 +338,14 @@ describe('auth routes', () => {
       // 模拟用户已被删除
       mockGetAccountById.mockResolvedValue(null)
 
-      const { data } = await client.api.auth.me.get({
+      const res = await client.api.auth.me.get({
         headers: { Authorization: `Bearer ${token}` },
       })
 
-      expect(data?.success).toBe(false)
-      expect(data?.error).toContain('用户不存在')
+      const err = extractEdenError(res)
+      expect(err).toBeTruthy()
+      expect(err!.status).toBe(404)
+      expect(err!.error).toContain('用户不存在')
     })
   })
 })

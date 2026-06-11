@@ -1,6 +1,7 @@
 import type { ServerConfig } from '../src/config'
 import { treaty } from '@elysia/eden'
 import { beforeAll, beforeEach, describe, expect, it, mock } from 'bun:test'
+import { extractEdenError } from './helpers/test-factory'
 
 /**
  * Canvas 路由测试 — 认证守卫 + CRUD 路径
@@ -175,8 +176,9 @@ describe('canvas routes', () => {
 
   describe('GET /projects', () => {
     it('未登录时返回错误', async () => {
-      const { data } = await client.api.canvas.projects.get()
-      expect(data?.success).toBe(false)
+      const res = await client.api.canvas.projects.get()
+      const err = extractEdenError(res)
+      expect(err).toBeTruthy()
     })
 
     it('登录后返回项目列表', async () => {
@@ -194,8 +196,9 @@ describe('canvas routes', () => {
 
   describe('POST /projects', () => {
     it('未登录时返回错误', async () => {
-      const { data } = await client.api.canvas.projects.post({ storyText: '一段超过十个字的故事文本内容' })
-      expect(data?.success === false || data === undefined).toBe(true)
+      const res = await client.api.canvas.projects.post({ storyText: '一段超过十个字的故事文本内容' })
+      const err = extractEdenError(res)
+      expect(err).toBeTruthy()
     })
 
     it('登录后创建项目', async () => {
@@ -226,10 +229,11 @@ describe('canvas routes', () => {
 
     it('项目不存在返回错误', async () => {
       mockGetCanvasProjectByIdForAccount.mockResolvedValue(null)
-      const { data } = await client.api.canvas.projects({ projectId: 'nonexistent' }).get({
+      const res = await client.api.canvas.projects({ projectId: 'nonexistent' }).get({
         headers: { Authorization: `Bearer ${token}` },
       })
-      expect(data?.success).toBe(false)
+      const err = extractEdenError(res)
+      expect(err).toBeTruthy()
     })
   })
 

@@ -10,7 +10,7 @@ import { beforeAll, beforeEach, describe, expect, it, mock } from 'bun:test'
 
 // ─── Mock 类型 ───────────────────────────────────────────────
 
-import { makeFailedRecord, makeProcessingRecord, makeTestConfig, signTestToken } from './helpers/test-factory'
+import { extractEdenError, makeFailedRecord, makeProcessingRecord, makeTestConfig, signTestToken } from './helpers/test-factory'
 
 interface MockProviderResult {
   success: boolean
@@ -140,47 +140,55 @@ describe('generate routes — retry & cancel', () => {
 
   describe('POST /api/records/:id/retry', () => {
     it('未登录时返回错误', async () => {
-      const { data } = await client.api.records({ id: 'rec-001' }).retry.post()
+      const res = await client.api.records({ id: 'rec-001' }).retry.post()
 
-      expect(data?.success === false || data === undefined).toBe(true)
+      const err = extractEdenError(res)
+      expect(err).toBeTruthy()
+      expect(err!.status).toBe(401)
     })
 
     it('记录不存在时返回错误', async () => {
       mockGetRecordById.mockResolvedValue(null)
 
-      const { data } = await client.api.records({ id: 'nonexistent' }).retry.post(
+      const res = await client.api.records({ id: 'nonexistent' }).retry.post(
         null,
         { headers: { Authorization: `Bearer ${token}` } },
       )
 
-      expect(data?.success).toBe(false)
-      expect(data?.error).toContain('不存在')
+      const err = extractEdenError(res)
+      expect(err).toBeTruthy()
+      expect(err!.error).toContain('不存在')
+      expect(err!.status).toBe(404)
       expect(mockResetToPending).not.toHaveBeenCalled()
     })
 
     it('非失败记录返回错误（只能重试失败任务）', async () => {
       mockGetRecordById.mockResolvedValue(makeFailedRecord({ status: 'succeeded' }))
 
-      const { data } = await client.api.records({ id: 'rec-001' }).retry.post(
+      const res = await client.api.records({ id: 'rec-001' }).retry.post(
         null,
         { headers: { Authorization: `Bearer ${token}` } },
       )
 
-      expect(data?.success).toBe(false)
-      expect(data?.error).toContain('失败')
+      const err = extractEdenError(res)
+      expect(err).toBeTruthy()
+      expect(err!.error).toContain('失败')
+      expect(err!.status).toBe(422)
       expect(mockResetToPending).not.toHaveBeenCalled()
     })
 
     it('无权操作其他用户的记录', async () => {
       mockGetRecordById.mockResolvedValue(makeFailedRecord({ accountId: 'other-user' }))
 
-      const { data } = await client.api.records({ id: 'rec-001' }).retry.post(
+      const res = await client.api.records({ id: 'rec-001' }).retry.post(
         null,
         { headers: { Authorization: `Bearer ${token}` } },
       )
 
-      expect(data?.success).toBe(false)
-      expect(data?.error).toContain('无权')
+      const err = extractEdenError(res)
+      expect(err).toBeTruthy()
+      expect(err!.error).toContain('无权')
+      expect(err!.status).toBe(403)
     })
 
     it('重试失败任务 — 同步模型成功', async () => {
@@ -219,13 +227,14 @@ describe('generate routes — retry & cancel', () => {
     it('重试时未知模型返回错误', async () => {
       mockGetRecordById.mockResolvedValue(makeFailedRecord({ model: 'nonexistent-model' }))
 
-      const { data } = await client.api.records({ id: 'rec-001' }).retry.post(
+      const res = await client.api.records({ id: 'rec-001' }).retry.post(
         null,
         { headers: { Authorization: `Bearer ${token}` } },
       )
 
-      expect(data?.success).toBe(false)
-      expect(data?.error).toContain('Unknown model')
+      const err = extractEdenError(res)
+      expect(err).toBeTruthy()
+      expect(err!.error).toContain('Unknown model')
     })
   })
 
@@ -235,45 +244,53 @@ describe('generate routes — retry & cancel', () => {
 
   describe('POST /api/records/:id/cancel', () => {
     it('未登录时返回错误', async () => {
-      const { data } = await client.api.records({ id: 'rec-001' }).cancel.post()
+      const res = await client.api.records({ id: 'rec-001' }).cancel.post()
 
-      expect(data?.success === false || data === undefined).toBe(true)
+      const err = extractEdenError(res)
+      expect(err).toBeTruthy()
+      expect(err!.status).toBe(401)
     })
 
     it('记录不存在时返回错误', async () => {
       mockGetRecordById.mockResolvedValue(null)
 
-      const { data } = await client.api.records({ id: 'nonexistent' }).cancel.post(
+      const res = await client.api.records({ id: 'nonexistent' }).cancel.post(
         null,
         { headers: { Authorization: `Bearer ${token}` } },
       )
 
-      expect(data?.success).toBe(false)
-      expect(data?.error).toContain('不存在')
+      const err = extractEdenError(res)
+      expect(err).toBeTruthy()
+      expect(err!.error).toContain('不存在')
+      expect(err!.status).toBe(404)
     })
 
     it('无权操作其他用户的记录', async () => {
       mockGetRecordById.mockResolvedValue(makeProcessingRecord({ accountId: 'other-user' }))
 
-      const { data } = await client.api.records({ id: 'rec-001' }).cancel.post(
+      const res = await client.api.records({ id: 'rec-001' }).cancel.post(
         null,
         { headers: { Authorization: `Bearer ${token}` } },
       )
 
-      expect(data?.success).toBe(false)
-      expect(data?.error).toContain('无权')
+      const err = extractEdenError(res)
+      expect(err).toBeTruthy()
+      expect(err!.error).toContain('无权')
+      expect(err!.status).toBe(403)
     })
 
     it('已完成任务不能取消', async () => {
       mockGetRecordById.mockResolvedValue(makeProcessingRecord({ status: 'succeeded' }))
 
-      const { data } = await client.api.records({ id: 'rec-001' }).cancel.post(
+      const res = await client.api.records({ id: 'rec-001' }).cancel.post(
         null,
         { headers: { Authorization: `Bearer ${token}` } },
       )
 
-      expect(data?.success).toBe(false)
-      expect(data?.error).toContain('只能取消')
+      const err = extractEdenError(res)
+      expect(err).toBeTruthy()
+      expect(err!.error).toContain('只能取消')
+      expect(err!.status).toBe(422)
       expect(mockCancelRecord).not.toHaveBeenCalled()
     })
 

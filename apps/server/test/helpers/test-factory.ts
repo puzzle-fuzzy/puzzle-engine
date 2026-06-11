@@ -144,3 +144,37 @@ export async function signTestToken(jwtSecret: string, accountId: string): Promi
   const { data } = await jwtClient.sign.get()
   return data as unknown as string
 }
+
+// ===== Eden 错误响应提取 =====
+
+/**
+ * Eden 错误响应结构（非 2xx 时 Eden 将 body 放入 error.value）
+ */
+interface EdenErrorResponse {
+  status?: number
+  statusText?: string
+  value?: unknown
+}
+
+/**
+ * 从 Eden 响应中提取错误体
+ *
+ * HTTP 状态码整改后，路由错误响应使用 4xx 状态码。
+ * Eden treaty 将非 2xx 响应体放入 error.value 而非 data。
+ * 此 helper 统一提取错误消息和状态码。
+ *
+ * @returns 错误信息对象，或 null（非错误响应时）
+ */
+export function extractEdenError(res: { data: unknown, error: unknown }): { success: false, error: string, status: number } | null {
+  if (!res.error)
+    return null
+  const edenErr = res.error as EdenErrorResponse
+  const body = edenErr.value as { success?: boolean, error?: string } | undefined
+  if (!body)
+    return null
+  return {
+    success: false,
+    error: body.error ?? 'unknown error',
+    status: edenErr.status ?? 0,
+  }
+}

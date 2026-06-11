@@ -1,6 +1,6 @@
 import { treaty } from '@elysia/eden'
 import { beforeAll, beforeEach, describe, expect, it, mock } from 'bun:test'
-import { makeTestConfig, signTestToken } from './helpers/test-factory'
+import { extractEdenError, makeTestConfig, signTestToken } from './helpers/test-factory'
 
 /**
  * 计费统计路由测试
@@ -59,10 +59,11 @@ describe('billing routes', () => {
 
   describe('GET /statistics', () => {
     it('未登录时返回错误', async () => {
-      const { data } = await client.api.billing.statistics.get()
+      const res = await client.api.billing.statistics.get()
 
-      expect(data?.success).toBe(false)
-      expect(data?.error).toContain('未登录')
+      const err = extractEdenError(res)
+      expect(err).toBeTruthy()
+      expect(err!.error).toContain('未登录')
     })
 
     it('登录后返回统计数据', async () => {

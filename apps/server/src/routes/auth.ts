@@ -3,6 +3,7 @@ import type { ServerConfig } from '../config'
 import { createAccount, getAccountByEmail, getAccountById, getAccountByUsername } from '@excuse/db'
 import { Elysia, t } from 'elysia'
 import { createAuthPlugin } from '../plugins/auth'
+import { conflict, forbidden, notFound, unauthorized } from '../utils/errors'
 
 /**
  * 从账户行中剥离密码哈希，安全返回给客户端
@@ -19,19 +20,19 @@ export function createAuthRoutes(config: ServerConfig) {
   return new Elysia({ prefix: '/api/auth' })
     .use(createAuthPlugin(config))
     // 注册
-    .post('/register', async ({ body, jwt }) => {
+    .post('/register', async ({ body, jwt, set }) => {
       const { username, email, password } = body
 
       // 检查邮箱是否已注册
       const existingEmail = await getAccountByEmail(email)
       if (existingEmail) {
-        return { success: false, error: '该邮箱已被注册' }
+        return conflict(set, '该邮箱已被注册')
       }
 
       // 检查用户名是否已存在
       const existingUsername = await getAccountByUsername(username)
       if (existingUsername) {
-        return { success: false, error: '该用户名已被使用' }
+        return conflict(set, '该用户名已被使用')
       }
 
       // 使用 Bun 内置 bcrypt 哈希密码
@@ -62,24 +63,24 @@ export function createAuthRoutes(config: ServerConfig) {
     })
 
     // 登录
-    .post('/login', async ({ body, jwt }) => {
+    .post('/login', async ({ body, jwt, set }) => {
       const { email, password } = body
 
       // 查找账户
       const account = await getAccountByEmail(email)
       if (!account) {
-        return { success: false, error: '邮箱或密码错误' }
+        return unauthorized(set, '邮箱或密码错误')
       }
 
       // 验证密码
       const valid = await Bun.password.verify(password, account.password, 'bcrypt')
       if (!valid) {
-        return { success: false, error: '邮箱或密码错误' }
+        return unauthorized(set, '邮箱或密码错误')
       }
 
       // 检查账户状态
       if (!account.isActive) {
-        return { success: false, error: '账户已被禁用' }
+        return forbidden(set, '账户已被禁用')
       }
 
       // 签发 JWT
@@ -98,14 +99,14 @@ export function createAuthRoutes(config: ServerConfig) {
     })
 
     // 获取当前用户信息
-    .get('/me', async ({ userId }) => {
+    .get('/me', async ({ userId, set }) => {
       if (!userId) {
-        return { success: false, error: '未登录' }
+        return unauthorized(set, '未登录')
       }
 
       const account = await getAccountById(userId)
       if (!account) {
-        return { success: false, error: '用户不存在' }
+        return notFound(set, '用户不存在')
       }
 
       return {

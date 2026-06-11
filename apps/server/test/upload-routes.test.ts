@@ -127,6 +127,7 @@ describe('upload routes', () => {
         body: formData,
       }))
 
+      expect(response.status).toBe(401)
       const data = await response.json() as { success: boolean, error?: string }
       expect(data.success).toBe(false)
       expect(data.error).toContain('登录')
@@ -144,6 +145,7 @@ describe('upload routes', () => {
         body: formData,
       }))
 
+      expect(response.status).toBe(401)
       const data = await response.json() as { success: boolean, error?: string }
       expect(data.success).toBe(false)
       expect(data.error).toContain('登录')

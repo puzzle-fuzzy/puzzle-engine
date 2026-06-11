@@ -107,6 +107,7 @@ describe('upload routes — DELETE /api/upload/:id', () => {
       method: 'DELETE',
     }))
 
+    expect(response.status).toBe(401)
     const data = await response.json() as { success: boolean, error?: string }
     expect(data.success).toBe(false)
     expect(data.error).toContain('登录')
@@ -123,6 +124,7 @@ describe('upload routes — DELETE /api/upload/:id', () => {
       headers: { Authorization: `Bearer ${token}` },
     }))
 
+    expect(response.status).toBe(404)
     const data = await response.json() as { success: boolean, error?: string }
     expect(data.success).toBe(false)
     expect(data.error).toContain('不存在')
@@ -138,6 +140,7 @@ describe('upload routes — DELETE /api/upload/:id', () => {
       headers: { Authorization: `Bearer ${token}` },
     }))
 
+    expect(response.status).toBe(403)
     const data = await response.json() as { success: boolean, error?: string }
     expect(data.success).toBe(false)
     expect(data.error).toContain('无权')

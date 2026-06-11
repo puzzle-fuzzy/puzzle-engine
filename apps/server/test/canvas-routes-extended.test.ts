@@ -1,6 +1,7 @@
 import type { ServerConfig } from '../src/config'
 import { treaty } from '@elysia/eden'
 import { beforeAll, beforeEach, describe, expect, it, mock } from 'bun:test'
+import { extractEdenError } from './helpers/test-factory'
 
 /**
  * Canvas 路由扩展测试
@@ -172,10 +173,11 @@ describe('canvas routes — extended', () => {
 
   describe('PATCH /projects/:projectId', () => {
     it('未登录时返回错误', async () => {
-      const { data } = await client.api.canvas.projects({ projectId: 'proj-001' }).patch({
+      const res = await client.api.canvas.projects({ projectId: 'proj-001' }).patch({
         title: '新标题',
       })
-      expect(data?.success === false || data === undefined).toBe(true)
+      const err = extractEdenError(res)
+      expect(err).toBeTruthy()
     })
 
     it('更新项目标题', async () => {
@@ -202,12 +204,13 @@ describe('canvas routes — extended', () => {
 
     it('不提供任何字段时返回错误', async () => {
       mockGetCanvasProjectByIdForAccount.mockResolvedValue(makeProjectRow())
-      const { data } = await client.api.canvas.projects({ projectId: 'proj-001' }).patch(
+      const res = await client.api.canvas.projects({ projectId: 'proj-001' }).patch(
         {},
         { headers: { Authorization: `Bearer ${token}` } },
       )
-      expect(data?.success).toBe(false)
-      expect(data?.error).toContain('至少')
+      const err = extractEdenError(res)
+      expect(err).toBeTruthy()
+      expect(err!.error).toContain('至少')
     })
   })
 
@@ -277,8 +280,9 @@ describe('canvas routes — extended', () => {
 
   describe('DELETE /locations/:locationId', () => {
     it('未登录时返回错误', async () => {
-      const { data } = await client.api.canvas.locations({ locationId: 'loc-001' }).delete()
-      expect(data?.success === false || data === undefined).toBe(true)
+      const res = await client.api.canvas.locations({ locationId: 'loc-001' }).delete()
+      const err = extractEdenError(res)
+      expect(err).toBeTruthy()
     })
 
     it('登录后删除场景', async () => {
@@ -297,8 +301,9 @@ describe('canvas routes — extended', () => {
 
   describe('DELETE /shots/:shotId', () => {
     it('未登录时返回错误', async () => {
-      const { data } = await client.api.canvas.shots({ shotId: 'shot-001' }).delete()
-      expect(data?.success === false || data === undefined).toBe(true)
+      const res = await client.api.canvas.shots({ shotId: 'shot-001' }).delete()
+      const err = extractEdenError(res)
+      expect(err).toBeTruthy()
     })
 
     it('登录后删除镜头', async () => {
@@ -317,8 +322,9 @@ describe('canvas routes — extended', () => {
 
   describe('POST /shots/:shotId/retry', () => {
     it('未登录时返回错误', async () => {
-      const { data } = await client.api.canvas.shots({ shotId: 'shot-001' }).retry.post()
-      expect(data?.success === false || data === undefined).toBe(true)
+      const res = await client.api.canvas.shots({ shotId: 'shot-001' }).retry.post()
+      const err = extractEdenError(res)
+      expect(err).toBeTruthy()
     })
 
     it('登录后立即返回成功（fire-and-forget）', async () => {
