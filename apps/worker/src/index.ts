@@ -8,12 +8,33 @@ const processor = createTaskProcessor(config)
 const logger = createLogger('worker')
 
 let running = true
+let currentTaskPromise: Promise<unknown> | null = null
+const GRACEFUL_TIMEOUT_MS = 30_000
 
 // ── 优雅退出 ──────────────────────────────────────────
 for (const signal of ['SIGINT', 'SIGTERM'] as const) {
-  process.on(signal, () => {
-    logger.info({ signal }, '🛑 Received signal, shutting down...')
+  process.on(signal, async () => {
+    logger.info({ signal }, '🛑 Received signal, shutting down gracefully...')
     running = false
+
+    // Wait for current task to finish (max 30s), then force exit
+    if (currentTaskPromise) {
+      const timeout = setTimeout(() => {
+        logger.warn('⏰ Graceful timeout exceeded, forcing exit')
+        process.exit(1)
+      }, GRACEFUL_TIMEOUT_MS)
+
+      try {
+        await currentTaskPromise
+        logger.info('✅ Current task completed before exit')
+      }
+      catch {
+        logger.warn('⚠️ Current task failed during graceful shutdown')
+      }
+      clearTimeout(timeout)
+    }
+
+    process.exit(0)
   })
 }
 
@@ -30,7 +51,10 @@ async function main() {
           break // 退出信号检查
 
         const taskLogger = logger.child({ taskId: record.taskId })
-        const result = await processor.processTask(record)
+        currentTaskPromise = processor.processTask(record)
+
+        const result = await currentTaskPromise
+        currentTaskPromise = null
 
         switch (result.action) {
           case 'completed':
