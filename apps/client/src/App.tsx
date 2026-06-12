@@ -1,19 +1,28 @@
-import { useEffect } from 'react'
+import { lazy, Suspense, useEffect } from 'react'
 import { Route, Routes } from 'react-router'
 import { getAuthToken } from './api/client'
 import { sseClient } from './api/sse'
 import { ProtectedRoute } from './auth/ProtectedRoute'
 import { ErrorBoundary } from './components/ui/error-boundary'
 import { Toaster } from './components/ui/sonner'
-import Assets from './pages/Assets'
-import Billing from './pages/Billing'
-import Canvas from './pages/Canvas'
-import CanvasEditor from './pages/CanvasEditor'
-import Layout from './pages/Layout'
-import Login from './pages/Login'
-import Register from './pages/Register'
-import Workspace from './pages/Workspace'
 import { useRealtimeSync } from './stores/realtime-sync'
+
+const Assets = lazy(() => import('./pages/Assets'))
+const Billing = lazy(() => import('./pages/Billing'))
+const Canvas = lazy(() => import('./pages/Canvas'))
+const CanvasEditor = lazy(() => import('./pages/CanvasEditor'))
+const Layout = lazy(() => import('./pages/Layout'))
+const Login = lazy(() => import('./pages/Login'))
+const Register = lazy(() => import('./pages/Register'))
+const Workspace = lazy(() => import('./pages/Workspace'))
+
+function RouteFallback() {
+  return (
+    <div className="flex min-h-screen items-center justify-center text-sm text-muted-foreground">
+      页面加载中...
+    </div>
+  )
+}
 
 function App() {
   useEffect(() => {
@@ -31,19 +40,21 @@ function App() {
     <>
       <Toaster richColors position="top-center" />
       <ErrorBoundary>
-        <Routes>
-          <Route path="/login" element={<Login />} />
-          <Route path="/register" element={<Register />} />
-          <Route element={<Layout />}>
-            <Route element={<ProtectedRoute />}>
-              <Route path="/" element={<Workspace />} />
-              <Route path="/canvas" element={<Canvas />} />
-              <Route path="/canvas/:projectId" element={<CanvasEditor />} />
-              <Route path="/assets" element={<Assets />} />
-              <Route path="/billing" element={<Billing />} />
+        <Suspense fallback={<RouteFallback />}>
+          <Routes>
+            <Route path="/login" element={<Login />} />
+            <Route path="/register" element={<Register />} />
+            <Route element={<Layout />}>
+              <Route element={<ProtectedRoute />}>
+                <Route path="/" element={<Workspace />} />
+                <Route path="/canvas" element={<Canvas />} />
+                <Route path="/canvas/:projectId" element={<CanvasEditor />} />
+                <Route path="/assets" element={<Assets />} />
+                <Route path="/billing" element={<Billing />} />
+              </Route>
             </Route>
-          </Route>
-        </Routes>
+          </Routes>
+        </Suspense>
       </ErrorBoundary>
     </>
   )
