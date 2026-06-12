@@ -55,7 +55,7 @@ const mockGetCanvasProjectById = mock<() => Promise<CanvasProjectRow | null>>(()
 const mockGetCanvasProjectDetail = mock<() => Promise<MockCanvasProjectDetail | null>>(() => Promise.resolve(null))
 const mockListCanvasProjectsByAccount = mock(() => Promise.resolve([]))
 const mockSoftDeleteCanvasProject = mock(() => Promise.resolve(undefined))
-const mockUpdateCanvasProject = mock(() => Promise.resolve(makeProjectRow()))
+const mockUpdateCanvasProject = mock<(values?: Partial<CanvasProjectRow>) => Promise<CanvasProjectRow>>(() => Promise.resolve(makeProjectRow()))
 const mockGetCanvasCharacterById = mock(() => Promise.resolve(null))
 const mockUpdateCanvasCharacter = mock(() => Promise.resolve({ id: 'char-001', name: '新名', updatedAt: new Date() }))
 const mockUpdateCanvasLocation = mock(() => Promise.resolve({ id: 'loc-001', updatedAt: new Date() }))
@@ -127,6 +127,35 @@ mock.module('@excuse/provider', () => ({
 
 mock.module('@excuse/billing', () => ({
   calculateCost: () => ({ unit: 'token', totalPriceCents: 1, totalPrice: 0.01 }),
+}))
+
+mock.module('../src/modules/canvas/service', () => ({
+  listProjects: mockListCanvasProjectsByAccount,
+  createProject: async (accountId: string, input: { title?: string, storyText: string }) =>
+    makeProjectRow({ accountId, title: input.title ?? null, storyText: input.storyText }),
+  getProjectDetail: mockGetCanvasProjectDetail,
+  softDeleteProject: mockSoftDeleteCanvasProject,
+  updateProjectProperties: async (_projectId: string, input: Partial<Pick<CanvasProjectRow, 'title' | 'storyText'>>) =>
+    mockUpdateCanvasProject(input),
+  updateCharacterData: mockUpdateCanvasCharacter,
+  updateLocationData: mockUpdateCanvasLocation,
+  updateShotData: mockUpdateCanvasShot,
+  deleteCharacter: mockDeleteCanvasCharacterById,
+  deleteLocation: mockDeleteCanvasLocationById,
+  deleteShot: mockDeleteCanvasShotById,
+  saveCanvasLayout: async () => undefined,
+  updateModelPreferences: mockUpdateCanvasProject,
+  analyzeProject: async () => undefined,
+  generateCharacters: async () => undefined,
+  generateLocations: async () => undefined,
+  generateCharacterRefs: async () => undefined,
+  generateLocationRefs: async () => undefined,
+  generateStoryboard: async () => undefined,
+  checkContinuity: async () => undefined,
+  rebuildShotPrompts: async () => undefined,
+  generateVideos: async () => undefined,
+  retryShotVideo: async () => undefined,
+  retryFailedShots: async () => undefined,
 }))
 
 // 不 mock @excuse/shared — 只包含类型 + logger，不影响测试逻辑

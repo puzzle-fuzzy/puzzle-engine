@@ -52,7 +52,7 @@ function _makeProjectDetail(projectOverrides: Partial<CanvasProjectRow> = {}): M
 
 const mockGetCanvasProjectById = mock<() => Promise<CanvasProjectRow | null>>(() => Promise.resolve(null))
 const mockGetCanvasProjectDetail = mock<() => Promise<MockCanvasProjectDetail | null>>(() => Promise.resolve(null))
-const mockUpdateCanvasProject = mock(() => Promise.resolve(makeProjectRow()))
+const mockUpdateCanvasProject = mock<(values?: Partial<CanvasProjectRow>) => Promise<CanvasProjectRow>>(() => Promise.resolve(makeProjectRow()))
 const mockDeleteCanvasLocationById = mock(() => Promise.resolve(undefined))
 const mockDeleteCanvasShotById = mock(() => Promise.resolve(undefined))
 const mockGetCanvasProjectByIdForAccount = mock(() => Promise.resolve(makeProjectRow()))
@@ -123,6 +123,35 @@ mock.module('@excuse/provider', () => ({
 
 mock.module('@excuse/billing', () => ({
   calculateCost: () => ({ unit: 'token', totalPriceCents: 1, totalPrice: 0.01 }),
+}))
+
+mock.module('../src/modules/canvas/service', () => ({
+  listProjects: async () => [],
+  createProject: async (accountId: string, input: { title?: string, storyText: string }) =>
+    makeProjectRow({ accountId, title: input.title ?? null, storyText: input.storyText }),
+  getProjectDetail: mockGetCanvasProjectDetail,
+  softDeleteProject: async () => undefined,
+  updateProjectProperties: async (_projectId: string, input: Partial<Pick<CanvasProjectRow, 'title' | 'storyText'>>) =>
+    mockUpdateCanvasProject(input),
+  updateCharacterData: mockUpdateCanvasCharacter,
+  updateLocationData: mockUpdateCanvasLocation,
+  updateShotData: mockUpdateCanvasShot,
+  deleteCharacter: async () => undefined,
+  deleteLocation: mockDeleteCanvasLocationById,
+  deleteShot: mockDeleteCanvasShotById,
+  saveCanvasLayout: async () => undefined,
+  updateModelPreferences: mockUpdateCanvasProject,
+  analyzeProject: async () => undefined,
+  generateCharacters: async () => undefined,
+  generateLocations: async () => undefined,
+  generateCharacterRefs: async () => undefined,
+  generateLocationRefs: async () => undefined,
+  generateStoryboard: async () => undefined,
+  checkContinuity: async () => undefined,
+  rebuildShotPrompts: async () => undefined,
+  generateVideos: async () => undefined,
+  retryShotVideo: async () => undefined,
+  retryFailedShots: async () => undefined,
 }))
 
 // eslint-disable-next-line import/first
