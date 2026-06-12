@@ -3,8 +3,9 @@ import type { ServerConfig } from '../config'
 import { createUploadedFile, deleteUploadedFileById, getUploadedFileById } from '@excuse/db'
 import { AssetStorage } from '@excuse/provider'
 import { Elysia, t } from 'elysia'
-import { createAuthPlugin } from '../plugins/auth'
-import { forbidden, notFound, unauthorized, validationError } from '../utils/errors'
+import { createRequireAuthPlugin } from '../plugins/auth'
+import { audit } from '../services/audit'
+import { forbidden, notFound, validationError } from '../utils/errors'
 
 const ALLOWED_MIME_TYPES = ['image/png', 'image/jpeg', 'image/webp', 'image/gif']
 const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10MB
@@ -40,13 +41,9 @@ export function createUploadRoutes(config: ServerConfig) {
   })
 
   return new Elysia({ prefix: '/api' })
-    .use(createAuthPlugin(config))
+    .use(createRequireAuthPlugin(config))
     // 文件上传
     .post('/upload', async ({ body, userId, set }) => {
-      if (!userId) {
-        return unauthorized(set)
-      }
-
       const file = body.file
       if (!file) {
         return validationError(set, 'No file provided')
@@ -91,10 +88,6 @@ export function createUploadRoutes(config: ServerConfig) {
 
     // 删除上传文件
     .delete('/upload/:id', async ({ params: { id }, userId, set }) => {
-      if (!userId) {
-        return unauthorized(set)
-      }
-
       const record = await getUploadedFileById(id)
       if (!record) {
         return notFound(set, '文件不存在')
@@ -106,6 +99,8 @@ export function createUploadRoutes(config: ServerConfig) {
       // Delete from storage then from DB
       await storage.deleteFile(record.storagePath)
       await deleteUploadedFileById(id)
+
+      audit('file_delete', { accountId: userId, targetId: id })
 
       return { success: true }
     }, {

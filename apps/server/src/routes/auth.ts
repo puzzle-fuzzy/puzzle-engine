@@ -4,6 +4,7 @@ import type { ServerConfig } from '../config'
 import { createAccount, getAccountByEmail, getAccountById, getAccountByUsername } from '@excuse/db'
 import { Elysia, t } from 'elysia'
 import { createAuthPlugin } from '../plugins/auth'
+import { audit } from '../services/audit'
 import { conflict, forbidden, notFound, unauthorized } from '../utils/errors'
 
 /**
@@ -59,6 +60,8 @@ export function createAuthRoutes(config: ServerConfig) {
       // 签发 JWT
       const token = await jwt.sign({ sub: account.id })
 
+      audit('register', { accountId: account.id })
+
       return {
         success: true,
         token,
@@ -78,7 +81,7 @@ export function createAuthRoutes(config: ServerConfig) {
     })
 
     // 登录
-    .post('/login', async ({ body, jwt, set }) => {
+    .post('/login', async ({ body, jwt, set, request }) => {
       const { email, password } = body
 
       // 查找账户
@@ -100,6 +103,8 @@ export function createAuthRoutes(config: ServerConfig) {
 
       // 签发 JWT
       const token = await jwt.sign({ sub: account.id })
+
+      audit('login', { accountId: account.id, ip: request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() })
 
       return {
         success: true,

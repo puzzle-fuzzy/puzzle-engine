@@ -2,6 +2,7 @@ import type { ServerConfig } from '../config'
 import { createApiKey, listApiKeysByAccount, revokeApiKey } from '@excuse/db'
 import { Elysia, t } from 'elysia'
 import { createRequireAuthPlugin } from '../plugins/auth'
+import { audit } from '../services/audit'
 import { notFound } from '../utils/errors'
 
 /**
@@ -19,12 +20,14 @@ export function createApiKeyRoutes(config: ServerConfig) {
       const prefix = rawKey.slice(0, 8)
       const keyHash = await hashKey(rawKey)
 
-      await createApiKey({
+      const key = await createApiKey({
         accountId: userId,
         prefix,
         keyHash,
         name: body.name,
       })
+
+      audit('api_key_create', { accountId: userId, targetId: key.id })
 
       return { success: true, key: rawKey, prefix }
     }, {
@@ -53,6 +56,9 @@ export function createApiKeyRoutes(config: ServerConfig) {
       const revoked = await revokeApiKey(params.id, userId)
       if (!revoked)
         return notFound(set, '密钥不存在或已撤销')
+
+      audit('api_key_revoke', { accountId: userId, targetId: params.id })
+
       return { success: true }
     }, {
       params: t.Object({

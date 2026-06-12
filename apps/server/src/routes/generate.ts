@@ -11,8 +11,9 @@ import {
 import { AssetStorage, DashScopeClient, getModelById, validateModelParameters } from '@excuse/provider'
 import { Elysia, t } from 'elysia'
 import * as svc from '../modules/generation/service'
-import { createAuthPlugin } from '../plugins/auth'
-import { forbidden, notFound, unauthorized, validationError } from '../utils/errors'
+import { createRequireAuthPlugin } from '../plugins/auth'
+import { audit } from '../services/audit'
+import { forbidden, notFound, validationError } from '../utils/errors'
 
 /**
  * 生成任务路由 — CRUD + retry/cancel
@@ -51,12 +52,9 @@ export function createGenerateRoutes(config: ServerConfig) {
   }
 
   return new Elysia({ prefix: '/api' })
-    .use(createAuthPlugin(config))
+    .use(createRequireAuthPlugin(config))
     // 发起生成
     .post('/generate', async ({ body, userId, set }) => {
-      if (!userId) {
-        return unauthorized(set)
-      }
       const { model, parameters, referenceFileIds } = body
 
       // 模型校验 — 只允许模型配置中声明过的参数进入 provider
@@ -121,6 +119,8 @@ export function createGenerateRoutes(config: ServerConfig) {
         estimatedCost,
       }, deps)
 
+      audit('generate', { accountId: userId, targetId: result.record?.id })
+
       return { success: result.success, record: serializeRecord(result.record) }
     }, {
       body: t.Object({
@@ -137,11 +137,7 @@ export function createGenerateRoutes(config: ServerConfig) {
     })
 
     // 获取生成记录列表
-    .get('/records', async ({ query, userId, set }) => {
-      if (!userId) {
-        return unauthorized(set)
-      }
-
+    .get('/records', async ({ query, userId }) => {
       const VALID_CATEGORIES = ['text', 'image', 'video'] as const
       const VALID_STATUSES = ['pending', 'submitting', 'processing', 'saving_output', 'succeeded', 'failed', 'cancelled'] as const
 
@@ -178,10 +174,6 @@ export function createGenerateRoutes(config: ServerConfig) {
 
     // 获取单条记录详情
     .get('/records/:id', async ({ params, userId, set }) => {
-      if (!userId) {
-        return unauthorized(set)
-      }
-
       const record = await getGenerationRecordById(params.id)
 
       if (!record) {
@@ -207,10 +199,6 @@ export function createGenerateRoutes(config: ServerConfig) {
 
     // 删除单条记录
     .delete('/records/:id', async ({ params, userId, set }) => {
-      if (!userId) {
-        return unauthorized(set)
-      }
-
       const record = await getGenerationRecordById(params.id)
       if (!record) {
         return notFound(set, '记录不存在')
@@ -235,9 +223,6 @@ export function createGenerateRoutes(config: ServerConfig) {
 
     // 重试失败任务 — 重走完整的 provider 调用流程（参数校验 → 调用 → 结果处理）
     .post('/records/:id/retry', async ({ params, userId, set }) => {
-      if (!userId)
-        return unauthorized(set)
-
       const record = await getGenerationRecordById(params.id)
       if (!record)
         return notFound(set, '记录不存在')
@@ -303,9 +288,6 @@ export function createGenerateRoutes(config: ServerConfig) {
 
     // 取消进行中的任务 — provider 取消(best-effort) + DB 取消 + SSE 推送
     .post('/records/:id/cancel', async ({ params, userId, set }) => {
-      if (!userId)
-        return unauthorized(set)
-
       const record = await getGenerationRecordById(params.id)
       if (!record)
         return notFound(set, '记录不存在')
