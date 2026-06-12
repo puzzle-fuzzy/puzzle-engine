@@ -1,3 +1,4 @@
+import type { CanvasProjectRow } from '@excuse/db'
 import type { ServerConfig } from '../src/config'
 import { treaty } from '@elysia/eden'
 import { beforeAll, beforeEach, describe, expect, it, mock } from 'bun:test'
@@ -12,13 +13,21 @@ import { extractEdenError } from './helpers/test-factory'
 
 // ─── Mock factories（返回带 Date 字段的 row 对象，匹配 mapper 期望） ──
 
-function makeProjectRow(overrides: Record<string, unknown> = {}) {
+interface MockCanvasProjectDetail {
+  project: CanvasProjectRow
+  characters: []
+  locations: []
+  shots: []
+  latestContinuity: null
+}
+
+function makeProjectRow(overrides: Partial<CanvasProjectRow> = {}): CanvasProjectRow {
   return {
     id: 'proj-001',
     accountId: 'acc-001',
     title: null,
     storyText: '一段超过十个字的故事文本内容',
-    status: 'draft',
+    status: 'draft' as const,
     analysisJson: null,
     modelPreferencesJson: null,
     canvasLayout: null,
@@ -29,7 +38,7 @@ function makeProjectRow(overrides: Record<string, unknown> = {}) {
   }
 }
 
-function makeProjectDetail(projectOverrides: Record<string, unknown> = {}) {
+function makeProjectDetail(projectOverrides: Partial<CanvasProjectRow> = {}): MockCanvasProjectDetail {
   return {
     project: makeProjectRow(projectOverrides),
     characters: [],
@@ -42,8 +51,8 @@ function makeProjectDetail(projectOverrides: Record<string, unknown> = {}) {
 // ─── @excuse/db mock ──────────────────────────────────────
 
 const mockCreateCanvasProject = mock(() => Promise.resolve(makeProjectRow()))
-const mockGetCanvasProjectById = mock<() => Promise<any>>(() => Promise.resolve(null))
-const mockGetCanvasProjectDetail = mock<() => Promise<any>>(() => Promise.resolve(null))
+const mockGetCanvasProjectById = mock<() => Promise<CanvasProjectRow | null>>(() => Promise.resolve(null))
+const mockGetCanvasProjectDetail = mock<() => Promise<MockCanvasProjectDetail | null>>(() => Promise.resolve(null))
 const mockListCanvasProjectsByAccount = mock(() => Promise.resolve([]))
 const mockSoftDeleteCanvasProject = mock(() => Promise.resolve(undefined))
 const mockUpdateCanvasProject = mock(() => Promise.resolve(makeProjectRow()))

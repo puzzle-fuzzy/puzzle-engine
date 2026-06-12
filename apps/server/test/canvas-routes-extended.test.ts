@@ -1,3 +1,4 @@
+import type { CanvasProjectRow } from '@excuse/db'
 import type { ServerConfig } from '../src/config'
 import { treaty } from '@elysia/eden'
 import { beforeAll, beforeEach, describe, expect, it, mock } from 'bun:test'
@@ -12,13 +13,21 @@ import { extractEdenError } from './helpers/test-factory'
 
 // ─── Mock factories ────────────────────────────────────
 
-function makeProjectRow(overrides: Record<string, unknown> = {}) {
+interface MockCanvasProjectDetail {
+  project: CanvasProjectRow
+  characters: []
+  locations: []
+  shots: []
+  latestContinuity: null
+}
+
+function makeProjectRow(overrides: Partial<CanvasProjectRow> = {}): CanvasProjectRow {
   return {
     id: 'proj-001',
     accountId: 'acc-001',
     title: null,
     storyText: '一段超过十个字的故事文本内容',
-    status: 'draft',
+    status: 'draft' as const,
     analysisJson: null,
     modelPreferencesJson: null,
     canvasLayout: null,
@@ -29,7 +38,7 @@ function makeProjectRow(overrides: Record<string, unknown> = {}) {
   }
 }
 
-function _makeProjectDetail(projectOverrides: Record<string, unknown> = {}) {
+function _makeProjectDetail(projectOverrides: Partial<CanvasProjectRow> = {}): MockCanvasProjectDetail {
   return {
     project: makeProjectRow(projectOverrides),
     characters: [],
@@ -41,8 +50,8 @@ function _makeProjectDetail(projectOverrides: Record<string, unknown> = {}) {
 
 // ─── Mocks ───────────────────────────────────────────────
 
-const mockGetCanvasProjectById = mock<() => Promise<any>>(() => Promise.resolve(null))
-const mockGetCanvasProjectDetail = mock<() => Promise<any>>(() => Promise.resolve(null))
+const mockGetCanvasProjectById = mock<() => Promise<CanvasProjectRow | null>>(() => Promise.resolve(null))
+const mockGetCanvasProjectDetail = mock<() => Promise<MockCanvasProjectDetail | null>>(() => Promise.resolve(null))
 const mockUpdateCanvasProject = mock(() => Promise.resolve(makeProjectRow()))
 const mockDeleteCanvasLocationById = mock(() => Promise.resolve(undefined))
 const mockDeleteCanvasShotById = mock(() => Promise.resolve(undefined))

@@ -13,10 +13,25 @@ const config: DashScopeConfig = {
 
 /** 创建符合 typeof fetch 的 mock，补齐 preconnect 等静态方法 */
 function mockFetch(
-  impl: (...args: any[]) => Promise<Response>,
+  impl: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>,
 ): typeof fetch {
   const fn = mock(impl)
   return Object.assign(fn, { preconnect() {} }) as unknown as typeof fetch
+}
+
+function asRecord(value: unknown): Record<string, unknown> {
+  expect(value).toBeDefined()
+  expect(value).not.toBeNull()
+  expect(typeof value).toBe('object')
+  return value as Record<string, unknown>
+}
+
+function parseJsonBody(init?: RequestInit): Record<string, unknown> {
+  const body = init?.body
+  if (typeof body !== 'string')
+    throw new Error('Expected fetch body to be a JSON string')
+  const parsed: unknown = JSON.parse(body)
+  return asRecord(parsed)
 }
 
 function mockFetchResponse(status: number, body: unknown) {
@@ -110,10 +125,10 @@ describe('DashScopeClient', () => {
     })
 
     it('正确构建 chat 请求体（messages 格式）', async () => {
-      let capturedBody: any = null
+      let capturedBody: Record<string, unknown> | null = null
 
-      globalThis.fetch = mockFetch((url: string, init: any) => {
-        capturedBody = JSON.parse(init.body)
+      globalThis.fetch = mockFetch((_url, init) => {
+        capturedBody = parseJsonBody(init)
         return Promise.resolve(new Response(JSON.stringify({
           output: { choices: [{ message: { content: [{ text: 'ok' }] } }] },
           usage: {},
@@ -122,18 +137,21 @@ describe('DashScopeClient', () => {
 
       await client.chatCompletion('qwen-max', { prompt: '你好', temperature: 0.5 })
 
-      expect(capturedBody.model).toBe('qwen-max')
-      expect(capturedBody.input.messages[0].role).toBe('user')
-      expect(capturedBody.input.messages[0].content).toBe('你好')
-      expect(capturedBody.parameters.temperature).toBe(0.5)
-      expect(capturedBody.parameters.result_format).toBe('message')
+      const input = asRecord(capturedBody?.input)
+      const messages = input.messages as Array<Record<string, unknown>>
+      const parameters = asRecord(capturedBody?.parameters)
+      expect(capturedBody?.model).toBe('qwen-max')
+      expect(messages[0]?.role).toBe('user')
+      expect(messages[0]?.content).toBe('你好')
+      expect(parameters.temperature).toBe(0.5)
+      expect(parameters.result_format).toBe('message')
     })
 
     it('正确构建 openai-chat 请求体（qwen3.7-plus）', async () => {
-      let capturedBody: any = null
+      let capturedBody: Record<string, unknown> | null = null
 
-      globalThis.fetch = mockFetch((url: string, init: any) => {
-        capturedBody = JSON.parse(init.body)
+      globalThis.fetch = mockFetch((_url, init) => {
+        capturedBody = parseJsonBody(init)
         return Promise.resolve(new Response(JSON.stringify({
           choices: [{ message: { content: '分析结果', role: 'assistant' } }],
           usage: { prompt_tokens: 10, completion_tokens: 20 },
@@ -142,12 +160,13 @@ describe('DashScopeClient', () => {
 
       const result = await client.chatCompletion('qwen3.7-plus', { prompt: '你好', temperature: 0.7 })
 
-      expect(capturedBody.model).toBe('qwen3.7-plus')
-      expect(capturedBody.messages[0].role).toBe('user')
-      expect(capturedBody.messages[0].content).toBe('你好')
-      expect(capturedBody.temperature).toBe(0.7)
-      expect(capturedBody.input).toBeUndefined()
-      expect(capturedBody.parameters).toBeUndefined()
+      const messages = capturedBody?.messages as Array<Record<string, unknown>>
+      expect(capturedBody?.model).toBe('qwen3.7-plus')
+      expect(messages[0]?.role).toBe('user')
+      expect(messages[0]?.content).toBe('你好')
+      expect(capturedBody?.temperature).toBe(0.7)
+      expect(capturedBody?.input).toBeUndefined()
+      expect(capturedBody?.parameters).toBeUndefined()
 
       expect(result.success).toBe(true)
       expect(result.output!.text).toBe('分析结果')
@@ -156,10 +175,10 @@ describe('DashScopeClient', () => {
     })
 
     it('设置正确的 Authorization header', async () => {
-      let capturedHeaders: any = null
+      let capturedHeaders: Record<string, unknown> | null = null
 
-      globalThis.fetch = mockFetch((url: string, init: any) => {
-        capturedHeaders = init.headers
+      globalThis.fetch = mockFetch((_url, init) => {
+        capturedHeaders = asRecord(init?.headers)
         return Promise.resolve(new Response(JSON.stringify({
           output: { choices: [{ message: { content: [{ text: 'ok' }] } }] },
           usage: {},
@@ -238,10 +257,10 @@ describe('DashScopeClient', () => {
     })
 
     it('包含 X-DashScope-Async header', async () => {
-      let capturedHeaders: any = null
+      let capturedHeaders: Record<string, unknown> | null = null
 
-      globalThis.fetch = mockFetch((url: string, init: any) => {
-        capturedHeaders = init.headers
+      globalThis.fetch = mockFetch((_url, init) => {
+        capturedHeaders = asRecord(init?.headers)
         return Promise.resolve(new Response(JSON.stringify({
           output: { task_id: 't1' },
         }), { status: 200 }))
