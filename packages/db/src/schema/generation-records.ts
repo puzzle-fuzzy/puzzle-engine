@@ -75,6 +75,9 @@ export const generationRecords = pgTable('generation_records', {
   /** 费用明细（token 数量、单价、总费用等） */
   cost: jsonb('cost').$type<CostDetail>(),
 
+  /** 权威费用值（整数分），从 cost.totalPriceCents 冗余，用于 SQL 聚合避免 JSONB 解析 */
+  totalPriceCents: integer('total_price_cents'),
+
   /** 失败时的错误信息 */
   errorMessage: text('error_message'),
 

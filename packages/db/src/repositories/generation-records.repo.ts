@@ -124,7 +124,7 @@ export async function markGenerationSucceeded(
     .set({
       status: 'succeeded',
       outputResult,
-      ...(cost && { cost }),
+      ...(cost && { cost, totalPriceCents: cost.totalPriceCents }),
       updatedAt: new Date(),
     })
     .where(eq(generationRecords.id, id))
