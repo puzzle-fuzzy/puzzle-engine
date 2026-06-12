@@ -1,5 +1,5 @@
-// 原始客户端（供 LISTEN/NOTIFY 使用）
-export { pgClient } from './db'
+// 原始客户端 + DB 连接工具（供 LISTEN/NOTIFY 和启动等待使用）
+export { pgClient, waitForDb } from './db'
 
 // Domain 类型（纯接口，供 schema $type() 和 @excuse/shared import type）
 export * from './domain-types'

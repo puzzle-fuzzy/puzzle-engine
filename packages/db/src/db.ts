@@ -19,3 +19,18 @@ export function getDb() {
 export function setDb(instance: typeof _db) {
   _db = instance
 }
+
+/** 等待数据库连接可用，最多重试 maxRetries 次，每次间隔 delayMs */
+export async function waitForDb(maxRetries = 10, delayMs = 1000): Promise<void> {
+  for (let i = 0; i < maxRetries; i++) {
+    try {
+      await pgClient`SELECT 1`
+      return
+    }
+    catch {
+      if (i === maxRetries - 1)
+        throw new Error(`数据库连接失败：已重试 ${maxRetries} 次`)
+      await new Promise(resolve => setTimeout(resolve, delayMs))
+    }
+  }
+}

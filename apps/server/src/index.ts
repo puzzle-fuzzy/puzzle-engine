@@ -9,11 +9,12 @@ import { Elysia } from 'elysia'
 import { loadConfig } from './config'
 import { createAuthPlugin } from './plugins/auth'
 import { loggerPlugin } from './plugins/logger'
+import { requestIdPlugin } from './plugins/request-id'
 import { createAuthRoutes } from './routes/auth'
 import { createBillingRoutes } from './routes/billing'
 import { createCanvasRoutes } from './routes/canvas'
 import { createGenerateRoutes } from './routes/generate'
-import { healthRoutes } from './routes/health'
+import { createHealthRoutes } from './routes/health'
 import { modelsRoutes } from './routes/models'
 import { createSSERoutes } from './routes/sse'
 import { createUploadRoutes } from './routes/upload'
@@ -72,7 +73,7 @@ const app = new Elysia()
         },
       },
     },
-    path: '/api/docs',
+    path: '/openapi',
   }))
   .use(swagger({
     path: '/api/swagger',
@@ -85,6 +86,7 @@ const app = new Elysia()
     },
   }))
   .use(loggerPlugin)
+  .use(requestIdPlugin)
   .use(cors({
     origin: [config.frontendUrl, 'http://localhost:8007'],
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
@@ -96,7 +98,7 @@ const app = new Elysia()
   }))
   .use(createAuthPlugin(config))
   .use(createAuthRoutes(config))
-  .use(healthRoutes)
+  .use(createHealthRoutes())
   .use(modelsRoutes)
   .use(createCanvasRoutes(config))
   .use(createGenerateRoutes(config))
@@ -108,7 +110,17 @@ const app = new Elysia()
 export type App = typeof app
 export default app
 
-app.listen(config.port)
+app.listen(config.port, async () => {
+  // 启动时检查数据库连接（非阻塞，失败仅记录日志）
+  try {
+    const { waitForDb } = await import('@excuse/db')
+    await waitForDb(3, 500)
+    logger.info(`🚀 Server listening on port ${config.port}`)
+  }
+  catch {
+    logger.warn('⚠️ 数据库连接失败，服务已启动但 DB 功能不可用')
+  }
+})
 
 // 启动 PostgreSQL LISTEN — 接收 Worker 的生成状态通知并推送到 SSE 客户端
 startSSEListener().catch((err: unknown) => {
