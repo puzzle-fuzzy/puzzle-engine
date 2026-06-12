@@ -11,6 +11,7 @@ import { createAuthPlugin } from './plugins/auth'
 import { loggerPlugin } from './plugins/logger'
 import { requestIdPlugin } from './plugins/request-id'
 import { rateLimitPlugin } from './plugins/rate-limit'
+import { createApiKeyRoutes } from './routes/api-keys'
 import { createAuthRoutes } from './routes/auth'
 import { createBillingRoutes } from './routes/billing'
 import { createCanvasRoutes } from './routes/canvas'
@@ -100,6 +101,7 @@ const app = new Elysia()
   }))
   .use(createAuthPlugin(config))
   .use(createAuthRoutes(config))
+  .use(createApiKeyRoutes(config))
   .use(createHealthRoutes())
   .use(modelsRoutes)
   .use(createCanvasRoutes(config))

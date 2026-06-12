@@ -63,7 +63,7 @@ describe('billing routes', () => {
 
       const err = extractEdenError(res)
       expect(err).toBeTruthy()
-      expect(err!.error).toContain('未登录')
+      expect(err!.error).toContain('登录')
     })
 
     it('登录后返回统计数据', async () => {

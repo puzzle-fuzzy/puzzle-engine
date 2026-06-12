@@ -2,8 +2,7 @@ import type { ServerConfig } from '../config'
 import { aggregateStatistics } from '@excuse/billing'
 import { getCostRecords } from '@excuse/db'
 import { Elysia } from 'elysia'
-import { createAuthPlugin } from '../plugins/auth'
-import { unauthorized } from '../utils/errors'
+import { createRequireAuthPlugin } from '../plugins/auth'
 
 /**
  * 费用统计路由
@@ -13,10 +12,8 @@ import { unauthorized } from '../utils/errors'
  */
 export function createBillingRoutes(config: ServerConfig) {
   return new Elysia({ prefix: '/api/billing' })
-    .use(createAuthPlugin(config))
-    .get('/statistics', async ({ userId, set }) => {
-      if (!userId)
-        return unauthorized(set, '未登录')
+    .use(createRequireAuthPlugin(config))
+    .get('/statistics', async ({ userId }) => {
       const now = new Date()
       const from = new Date(now.getFullYear(), now.getMonth(), now.getDate())
       from.setDate(from.getDate() - 29)

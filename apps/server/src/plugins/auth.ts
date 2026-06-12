@@ -2,13 +2,12 @@ import type { Elysia } from 'elysia'
 import type { ServerConfig } from '../config'
 import { bearer } from '@elysia/bearer'
 import { jwt } from '@elysia/jwt'
-import { t } from 'elysia'
+import { status, t } from 'elysia'
 
 /**
  * 认证插件 — JWT + Bearer token 解析
  *
  * 使用 Elysia 回调式插件模式：(app) => app.use(...).derive(...)
- * 这是 ElysiaJS 的最佳实践，确保 derive 的类型变更传播到父级实例。
  *
  * 认证方式: Authorization: Bearer <token>
  * SSE 连接也使用 Bearer header（通过 @microsoft/fetch-event-source 自定义 headers）。
@@ -42,5 +41,29 @@ export function createAuthPlugin(config: ServerConfig) {
           return { userId: null }
         }
         return { userId: payload.sub }
+      })
+}
+
+/**
+ * 认证守卫插件 — resolve 模式自动拦截未登录请求
+ *
+ * 内部使用 createAuthPlugin 解析 JWT 获得 userId，
+ * 然后通过 resolve 验证 userId 是否存在：
+ *   - 未登录 → 直接返回 401 响应
+ *   - 已登录 → 将 userId 类型从 string | null 收窄为 string
+ *
+ * 适用于所有路由都需要认证的路由组（canvas、generate、billing 等）。
+ * 混合公开/受保护路由的场景（如 auth.ts 的 register+login+/me）
+ * 应继续使用 createAuthPlugin 并手动检查。
+ */
+export function createRequireAuthPlugin(config: ServerConfig) {
+  return (app: Elysia) =>
+    app
+      .use(createAuthPlugin(config))
+      .resolve(({ userId }) => {
+        if (!userId) {
+          return status(401, { success: false, error: '请先登录' })
+        }
+        return { userId }
       })
 }
