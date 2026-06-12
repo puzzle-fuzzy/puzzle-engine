@@ -13,6 +13,7 @@ import { Elysia, t } from 'elysia'
 import * as svc from '../modules/generation/service'
 import { createRequireAuthPlugin } from '../plugins/auth'
 import { audit } from '../services/audit'
+import { checkCategoryRateLimit } from '../utils/category-rate-limit'
 import { forbidden, notFound, validationError } from '../utils/errors'
 
 /**
@@ -70,6 +71,21 @@ export function createGenerateRoutes(config: ServerConfig) {
       }
 
       const category = modelConfig.category
+
+      // 视频模型独立限流 — 5 次/分钟/用户，防止高成本任务滥用
+      if (category === 'video') {
+        const { allowed, retryAfterSec } = checkCategoryRateLimit({
+          userId,
+          category: 'video',
+          maxRequests: 5,
+          windowMs: 60 * 1000,
+        })
+        if (!allowed) {
+          set.status = 429
+          set.headers['Retry-After'] = String(retryAfterSec)
+          return { success: false, error: `视频生成请求过于频繁，请 ${retryAfterSec} 秒后再试` }
+        }
+      }
 
       // 参考文件归属校验 — 必须在创建 DB 记录之前（P1.9 约束）
       let referenceUrls: string[] | undefined
@@ -235,6 +251,21 @@ export function createGenerateRoutes(config: ServerConfig) {
       const modelConfig = getModelById(record.model)
       if (!modelConfig)
         return validationError(set, `Unknown model: ${record.model}`)
+
+      // 视频模型独立限流 — 重试同样受限于 5 次/分钟
+      if (modelConfig.category === 'video') {
+        const { allowed, retryAfterSec } = checkCategoryRateLimit({
+          userId,
+          category: 'video',
+          maxRequests: 5,
+          windowMs: 60 * 1000,
+        })
+        if (!allowed) {
+          set.status = 429
+          set.headers['Retry-After'] = String(retryAfterSec)
+          return { success: false, error: `视频生成请求过于频繁，请 ${retryAfterSec} 秒后再试` }
+        }
+      }
 
       // 参考文件归属校验 — 必须在 resetGenerationToPending 之前（P1.9 约束）
       const inputParams = record.inputParams

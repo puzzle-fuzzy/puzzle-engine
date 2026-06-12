@@ -11,6 +11,11 @@ import { beforeAll, beforeEach, describe, expect, it, mock } from 'bun:test'
 
 // ─── Mock 类型 ───────────────────────────────────────────────
 
+// mock.module 提升到 import 之前（Bun 会自动提升 mock.module）
+
+import { createGenerateRoutes } from '../src/routes/generate'
+
+import { resetCategoryRateLimit } from '../src/utils/category-rate-limit'
 import { extractEdenError, makeRecord, makeTestConfig, signTestToken } from './helpers/test-factory'
 
 /** Provider 返回结构（涵盖同步/异步/成功/失败所有变体） */
@@ -107,10 +112,6 @@ mock.module('@excuse/billing', () => ({
   calculateCost: mockCalculateCost,
 }))
 
-// mock.module 提升到 import 之前（Bun 会自动提升 mock.module）
-// eslint-disable-next-line import/first
-import { createGenerateRoutes } from '../src/routes/generate'
-
 // ─── 测试配置 ────────────────────────────────────────────
 
 const testConfig = makeTestConfig({
@@ -137,6 +138,7 @@ describe('generate routes', () => {
   })
 
   beforeEach(() => {
+    resetCategoryRateLimit()
     mockCreateRecord.mockClear()
     mockListRecords.mockClear()
     mockGetRecordById.mockClear()
@@ -539,6 +541,78 @@ describe('generate routes', () => {
       expect(err!.status).toBe(403)
       expect(err!.error).toContain('无权')
       expect(mockDeleteRecord).not.toHaveBeenCalled()
+    })
+  })
+
+  // ═══════════════════════════════════════════════════
+  //  视频模型独立限流 (P2.18.1)
+  // ═══════════════════════════════════════════════════
+
+  describe('视频模型独立限流', () => {
+    it('视频模型 5 次内允许通过', async () => {
+      mockGenerate.mockResolvedValue({ success: true, output: { text: 'ok' }, usage: {} })
+      mockCreateRecord.mockResolvedValue(makeRecord({ model: 'wan2.1-i2v-t2v-720p', category: 'video' }))
+      mockMarkSucceeded.mockResolvedValue(undefined)
+
+      for (let i = 0; i < 5; i++) {
+        const res = await client.api.generate.post(
+          { model: 'wan2.1-i2v-t2v-720p', parameters: { prompt: `video ${i}` } },
+          { headers: { Authorization: `Bearer ${token}` } },
+        )
+        // 前 5 次不应被限流拒绝（可能成功或 provider 错误，但不是 429）
+        const err = extractEdenError(res)
+        if (err) {
+          expect(err.status).not.toBe(429)
+        }
+      }
+    })
+
+    it('视频模型第 6 次返回 429', async () => {
+      mockGenerate.mockResolvedValue({ success: true, output: { text: 'ok' }, usage: {} })
+
+      // 先消费 5 次
+      for (let i = 0; i < 5; i++) {
+        mockCreateRecord.mockResolvedValueOnce(makeRecord({ model: 'wan2.1-i2v-t2v-720p', category: 'video' }))
+        await client.api.generate.post(
+          { model: 'wan2.1-i2v-t2v-720p', parameters: { prompt: `burst ${i}` } },
+          { headers: { Authorization: `Bearer ${token}` } },
+        )
+      }
+
+      // 第 6 次应被限流
+      const res = await client.api.generate.post(
+        { model: 'wan2.1-i2v-t2v-720p', parameters: { prompt: 'burst 6' } },
+        { headers: { Authorization: `Bearer ${token}` } },
+      )
+      const err = extractEdenError(res)
+      expect(err).toBeTruthy()
+      expect(err!.status).toBe(429)
+      expect(err!.error).toContain('视频生成')
+    })
+
+    it('文本模型不受视频限流影响', async () => {
+      mockGenerate.mockResolvedValue({ success: true, output: { text: 'ok' }, usage: {} })
+
+      // 先消费 5 次视频额度
+      for (let i = 0; i < 5; i++) {
+        mockCreateRecord.mockResolvedValueOnce(makeRecord({ model: 'wan2.1-i2v-t2v-720p', category: 'video' }))
+        await client.api.generate.post(
+          { model: 'wan2.1-i2v-t2v-720p', parameters: { prompt: `vid ${i}` } },
+          { headers: { Authorization: `Bearer ${token}` } },
+        )
+      }
+
+      // 文本模型应不受影响
+      mockCreateRecord.mockResolvedValueOnce(makeRecord({ model: 'qwen-max', category: 'text' }))
+      const res = await client.api.generate.post(
+        { model: 'qwen-max', parameters: { prompt: 'text after video burst' } },
+        { headers: { Authorization: `Bearer ${token}` } },
+      )
+      const err = extractEdenError(res)
+      // 不应是 429（可能成功或有其他错误，但不受视频限流）
+      if (err) {
+        expect(err.status).not.toBe(429)
+      }
     })
   })
 })
