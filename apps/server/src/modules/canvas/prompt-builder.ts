@@ -1,7 +1,18 @@
+/**
+ * 视频提示词构建器
+ *
+ * 将镜头数据（角色、场景、摄影、连续性、时间线、环境）组装成
+ * 可直接传给 AI 视频生成模型的 videoPrompt 和 negativePrompt。
+ *
+ * 输出结构：
+ *   - videoPrompt: 包含角色一致性、场景、叙事、逐帧时间线、情绪、朝向、环境、摄影参数
+ *   - negativePrompt: 合并角色 + 场景负面提示词 + 通用质量约束
+ */
 import type { NormalizedCharacter, NormalizedLocation, NormalizedShot } from './continuity'
 
 export type { NormalizedCharacter, NormalizedLocation, NormalizedShot }
 
+/** 解析时间范围字符串 "0s-5s" → { start: 0, end: 5 } */
 function parseTimeRange(timeRange: string): { start: number, end: number } {
   const match = timeRange.match(/(\d+)s-(\d+)s/)
   if (!match)
@@ -9,6 +20,7 @@ function parseTimeRange(timeRange: string): { start: number, end: number } {
   return { start: Number.parseInt(match[1]), end: Number.parseInt(match[2]) }
 }
 
+/** 将多秒区间时间线展开为逐秒时间线，如 "0s-3s: 动作A" → 3 条单秒条目 */
 function expandTimelineToPerSecond(timeline: Array<{ time: string, action: string }>): Array<{ time: string, action: string }> {
   const perSecond: Array<{ time: string, action: string }> = []
 
@@ -25,6 +37,12 @@ function expandTimelineToPerSecond(timeline: Array<{ time: string, action: strin
   return perSecond
 }
 
+/**
+ * 构建逐帧时间线文本段落
+ *
+ * 优先使用 LLM 生成的 timeline 数据（展开为逐秒后合并连续相同动作），
+ * 若无 timeline 则根据 actionStart/actionEnd 生成均匀分布的 fallback 时间线。
+ */
 function buildTimelineSection(
   timeline: Array<{ time: string, action: string }>,
   actionStart: string,
@@ -72,6 +90,20 @@ function buildTimelineSection(
   return fallback.join('\n')
 }
 
+/**
+ * 为单个镜头构建完整的视频生成提示词
+ *
+ * 组装内容：
+ *   1. Character consistency — 角色 identityPrompt（保证外貌一致）
+ *   2. Scene consistency — 场景 scenePrompt（保证环境一致）
+ *   3. Current shot — 镜头叙事描述
+ *   4. Frame-by-frame timeline — 逐秒动作时间线
+ *   5. Emotion continuity — 起始/结束情绪
+ *   6. Character facing — 角色朝向（遵守 180 度规则）
+ *   7. Environment — 光线/氛围/风格/背景动态
+ *   8. Camera — shotSize/angle/movement/lens
+ *   9. Quality requirements — 高一致性 AI 视频的硬性约束
+ */
 export function buildShotVideoPrompt(args: {
   shot: NormalizedShot
   characters: NormalizedCharacter[]

@@ -1,5 +1,4 @@
-import { isImageOutput, isVideoOutput } from '@excuse/shared'
-import { parseOutputResult } from '@excuse/shared'
+import { isImageOutput, isVideoOutput, parseOutputResult } from '@excuse/shared'
 import currency from 'currency.js'
 import {
   AlertCircle,

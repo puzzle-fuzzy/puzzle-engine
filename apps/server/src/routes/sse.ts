@@ -97,6 +97,12 @@ export function createSSERoutes(config: ServerConfig) {
         removeConnection(userId, sender)
       }
     }, {
-      // SSE 只通过 Authorization header 认证，不再支持 query token
+      detail: {
+        summary: 'SSE 实时推送连接',
+        description: '通过 Server-Sent Events 建立长连接，实时推送生成状态变更和 Canvas pipeline 进度。使用 fetchEventSource 连接，仅支持 Bearer header 认证。支持事件：connected、heartbeat（30s）、generation_status、pipeline_node_update',
+        tags: ['实时推送'],
+        security: [{ bearerAuth: [] }],
+        hide: true,
+      },
     })
 }

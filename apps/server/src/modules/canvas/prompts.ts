@@ -1,3 +1,12 @@
+/**
+ * LLM Prompt 模板
+ *
+ * 定义 Canvas pipeline 各阶段的 system prompt 和 user prompt。
+ * 所有 prompt 要求 LLM 输出结构化 JSON，由 json-helper.ts 解析。
+ * prompt 使用中文编写指令（面向国内 LLM），生成英文 visual prompt。
+ */
+
+/** 阶段 1：故事分析 — 提取摘要、冲突、时间线、角色名、场景名 */
 export function buildAnalysisPrompt(storyText: string) {
   return {
     system: `你是一个专业的影视编剧和故事分析师。你的任务是从小说文本中提取结构化信息。
@@ -22,6 +31,7 @@ export function buildAnalysisPrompt(storyText: string) {
   }
 }
 
+/** 阶段 2：角色档案 — 为指定角色生成外观设定（face/hair/costume/identityPrompt） */
 export function buildCharacterPrompt(
   storyText: string,
   analysis: { summary: string, mainConflict: string, timeline: string[] },
@@ -63,6 +73,7 @@ ${storyText.slice(0, 3000)}
   }
 }
 
+/** 阶段 3：场景档案 — 为指定场景生成视觉设定（建筑/光线/色彩/cameraRules/scenePrompt） */
 export function buildLocationPrompt(
   storyText: string,
   analysis: { summary: string, mainConflict: string, timeline: string[] },
@@ -102,6 +113,7 @@ ${storyText.slice(0, 3000)}
   }
 }
 
+/** 阶段 6：分镜脚本 — 将故事拆分为连续镜头，包含 duration/camera/continuity/timeline/environment */
 export function buildStoryboardPrompt(
   storyText: string,
   analysis: { summary: string, mainConflict: string, timeline: string[] },

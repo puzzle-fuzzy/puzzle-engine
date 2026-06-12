@@ -1,3 +1,14 @@
+/**
+ * DB Row → DTO 序列化映射
+ *
+ * 将 Drizzle 查询返回的 DB row（Date 对象、JSONB 对象等）
+ * 转换为前端兼容的 DTO（ISO 字符串、可序列化对象）。
+ *
+ * 关键职责：
+ *   - Date → string (.toISOString())
+ *   - 可选字段 null 归一化
+ *   - profileJson 从 JSONB 直接透传（由 schema $type 绑定类型）
+ */
 import type { CanvasCharacterRow, CanvasContinuityRow, CanvasLocationRow, CanvasProjectRow, CanvasShotRow, CharacterProfile, ContinuityIssue, LocationProfile } from '@excuse/db'
 import type {
   CharacterDTO,
@@ -6,6 +17,7 @@ import type {
   ShotDTO,
 } from '@excuse/shared'
 
+/** CanvasCharacterRow → CharacterDTO */
 export function mapCharacter(row: CanvasCharacterRow): CharacterDTO {
   let profile: CharacterProfile | null = null
   if (row.profileJson) {
@@ -30,6 +42,7 @@ export function mapCharacter(row: CanvasCharacterRow): CharacterDTO {
   }
 }
 
+/** CanvasLocationRow → LocationDTO */
 export function mapLocation(row: CanvasLocationRow): LocationDTO {
   let profile: LocationProfile | null = null
   if (row.profileJson) {
@@ -51,6 +64,7 @@ export function mapLocation(row: CanvasLocationRow): LocationDTO {
   }
 }
 
+/** CanvasShotRow → ShotDTO */
 export function mapShot(row: CanvasShotRow): ShotDTO {
   return {
     id: row.id,
@@ -75,6 +89,12 @@ export function mapShot(row: CanvasShotRow): ShotDTO {
   }
 }
 
+/**
+ * 组装完整的项目详情 DTO
+ *
+ * 合并项目 + 角色 + 场景 + 镜头 + 连续性报告为单一响应对象。
+ * 前端 canvas 编辑器一次性获取所有数据。
+ */
 export function mapProjectDetail(
   project: CanvasProjectRow,
   characters: CanvasCharacterRow[],

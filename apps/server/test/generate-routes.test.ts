@@ -1,5 +1,4 @@
-import type { GenerationRecordRow } from '@excuse/db'
-import type { UploadedFileRow } from '@excuse/db'
+import type { GenerationRecordRow, UploadedFileRow } from '@excuse/db'
 import { treaty } from '@elysia/eden'
 import { beforeAll, beforeEach, describe, expect, it, mock } from 'bun:test'
 

@@ -21,10 +21,28 @@ import { startSSEListener } from './services/sse-manager'
 
 const config = loadConfig()
 
+/**
+ * =====================================================
+ * Excuse API — 应用入口
+ * =====================================================
+ *
+ * 启动流程：
+ *   1. 加载配置 → 2. 确保 uploads 目录 → 3. 组装 Elysia 中间件链
+ *   → 4. 注册所有路由模块 → 5. 启动 HTTP 监听 → 6. 启动 SSE 监听器
+ *
+ * 导出的 `App` 类型供客户端 @elysia/eden treaty 做端到端类型推导。
+ */
+
 // 确保 uploads 目录存在
 const uploadsDir = join(import.meta.dir, '..', config.storageRoot)
 mkdirSync(uploadsDir, { recursive: true })
 
+/**
+ * Elysia 应用实例
+ *
+ * 中间件注册顺序（从上到下依次生效）：
+ *   OpenAPI / Swagger → 日志 → CORS → 静态文件 → 认证 → 各业务路由
+ */
 const app = new Elysia()
   .use(openapi({
     documentation: {
@@ -32,6 +50,26 @@ const app = new Elysia()
         title: 'Excuse API',
         version: '0.1.0',
         description: 'AI 内容生成平台 — 创意流水线 API 文档',
+      },
+      tags: [
+        { name: '健康检查', description: '服务可用性探测' },
+        { name: '认证', description: '用户注册、登录、身份验证' },
+        { name: '模型', description: '可用 AI 模型目录' },
+        { name: '生成', description: 'AI 内容生成任务（文本/图片/视频）' },
+        { name: 'Canvas', description: 'AI 视频制作流水线 — 项目管理、阶段执行、资源编辑' },
+        { name: '上传', description: '文件上传与管理' },
+        { name: '计费', description: '费用统计与查询' },
+        { name: '实时推送', description: 'SSE 连接与事件推送' },
+      ],
+      components: {
+        securitySchemes: {
+          bearerAuth: {
+            type: 'http',
+            scheme: 'bearer',
+            bearerFormat: 'JWT',
+            description: '通过 Authorization: Bearer <token> 传递 JWT',
+          },
+        },
       },
     },
     path: '/api/docs',
@@ -66,6 +104,7 @@ const app = new Elysia()
   .use(createSSERoutes(config))
   .use(createBillingRoutes(config))
 
+/** 导出 App 类型，供客户端 eden treaty 进行端到端类型推导 */
 export type App = typeof app
 export default app
 

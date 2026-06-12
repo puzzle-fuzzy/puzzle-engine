@@ -81,6 +81,12 @@ export function createUploadRoutes(config: ServerConfig) {
       body: t.Object({
         file: t.File({ description: '上传的文件' }),
       }),
+      detail: {
+        summary: '上传文件',
+        description: '上传图片文件（PNG/JPEG/WebP/GIF，最大 10MB），保存到存储并创建 DB 记录',
+        tags: ['上传'],
+        security: [{ bearerAuth: [] }],
+      },
     })
 
     // 删除上传文件
@@ -106,5 +112,11 @@ export function createUploadRoutes(config: ServerConfig) {
       params: t.Object({
         id: t.String(),
       }),
+      detail: {
+        summary: '删除上传文件',
+        description: '删除指定文件（需为文件所有者）。同时从存储和数据库中移除。',
+        tags: ['上传'],
+        security: [{ bearerAuth: [] }],
+      },
     })
 }

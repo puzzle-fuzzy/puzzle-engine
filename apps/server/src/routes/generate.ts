@@ -128,6 +128,12 @@ export function createGenerateRoutes(config: ServerConfig) {
         parameters: t.Record(t.String(), t.Any()),
         referenceFileIds: t.Optional(t.Array(t.String())),
       }),
+      detail: {
+        summary: '发起生成任务',
+        description: '提交 AI 内容生成任务（文本/图片/视频）。校验流程：认证 → 模型存在 → 参数合法 → reference 归属 → 去重 → 创建记录 → provider 调用。异步任务（视频）返回后由 Worker 轮询完成。',
+        tags: ['生成'],
+        security: [{ bearerAuth: [] }],
+      },
     })
 
     // 获取生成记录列表
@@ -162,6 +168,12 @@ export function createGenerateRoutes(config: ServerConfig) {
         limit: t.Optional(t.Numeric()),
         offset: t.Optional(t.Numeric()),
       }),
+      detail: {
+        summary: '获取生成记录列表',
+        description: '分页查询当前用户的生成记录，支持按 category（text/image/video）和 status 过滤',
+        tags: ['生成'],
+        security: [{ bearerAuth: [] }],
+      },
     })
 
     // 获取单条记录详情
@@ -185,6 +197,12 @@ export function createGenerateRoutes(config: ServerConfig) {
       params: t.Object({
         id: t.String(),
       }),
+      detail: {
+        summary: '获取单条生成记录',
+        description: '根据 ID 查询单条生成记录详情，需为记录所有者',
+        tags: ['生成'],
+        security: [{ bearerAuth: [] }],
+      },
     })
 
     // 删除单条记录
@@ -207,6 +225,12 @@ export function createGenerateRoutes(config: ServerConfig) {
       params: t.Object({
         id: t.String(),
       }),
+      detail: {
+        summary: '删除生成记录',
+        description: '删除指定的生成记录，需为记录所有者',
+        tags: ['生成'],
+        security: [{ bearerAuth: [] }],
+      },
     })
 
     // 重试失败任务 — 重走完整的 provider 调用流程（参数校验 → 调用 → 结果处理）
@@ -269,6 +293,12 @@ export function createGenerateRoutes(config: ServerConfig) {
       params: t.Object({
         id: t.String(),
       }),
+      detail: {
+        summary: '重试失败任务',
+        description: '重走完整的 provider 调用流程（参数校验 → 调用 → 结果处理）。仅可重试 failed 或 cancelled 状态的记录。',
+        tags: ['生成'],
+        security: [{ bearerAuth: [] }],
+      },
     })
 
     // 取消进行中的任务 — provider 取消(best-effort) + DB 取消 + SSE 推送
@@ -293,5 +323,11 @@ export function createGenerateRoutes(config: ServerConfig) {
       params: t.Object({
         id: t.String(),
       }),
+      detail: {
+        summary: '取消进行中的任务',
+        description: '取消 pending/submitting/processing/saving_output 状态的任务。provider 侧取消为 best-effort，DB 和 SSE 始终标记为已取消。',
+        tags: ['生成'],
+        security: [{ bearerAuth: [] }],
+      },
     })
 }

@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'bun:test'
 import type { ModelConfig, ModelParameter } from '@excuse/shared'
+import { describe, expect, it } from 'bun:test'
 import { getModelById, getModelsByCategory, MODELS } from '../src/model-configs'
 
 describe('getModelById', () => {
@@ -264,7 +264,7 @@ describe('模型配置一致性 (P1.8)', () => {
           continue
         for (const opt of param.options) {
           const val = String(opt.value)
-          if (!val.match(/^\d+\*\d+$/)) {
+          if (!/^\d+\*\d+$/.test(val)) {
             violations.push(`${model.id}.${param.name}: option value "${val}" 不是 W*H 格式`)
           }
         }
@@ -278,7 +278,7 @@ describe('模型配置一致性 (P1.8)', () => {
     const violations: string[] = []
     for (const model of allModels) {
       const requiredParams = model.parameters.filter(p => p.required)
-      const hasCoreInput = requiredParams.some(p => {
+      const hasCoreInput = requiredParams.some((p) => {
         const mapping = model.inputMapping?.[p.name]
         return mapping && (mapping.target === 'prompt' || mapping.target === 'media')
       })

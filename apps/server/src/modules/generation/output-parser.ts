@@ -1,3 +1,15 @@
+/**
+ * Provider 输出解析器
+ *
+ * DashScope API 返回的 output 是非结构化的 Record<string, unknown>。
+ * 此模块在边界层完成类型解析，将 unknown 转为类型安全的 OutputResult 联合类型：
+ *   - TextOutputResult   — 文本生成结果
+ *   - ImageOutputResult  — 图片生成结果（含待下载 URL 或已保存 URL）
+ *   - VideoOutputResult  — 视频生成结果
+ *   - ProcessingOutputResult — 异步任务中间态
+ *
+ * 不允许 unknown 泄漏到上层业务代码。
+ */
 import type { ImageOutputResult, OutputResult, ProcessingOutputResult, TextOutputResult, VideoOutputResult } from '@excuse/db'
 
 /**
@@ -92,7 +104,9 @@ function parseProcessingOutput(raw: Record<string, unknown>): ProcessingOutputRe
  * 只有当 output 是图片类型且包含 urls 时才返回非空数组。
  */
 export function extractImageUrls(raw: Record<string, unknown> | undefined): string[] {
-  if (!raw) return []
-  if (!Array.isArray(raw.urls)) return []
+  if (!raw)
+    return []
+  if (!Array.isArray(raw.urls))
+    return []
   return raw.urls.filter((u): u is string => typeof u === 'string')
 }

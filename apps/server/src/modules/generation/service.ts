@@ -1,3 +1,17 @@
+/**
+ * 生成任务核心业务服务
+ *
+ * 从 generate route 提取的纯业务逻辑，不涉及 HTTP 语义。
+ *
+ * 职责：
+ *   1. 去重检查（checkDedupe）— 防止重复提交
+ *   2. 参考文件归属校验（resolveReferenceUrls）— 安全边界
+ *   3. 执行生成（executeGeneration）— provider 调用 + 三分支处理
+ *      - 分支 1: provider 失败 → 标记失败 + SSE
+ *      - 分支 2: 异步任务(视频) → 保存 taskId + SSE
+ *      - 分支 3: 同步完成(文本/图片) → 下载保存 + 计费 + SSE
+ *   4. 取消任务（cancelGeneration）— best-effort provider 取消 + DB 取消
+ */
 import type { GenerationCategory, GenerationRecordRow, OutputResult } from '@excuse/db'
 import type { AssetStorage, DashScopeClient } from '@excuse/provider'
 import type { CostDetail, ModelConfig } from '@excuse/shared'

@@ -70,6 +70,11 @@ export function createAuthRoutes(config: ServerConfig) {
         email: t.String({ format: 'email' }),
         password: t.String({ minLength: 6, maxLength: 100 }),
       }),
+      detail: {
+        summary: '用户注册',
+        description: '创建新账户，返回 JWT token 和用户信息。邮箱和用户名不可重复。',
+        tags: ['认证'],
+      },
     })
 
     // 登录
@@ -106,6 +111,11 @@ export function createAuthRoutes(config: ServerConfig) {
         email: t.String(),
         password: t.String(),
       }),
+      detail: {
+        summary: '用户登录',
+        description: '验证邮箱和密码，返回 JWT token 和用户信息。账户被禁用时返回 403。',
+        tags: ['认证'],
+      },
     })
 
     // 获取当前用户信息
@@ -123,5 +133,12 @@ export function createAuthRoutes(config: ServerConfig) {
         success: true,
         user: sanitizeUser(account),
       }
+    }, {
+      detail: {
+        summary: '获取当前用户信息',
+        description: '根据 JWT token 返回当前登录用户的完整资料（不含密码哈希）',
+        tags: ['认证'],
+        security: [{ bearerAuth: [] }],
+      },
     })
 }

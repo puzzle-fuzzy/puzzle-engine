@@ -1,6 +1,6 @@
-import { describe, expect, it } from 'bun:test'
 import type { ModelConfig } from '@excuse/shared'
-import { validateModelParameters, mergeWithDefaults } from '../src/model-validator'
+import { describe, expect, it } from 'bun:test'
+import { mergeWithDefaults, validateModelParameters } from '../src/model-validator'
 
 // ── 测试用的模型配置 ──────────────────────────────────
 

@@ -1,5 +1,9 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { SSEGenerationStatusEvent, SSENotificationEvent, SSEPipelineNodeEvent } from '@excuse/shared'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+
+import { getAuthToken, setAuthToken } from '../src/api/client'
+// Import after mocks
+import { sseClient } from '../src/api/sse'
 
 /**
  * SSE 客户端测试 — Vitest mock fetchEventSource
@@ -16,7 +20,7 @@ import type { SSEGenerationStatusEvent, SSENotificationEvent, SSEPipelineNodeEve
 
 // ── Mock fetchEventSource — 可控的 SSE 流模拟 ──────────────
 
-type FetchEventSourceInit = {
+interface FetchEventSourceInit {
   signal?: AbortSignal
   headers?: Record<string, string>
   onopen?: (response: Response) => Promise<void>
@@ -59,10 +63,6 @@ vi.mock('../src/api/client', () => ({
   setAuthToken: vi.fn(),
 }))
 
-// Import after mocks
-import { sseClient } from '../src/api/sse'
-import { getAuthToken, setAuthToken } from '../src/api/client'
-
 // ── Helper: 模拟服务器行为 ──────────────────────────────────
 
 function pushEvent(event: string, data: string) {
@@ -85,7 +85,7 @@ function closeStream() {
 
 // ── 测试 ──────────────────────────────────────────────────
 
-describe('SSEClient', () => {
+describe('sSEClient', () => {
   beforeEach(async () => {
     vi.clearAllMocks()
     capturedInit = null
@@ -232,8 +232,11 @@ describe('SSEClient', () => {
       await respondOpen(200)
 
       pushEvent('generation_status', JSON.stringify({
-        id: 'rec-001', taskId: 'gen_123', model: 'qwen-max',
-        status: 'invalid_status', category: 'text',
+        id: 'rec-001',
+        taskId: 'gen_123',
+        model: 'qwen-max',
+        status: 'invalid_status',
+        category: 'text',
       }))
       expect(handler).not.toHaveBeenCalled()
     })
@@ -335,8 +338,11 @@ describe('SSEClient', () => {
       await respondOpen(200)
 
       const event: SSEGenerationStatusEvent = {
-        id: 'rec-001', taskId: 'gen_123', model: 'qwen-max',
-        status: 'succeeded', category: 'text',
+        id: 'rec-001',
+        taskId: 'gen_123',
+        model: 'qwen-max',
+        status: 'succeeded',
+        category: 'text',
       }
       pushEvent('generation_status', JSON.stringify(event))
       expect(handler).toHaveBeenCalledTimes(1)
@@ -356,8 +362,11 @@ describe('SSEClient', () => {
       await respondOpen(200)
 
       const event: SSEGenerationStatusEvent = {
-        id: 'rec-001', taskId: 'gen_123', model: 'qwen-max',
-        status: 'succeeded', category: 'text',
+        id: 'rec-001',
+        taskId: 'gen_123',
+        model: 'qwen-max',
+        status: 'succeeded',
+        category: 'text',
       }
       pushEvent('generation_status', JSON.stringify(event))
 

@@ -1,5 +1,22 @@
+/**
+ * 连续性校验器 — 规则引擎（不调用 LLM）
+ *
+ * 检测相邻镜头间的连续性问题，包括：
+ *   - 缺失场景/角色引用 (error)
+ *   - 禁止的摄影角度 (error)
+ *   - 180 度规则违反 — 角色朝向突变 (warning)
+ *   - 动作不连续 — 前一镜头结束动作 ≠ 下一镜头开始动作 (warning)
+ *   - 情绪不连续 (warning)
+ *
+ * 返回 ContinuityIssue[] 数组，每个 issue 包含：
+ *   severity: 'error' | 'warning'
+ *   code: 问题类型标识
+ *   message: 人类可读描述
+ *   suggestion: 修复建议
+ */
 import type { ContinuityIssue, ShotCamera, ShotContinuity, ShotEnvironment, ShotTimelineEntry } from '@excuse/shared'
 
+/** 标准化镜头数据 — 从 DB row 映射为校验器所需的统一结构 */
 export interface NormalizedShot {
   id: string
   shotIndex: number
@@ -13,6 +30,7 @@ export interface NormalizedShot {
   environment?: ShotEnvironment
 }
 
+/** 标准化角色数据 — 校验器用于角色名映射和 identity 验证 */
 export interface NormalizedCharacter {
   id: string
   name: string
@@ -20,6 +38,7 @@ export interface NormalizedCharacter {
   negativePrompt: string
 }
 
+/** 标准化场景数据 — 校验器用于 cameraRules 检查 */
 export interface NormalizedLocation {
   id: string
   name: string
@@ -32,6 +51,13 @@ export interface NormalizedLocation {
   }
 }
 
+/**
+ * 执行连续性校验
+ *
+ * 校验分两轮：
+ *   1. 逐镜头：检查缺失引用、禁止角度
+ *   2. 逐对相邻镜头（同一场景内）：检查朝向、动作、情绪连续性
+ */
 export function validateShotContinuity(args: {
   shots: NormalizedShot[]
   characters: NormalizedCharacter[]

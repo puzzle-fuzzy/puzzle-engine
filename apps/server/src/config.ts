@@ -1,5 +1,11 @@
 import type { OSSConfig } from '@excuse/provider'
 
+/**
+ * 服务端全局配置类型
+ *
+ * 所有路由、模块通过 ServerConfig 获取运行时参数，
+ * 而不是直接读取 process.env，便于测试注入和环境隔离。
+ */
 export interface ServerConfig {
   port: number
   databaseUrl: string
@@ -13,6 +19,13 @@ export interface ServerConfig {
   oss: OSSConfig | undefined
 }
 
+/**
+ * 从环境变量加载并校验服务端配置
+ *
+ * - 开发环境使用内置默认值，无需 .env 即可启动
+ * - 生产环境强制校验 DATABASE_URL / DASHSCOPE_API_KEY / JWT_SECRET
+ * - OSS 配置可选，缺省时使用本地文件存储
+ */
 export function loadConfig(): ServerConfig {
   const config = {
     port: Number(process.env.PORT) || 5007,
@@ -44,6 +57,12 @@ export function loadConfig(): ServerConfig {
   return config
 }
 
+/**
+ * 加载阿里云 OSS 配置
+ *
+ * 四个必需变量（ACCESS_KEY_ID / SECRET / BUCKET / REGION）全部存在时才启用 OSS，
+ * 否则返回 undefined，回退到本地磁盘存储。
+ */
 function loadOSSConfig(): OSSConfig | undefined {
   const accessKeyId = process.env.OSS_ACCESS_KEY_ID
   const accessKeySecret = process.env.OSS_ACCESS_KEY_SECRET

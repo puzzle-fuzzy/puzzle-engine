@@ -1,3 +1,19 @@
+/**
+ * SSE 连接管理器 + PostgreSQL LISTEN 桥接
+ *
+ * 核心职责：
+ *   1. 维护内存中的 SSE 连接表（userId → Set<Sender>），支持多标签页
+ *   2. 监听 PostgreSQL LISTEN 'generation_status' 频道
+ *   3. 将 Worker 的 NOTIFY 消息解析后推送到对应用户的所有 SSE 连接
+ *
+ * 数据流：
+ *   Worker 完成任务 → NOTIFY 'generation_status' → startSSEListener 接收
+ *   → dispatchToUser → SSE route 中的 AsyncChannel → 客户端
+ *
+ * 两种推送事件：
+ *   - generation_status: 通用生成任务状态变更
+ *   - pipeline_node_update: Canvas pipeline 进度（含 canvasMeta 时自动发送）
+ */
 import type { GenerationNotifyPayload, SSEGenerationStatusEvent, SSEPipelineNodeEvent } from '@excuse/shared'
 import { pgClient } from '@excuse/db'
 import { createLogger } from '@excuse/shared'
