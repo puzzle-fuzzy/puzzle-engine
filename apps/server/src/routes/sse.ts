@@ -43,7 +43,8 @@ function createAsyncChannel() {
  * SSE 端点 — 实时推送生成状态和通知
  *
  * 客户端通过 fetchEventSource 连接: GET /api/sse
- * 认证方式: Authorization: Bearer <jwt>（唯一认证方式）
+ * 浏览器端优先使用 httpOnly cookie（credentials: include）
+ * 编程式客户端可使用 Authorization: Bearer <jwt>
  * Query token 已移除 — JWT 不再暴露在 URL 中（避免日志泄露风险）
  * 支持的事件类型:
  *   - connected: 连接建立
@@ -95,7 +96,7 @@ export function createSSERoutes(config: ServerConfig) {
     }, {
       detail: {
         summary: 'SSE 实时推送连接',
-        description: '通过 Server-Sent Events 建立长连接，实时推送生成状态变更和 Canvas pipeline 进度。使用 fetchEventSource 连接，仅支持 Bearer header 认证。支持事件：connected、heartbeat（30s）、generation_status、pipeline_node_update',
+        description: '通过 Server-Sent Events 建立长连接，实时推送生成状态变更和 Canvas pipeline 进度。浏览器端使用 httpOnly cookie + credentials: include 认证；编程式客户端可使用 Authorization: Bearer <jwt>。不支持 query token。支持事件：connected、heartbeat（30s）、generation_status、pipeline_node_update',
         tags: ['实时推送'],
         security: [{ bearerAuth: [] }],
         hide: true,
