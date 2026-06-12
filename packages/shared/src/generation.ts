@@ -5,6 +5,8 @@
 import type {
   CostDetail,
   GenerationCategory,
+  GenerationInputParams,
+  GenerationNotifyPayload,
   GenerationRecordRow,
   GenerationStatus,
   ImageOutputResult,
@@ -16,7 +18,7 @@ import type {
 } from '@excuse/db'
 
 // 重导出域类型，保持下游 import 不变
-export type { CostDetail, GenerationCategory, GenerationStatus }
+export type { CostDetail, GenerationCategory, GenerationInputParams, GenerationNotifyPayload, GenerationStatus }
 export type { ImageOutputResult, OutputResult, ProcessingOutputResult, TextOutputResult, VideoOutputResult }
 
 // ===== SSE → GenerationRecord 运行时解析 =====

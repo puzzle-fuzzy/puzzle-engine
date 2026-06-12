@@ -36,7 +36,7 @@ export const uploadedFiles = pgTable('uploaded_files', {
    */
   purpose: varchar('purpose', { length: 50 }).default('reference').notNull(),
 
-  /** 额外元数据（宽高、格式信息等） */
+  /** 额外元数据 — 存储边界：文件类型各异（图片宽高、视频帧率等），无法统一 DTO */
   metadata: jsonb('metadata').$type<Record<string, unknown>>(),
 
   /** 上传时间 */

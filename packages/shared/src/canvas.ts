@@ -56,6 +56,7 @@ export interface SSEPipelineNodeEvent {
   nodeId: string
   status: 'running' | 'completed' | 'failed'
   runId?: string
+  /** SSE 管道节点不透明数据 — 存储边界：不同 nodeType 产生不同 data 形状，backend 不解读 */
   data?: Record<string, unknown>
   error?: string
 }

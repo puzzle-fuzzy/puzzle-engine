@@ -19,6 +19,7 @@ export interface CanvasLayoutNode {
   position: CanvasLayoutPosition
   width?: number
   height?: number
+  /** 前端 React Flow 节点数据 — 存储边界：backend 不解读此字段内容 */
   data?: Record<string, unknown>
 }
 
@@ -27,6 +28,7 @@ export interface CanvasLayoutEdge {
   source: string
   target: string
   type?: string
+  /** 前端 React Flow 边数据 — 存储边界：backend 不解读此字段内容 */
   data?: Record<string, unknown>
 }
 
@@ -137,6 +139,33 @@ export interface ContinuityIssue {
 // ===== Generation Domain Types =====
 
 /**
+ * 生成任务输入参数信封 — 存储在 generation_records.inputParams JSONB 中
+ *
+ * 平坦结构：模型参数（prompt, n, duration, resolution 等）与信封字段
+ * （source, projectId, shotId, referenceFileIds）在同一层级。
+ * DB JSONB 无法按模型区分参数结构，故用 index signature 兼容动态键。
+ *
+ * 业务代码应通过 ValidatedModelParameters（@excuse/provider）访问模型参数，
+ * 不应直接索引此信封的 unknown 字段。
+ */
+export interface GenerationInputParams {
+  /** Canvas 来源标记（仅当 source === 'canvas' 时存在） */
+  source?: 'canvas'
+  /** Canvas 项目 ID（仅 canvas 来源时存在） */
+  projectId?: string
+  /** Canvas 镜头 ID（仅 canvas 来源时存在） */
+  shotId?: string
+  /** 参考文件 ID 列表（用户上传参考图时存在） */
+  referenceFileIds?: string[]
+  /**
+   * 模型参数 — 动态键，由 ModelConfig.parameters 声明决定。
+   * DB JSONB 存储边界：无法静态枚举所有模型的参数组合。
+   * 服务层应通过 ValidatedModelParameters 访问，此处仅存储。
+   */
+  [key: string]: unknown
+}
+
+/**
  * 费用明细（jsonb cost 字段的域类型）
  *  quantity / unitPrice 仅 image/video variant 存在；
  *  token variant 使用 inputUnitPrice / outputUnitPrice / inputCost / outputCost
@@ -204,3 +233,31 @@ export type OutputResult
     | ImageOutputResult
     | VideoOutputResult
     | ProcessingOutputResult
+
+/**
+ * Worker → PostgreSQL NOTIFY 的负载
+ *
+ * Worker 在更新 DB 后通过 pgClient.notify() 发送，
+ * Server 端通过 LISTEN 接收并映射为 SSE 事件推送到前端。
+ *
+ * status / category 使用字符串字面量而非 pgEnum 推断类型，
+ * 因为 domain-types.ts 不依赖 schema 层。
+ */
+export interface GenerationNotifyPayload {
+  accountId: string
+  recordId: string
+  status: 'pending' | 'submitting' | 'processing' | 'saving_output' | 'succeeded' | 'failed' | 'cancelled'
+  category: 'text' | 'image' | 'video'
+  model: string
+  /** 异步任务 ID（可为 null：未提交到 provider 的任务如用户取消 pending 状态） */
+  taskId: string | null
+  traceId?: string | null
+  outputResult?: OutputResult
+  errorMessage?: string
+  cost?: CostDetail
+  /** Canvas pipeline 元数据（仅当 source === 'canvas' 时存在） */
+  canvasMeta?: {
+    projectId: string
+    shotId: string
+  }
+}

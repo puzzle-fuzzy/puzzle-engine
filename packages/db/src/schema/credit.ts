@@ -63,7 +63,7 @@ export const creditTransactions = pgTable('credit_transactions', {
   generationRecordId: uuid('generation_record_id').references(() => generationRecords.id),
   /** 描述/原因 */
   description: varchar('description', { length: 500 }),
-  /** 额外元数据（管理端调整原因、支付渠道等） */
+  /** 额外元数据 — 存储边界：交易类型各异（管理端调整原因、支付渠道信息等），无法统一 DTO */
   metadata: jsonb('metadata').$type<Record<string, unknown>>(),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 }, table => [

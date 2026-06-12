@@ -10,6 +10,7 @@ export interface AuditEntry {
   accountId?: string
   action: AuditAction
   targetId?: string
+  /** 审计详情 — 非结构化存储边界：不同 action 类型有不同 detail 形状，无法统一 DTO */
   detail?: Record<string, unknown>
   ip?: string
 }

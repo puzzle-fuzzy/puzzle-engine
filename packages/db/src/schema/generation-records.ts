@@ -1,4 +1,4 @@
-import type { CostDetail, OutputResult } from '../domain-types'
+import type { CostDetail, GenerationInputParams, OutputResult } from '../domain-types'
 import { index, integer, jsonb, pgEnum, pgTable, text, timestamp, uuid, varchar } from 'drizzle-orm/pg-core'
 import { accounts } from './accounts'
 
@@ -66,8 +66,8 @@ export const generationRecords = pgTable('generation_records', {
   /** 任务状态，默认 pending */
   status: generationStatusEnum('status').notNull().default('pending'),
 
-  /** 输入参数（prompt、参考图、配置等） */
-  inputParams: jsonb('input_params').notNull().$type<Record<string, unknown>>(),
+  /** 输入参数（prompt、参考图、配置等） — 域类型 GenerationInputParams */
+  inputParams: jsonb('input_params').notNull().$type<GenerationInputParams>(),
 
   /** 输出结果（生成的 URL、文本内容等） */
   outputResult: jsonb('output_result').$type<OutputResult>(),
@@ -87,8 +87,8 @@ export const generationRecords = pgTable('generation_records', {
   /** 追踪 ID，跨 server/worker/SSE 关联同一次生成请求的全链路日志 */
   traceId: varchar('trace_id', { length: 36 }),
 
-  /** 去重键 = model + hash(params)，防止同参数重复提交 */
-  dedupeKey: varchar('dedupe_key', { length: 255 }).unique(),
+  /** 去重键 = userId + model + hash(params)，防止同参数重复提交 */
+  dedupeKey: text('dedupe_key').unique(),
 
   /** 创建时间 */
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),

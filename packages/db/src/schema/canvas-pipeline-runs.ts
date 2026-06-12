@@ -61,9 +61,9 @@ export const canvasPipelineRuns = pgTable('canvas_pipeline_runs', {
   errorMessage: text('error_message'),
   /** 触发者，外键 → accounts.id */
   createdBy: uuid('created_by').references(() => accounts.id),
-  /** 输入快照（执行时的角色/场景/故事文本状态，用于审计） */
+  /** 输入快照 — 管道审计数据：执行时的角色/场景/故事文本状态，不参与业务逻辑 */
   inputSnapshotJson: jsonb('input_snapshot_json').$type<Record<string, unknown>>(),
-  /** 输出摘要（执行结果的统计信息，如生成了多少角色/场景） */
+  /** 输出摘要 — 管道审计数据：执行结果统计信息，不参与业务逻辑 */
   outputSummaryJson: jsonb('output_summary_json').$type<Record<string, unknown>>(),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 }, table => [

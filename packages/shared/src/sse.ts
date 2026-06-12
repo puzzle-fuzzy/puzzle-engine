@@ -5,34 +5,13 @@ import { parseCostDetail, parseOutputResult } from './generation'
 // ===== SSE 事件类型定义 =====
 
 /**
- * Worker → PostgreSQL NOTIFY 的负载
- * Worker 在更新 DB 后通过 pgClient.notify() 发送
- */
-export interface GenerationNotifyPayload {
-  accountId: string
-  recordId: string
-  status: GenerationStatus
-  category: GenerationCategory
-  model: string
-  taskId: string
-  traceId?: string | null
-  outputResult?: OutputResult
-  errorMessage?: string
-  cost?: CostDetail
-  /** Canvas pipeline metadata (present when source === 'canvas') */
-  canvasMeta?: {
-    projectId: string
-    shotId: string
-  }
-}
-
-/**
  * SSE 推送到前端的生成状态事件
  * 当 Worker 完成任务（成功/失败）时推送
  */
 export interface SSEGenerationStatusEvent {
   id: string
-  taskId: string
+  /** 异步任务 ID（可为 null：未提交到 provider 的任务） */
+  taskId: string | null
   traceId?: string | null
   status: GenerationStatus
   category: GenerationCategory
@@ -67,7 +46,10 @@ export interface SSEHeartbeatEvent {
 // ===== SSE 事件解析器 — 边界层运行时校验 =====
 // SSE payload 来自网络（JSON 文本），必须在分发前解析为类型安全结构。
 // 解析失败返回 null，调用方丢弃事件并记录日志，不抛异常不崩溃连接。
+// isObject/str 是边界解析辅助函数，使用 Record<string, unknown> 作为
+// 中间 cast 是合法的 —— 作用是从 unknown JSON 提取已知字段到类型安全结构。
 
+/** 边界层类型守卫 — 将 unknown SSE payload 转为可索引的 Record 以提取字段 */
 function isObject(v: unknown): v is Record<string, unknown> {
   return typeof v === 'object' && v !== null && !Array.isArray(v)
 }

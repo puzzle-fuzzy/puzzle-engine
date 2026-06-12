@@ -24,7 +24,7 @@ export const auditLogs = pgTable('audit_logs', {
   action: auditActionEnum('action').notNull(),
   /** 操作对象标识（如 recordId、fileId、keyId） */
   targetId: varchar('target_id', { length: 255 }),
-  /** 操作详情（任意 JSON 结构） */
+  /** 操作详情 — 非结构化审计上下文，存储边界：不同 action 类型有不同 detail 形状，无法统一 DTO */
   detail: jsonb('detail').$type<Record<string, unknown>>(),
   /** 客户端 IP */
   ip: varchar('ip', { length: 45 }),

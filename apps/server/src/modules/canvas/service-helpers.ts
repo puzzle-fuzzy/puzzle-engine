@@ -14,6 +14,10 @@ export function createClient(config: { dashscopeApiKey: string, dashscopeBaseUrl
 }
 
 export function notifyNode(accountId: string, projectId: string, nodeType: string, nodeId: string, status: 'running' | 'completed' | 'failed', data?: Record<string, unknown>, error?: string, runId?: string) {
+  /**
+   * data 为 SSE 管道节点不透明数据 — 存储边界：
+   * 不同 nodeType 产生不同 data 形状，frontend 按 nodeType 分发处理，backend 不解读内容。
+   */
   dispatchToUser(accountId, 'pipeline_node_update', { projectId, nodeType, nodeId, status, data, error, runId })
 }
 
