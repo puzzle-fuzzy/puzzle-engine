@@ -10,6 +10,7 @@ import { loadConfig } from './config'
 import { createAuthPlugin } from './plugins/auth'
 import { loggerPlugin } from './plugins/logger'
 import { requestIdPlugin } from './plugins/request-id'
+import { rateLimitPlugin } from './plugins/rate-limit'
 import { createAuthRoutes } from './routes/auth'
 import { createBillingRoutes } from './routes/billing'
 import { createCanvasRoutes } from './routes/canvas'
@@ -87,6 +88,7 @@ const app = new Elysia()
   }))
   .use(loggerPlugin)
   .use(requestIdPlugin)
+  .use(rateLimitPlugin)
   .use(cors({
     origin: [config.frontendUrl, 'http://localhost:8007'],
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
