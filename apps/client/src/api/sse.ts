@@ -42,7 +42,6 @@ class SSEClient {
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null
   /** 用户主动调用 disconnect() 时为 true，此时不触发自动重连 */
   private intentionallyClosed = false
-  private hasConnected = false
   private openCallbacks = new Set<() => void>()
 
   /**
@@ -142,7 +141,6 @@ class SSEClient {
   }
 
   private notifyOpen() {
-    this.hasConnected = true
     for (const cb of this.openCallbacks) {
       try {
         cb()

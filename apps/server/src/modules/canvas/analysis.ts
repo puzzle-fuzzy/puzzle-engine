@@ -12,7 +12,7 @@ import {
 import { parseLLMJson } from './json-helper'
 import { buildAnalysisPrompt } from './prompts'
 import { getProjectDetail } from './service-crud'
-import { assertNotGenerating, createClient, getTextModel, notifyNode } from './service-helpers'
+import { createClient, getTextModel, notifyNode } from './service-helpers'
 
 export async function analyzeProject(projectId: string, config: { dashscopeApiKey: string, dashscopeBaseUrl?: string }, runId?: string) {
   const project = await getCanvasProjectById(projectId)

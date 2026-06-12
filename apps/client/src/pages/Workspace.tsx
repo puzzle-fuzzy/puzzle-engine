@@ -1,4 +1,4 @@
-import type { GenerateResponse, GenerationRecord, ModelConfig, ModelParameter } from '@/api/client'
+import type { GenerationRecord, ModelParameter } from '@/api/client'
 import type { Category } from '@/lib/generation-utils'
 import {
   FileText,
@@ -10,13 +10,6 @@ import {
   X,
 } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
-import { toast } from 'sonner'
-import {
-  deleteRecord,
-  fetchModels,
-  generate,
-  uploadFile,
-} from '@/api/client'
 import MediaPreviewDialog from '@/components/MediaPreviewDialog'
 import RecordCard from '@/components/RecordCard'
 import { Button } from '@/components/ui/button'
@@ -28,206 +21,48 @@ import { Select } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import { CATEGORY_CONFIG } from '@/lib/generation-utils'
 import { useGenerationStore } from '@/stores/generation'
+import { useWorkspaceStore } from '@/stores/workspace'
 
 export default function Workspace() {
-  const [models, setModels] = useState<ModelConfig[]>([])
-  const [selectedCategory, setSelectedCategory] = useState<Category>('image')
-  const [selectedModelId, setSelectedModelId] = useState<string>('')
-  const [parameters, setParameters] = useState<Record<string, unknown>>({})
-  const [loading, setLoading] = useState(false)
-  const [uploadingRefs, setUploadingRefs] = useState(false)
-  const [referenceFiles, setReferenceFiles] = useState<{ id: string, url: string, name: string }[]>([])
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
   const [expandedPrompts, setExpandedPrompts] = useState<Set<string>>(() => new Set())
   const [copiedId, setCopiedId] = useState<string | null>(null)
   const [groupByProject, setGroupByProject] = useState(false)
   const [deleteConfirm, setDeleteConfirm] = useState<{ open: boolean, id: string }>({ open: false, id: '' })
-  // 每个媒体参数的上传状态：paramName → { uploading, uploadedUrl, uploadedName }
-  const [mediaUploadState, setMediaUploadState] = useState<Record<string, {
-    uploading: boolean
-    uploadedUrl?: string
-    uploadedName?: string
-  }>>({})
 
-  // 从 Zustand store 获取 records / projectMap
+  // Workspace store — form state, models, submission logic
+  const selectedCategory = useWorkspaceStore(s => s.selectedCategory)
+  const selectedModelId = useWorkspaceStore(s => s.selectedModelId)
+  const parameters = useWorkspaceStore(s => s.parameters)
+  const loading = useWorkspaceStore(s => s.loading)
+  const uploadingRefs = useWorkspaceStore(s => s.uploadingRefs)
+  const referenceFiles = useWorkspaceStore(s => s.referenceFiles)
+  const mediaUploadState = useWorkspaceStore(s => s.mediaUploadState)
+
+  const setCategory = useWorkspaceStore(s => s.setCategory)
+  const setModelId = useWorkspaceStore(s => s.setModelId)
+  const setParameter = useWorkspaceStore(s => s.setParameter)
+  const loadModels = useWorkspaceStore(s => s.loadModels)
+  const submit = useWorkspaceStore(s => s.submit)
+  const regenerate = useWorkspaceStore(s => s.regenerate)
+  const removeRecord = useWorkspaceStore(s => s.removeRecord)
+  const uploadReferenceFiles = useWorkspaceStore(s => s.uploadReferenceFiles)
+  const uploadMediaParam = useWorkspaceStore(s => s.uploadMediaParam)
+  const clearMediaUpload = useWorkspaceStore(s => s.clearMediaUpload)
+
+  const categoryModels = useWorkspaceStore(s => s.categoryModels())
+  const selectedModel = useWorkspaceStore(s => s.selectedModel())
+  const canGenerate = useWorkspaceStore(s => s.canGenerate())
+  const showReferenceUpload = useWorkspaceStore(s => s.showReferenceUpload())
+
+  // Generation store — records + projects
   const records = useGenerationStore(s => s.records)
   const projectMap = useGenerationStore(s => s.projectMap)
-  const addRecord = useGenerationStore(s => s.addRecord)
-  const removeRecord = useGenerationStore(s => s.removeRecord)
   const fetchRecords = useGenerationStore(s => s.fetchRecords)
   const fetchProjects = useGenerationStore(s => s.fetchProjects)
 
-  // 加载模型列表
-  useEffect(() => {
-    fetchModels().then((data) => {
-      setModels(data.models)
-    })
-  }, [])
-
-  // 加载 Canvas 项目列表 + 生成记录（SSE 订阅由 RealtimeSync store 统一管理）
-  useEffect(() => {
-    fetchProjects()
-    fetchRecords()
-  }, [fetchProjects, fetchRecords])
-
-  // 按类别筛选模型
-  const categoryModels = models.filter(m => m.category === selectedCategory)
-  const selectedModel = models.find(m => m.id === selectedModelId)
-
-  // 切换类别时自动选择第一个模型
-  useEffect(() => {
-    if (categoryModels.length > 0 && !categoryModels.some(m => m.id === selectedModelId)) {
-      setSelectedModelId(categoryModels[0].id)
-      setParameters({})
-    }
-  }, [selectedCategory, categoryModels, selectedModelId])
-
-  // 获取参数默认值
-  function getParamDefault(param: ModelParameter): unknown {
-    if (param.name === 'prompt')
-      return ''
-    return param.defaultValue ?? (param.type === 'number' ? 0 : param.type === 'boolean' ? false : '')
-  }
-
-  // 初始化参数
-  useEffect(() => {
-    if (!selectedModel)
-      return
-    const defaults: Record<string, unknown> = {}
-    for (const p of selectedModel.parameters) {
-      defaults[p.name] = getParamDefault(p)
-    }
-    setParameters(defaults)
-    setMediaUploadState({})
-    // eslint-disable-next-line react/exhaustive-deps
-  }, [selectedModelId])
-
-  // 检查必填参数是否都已填写
-  const missingRequired = selectedModel
-    ? selectedModel.parameters.filter(p => p.required && !parameters[p.name])
-    : []
-  const canGenerate = selectedModel && missingRequired.length === 0
-
-  // 处理生成 — 提交后直接用响应数据更新列表，后续状态变更由 SSE 推送
-  async function handleGenerate() {
-    if (!selectedModel || !canGenerate)
-      return
-    setLoading(true)
-    try {
-      const referenceFileIds = referenceFiles.map(f => f.id)
-      const result: GenerateResponse = await generate({
-        model: selectedModel.id,
-        parameters,
-        referenceFileIds: referenceFileIds.length > 0 ? referenceFileIds : undefined,
-      })
-      if (result.success && result.record) {
-        addRecord(result.record)
-      }
-    }
-    catch {
-      toast.error('生成请求失败')
-    }
-    finally {
-      setLoading(false)
-    }
-  }
-
-  // 重新生成 — 提交后直接插入新记录，SSE 推送最终状态
-  async function handleRegenerate(record: GenerationRecord) {
-    setLoading(true)
-    try {
-      const result: GenerateResponse = await generate({
-        model: record.model,
-        parameters: record.inputParams,
-      })
-      if (result.success && result.record) {
-        addRecord(result.record)
-      }
-    }
-    catch {
-      toast.error('生成请求失败')
-    }
-    finally {
-      setLoading(false)
-    }
-  }
-
-  // 删除记录 — 弹出确认弹窗
-  async function handleDelete(id: string) {
-    setDeleteConfirm({ open: true, id })
-  }
-
-  async function confirmDelete() {
-    try {
-      await deleteRecord(deleteConfirm.id)
-      removeRecord(deleteConfirm.id)
-    }
-    catch {
-      toast.error('删除记录失败')
-    }
-    finally {
-      setDeleteConfirm({ open: false, id: '' })
-    }
-  }
-
-  // 参考图上传（r2v 模型）
-  async function handleReferenceUpload(e: React.ChangeEvent<HTMLInputElement>) {
-    const files = e.target.files
-    if (!files || files.length === 0)
-      return
-    setUploadingRefs(true)
-    try {
-      for (const file of Array.from(files)) {
-        const result = await uploadFile(file)
-        if (result.success) {
-          setReferenceFiles(prev => [...prev, { id: result.file.id, url: result.file.publicUrl, name: result.file.fileName }])
-        }
-      }
-    }
-    finally {
-      setUploadingRefs(false)
-    }
-  }
-
-  // 媒体参数上传（单个参数，如 first_frame_url、video_url 等）
-  async function handleMediaUpload(paramName: string, accept: string) {
-    const input = document.createElement('input')
-    input.type = 'file'
-    input.accept = accept
-    input.onchange = async (e) => {
-      const file = (e.target as HTMLInputElement).files?.[0]
-      if (!file)
-        return
-      setMediaUploadState(prev => ({ ...prev, [paramName]: { uploading: true } }))
-      try {
-        const result = await uploadFile(file)
-        if (result.success) {
-          setParameters(p => ({ ...p, [paramName]: result.file.publicUrl }))
-          setMediaUploadState(prev => ({
-            ...prev,
-            [paramName]: { uploading: false, uploadedUrl: result.file.publicUrl, uploadedName: result.file.fileName },
-          }))
-        }
-        else {
-          setMediaUploadState(prev => ({ ...prev, [paramName]: { uploading: false } }))
-        }
-      }
-      catch {
-        setMediaUploadState(prev => ({ ...prev, [paramName]: { uploading: false } }))
-      }
-    }
-    input.click()
-  }
-
-  // 清除已上传的媒体
-  function handleClearMedia(paramName: string) {
-    setParameters(p => ({ ...p, [paramName]: '' }))
-    setMediaUploadState((prev) => {
-      const next = { ...prev }
-      delete next[paramName]
-      return next
-    })
-  }
+  useEffect(() => { loadModels() }, [loadModels])
+  useEffect(() => { fetchProjects(); fetchRecords() }, [fetchProjects, fetchRecords])
 
   // 渲染媒体上传控件
   function renderMediaUpload(param: ModelParameter) {
@@ -240,7 +75,6 @@ export default function Workspace() {
 
     return (
       <div key={param.name} className="space-y-2">
-        {/* 已上传 → 显示预览 + 清除按钮 */}
         {hasUrl && (
           <div className="flex items-center gap-2 rounded-lg border bg-muted/30 p-2">
             {isImage && (
@@ -265,28 +99,23 @@ export default function Workspace() {
               variant="ghost"
               size="sm"
               className="size-7 p-0 text-muted-foreground hover:text-destructive"
-              onClick={() => handleClearMedia(param.name)}
+              onClick={() => clearMediaUpload(param.name)}
             >
               <X className="size-4" />
             </Button>
           </div>
         )}
 
-        {/* 未上传 → 显示上传按钮 */}
         {!hasUrl && (
           <button
             type="button"
             className="flex w-full cursor-pointer items-center justify-center gap-2 rounded-lg border-2 border-dashed border-muted-foreground/25 p-3 text-sm text-muted-foreground transition-colors hover:border-muted-foreground/50 hover:bg-muted/30"
-            onClick={() => handleMediaUpload(param.name, param.mediaUpload!.accept)}
+            onClick={() => uploadMediaParam(param.name, param.mediaUpload!.accept)}
             disabled={state?.uploading}
           >
             {state?.uploading
-              ? (
-                  <Loader2 className="size-4 animate-spin" />
-                )
-              : (
-                  <Upload className="size-4" />
-                )}
+              ? <Loader2 className="size-4 animate-spin" />
+              : <Upload className="size-4" />}
             {state?.uploading ? '上传中...' : `点击上传${isImage ? '图片' : isVideo ? '视频' : isAudio ? '音频' : '文件'}`}
           </button>
         )}
@@ -300,17 +129,15 @@ export default function Workspace() {
 
     switch (param.type) {
       case 'text':
-        // 媒体参数 → 上传控件
         if (param.mediaUpload)
           return renderMediaUpload(param)
-        // prompt / negative_prompt → 文本域
         if (param.name === 'prompt' || param.name === 'negative_prompt') {
           return (
             <Textarea
               key={param.name}
               placeholder={param.description || param.name}
               value={String(value || '')}
-              onChange={e => setParameters(p => ({ ...p, [param.name]: e.target.value }))}
+              onChange={e => setParameter(param.name, e.target.value)}
               rows={param.name === 'prompt' ? 4 : 2}
               className="resize-none"
             />
@@ -321,7 +148,7 @@ export default function Workspace() {
             key={param.name}
             placeholder={param.description || param.name}
             value={String(value || '')}
-            onChange={e => setParameters(p => ({ ...p, [param.name]: e.target.value }))}
+            onChange={e => setParameter(param.name, e.target.value)}
           />
         )
       case 'number':
@@ -333,7 +160,7 @@ export default function Workspace() {
             value={String(value ?? param.defaultValue ?? '')}
             min={param.min}
             max={param.max}
-            onChange={e => setParameters(p => ({ ...p, [param.name]: Number(e.target.value) }))}
+            onChange={e => setParameter(param.name, Number(e.target.value))}
           />
         )
       case 'select':
@@ -341,7 +168,7 @@ export default function Workspace() {
           <Select
             key={param.name}
             value={String(value ?? param.defaultValue ?? '')}
-            onChange={e => setParameters(p => ({ ...p, [param.name]: e.target.value }))}
+            onChange={e => setParameter(param.name, e.target.value)}
             options={param.options?.map(o => ({ label: o.label, value: String(o.value) }))}
           />
         )
@@ -351,7 +178,7 @@ export default function Workspace() {
             <input
               type="checkbox"
               checked={Boolean(value ?? param.defaultValue ?? false)}
-              onChange={e => setParameters(p => ({ ...p, [param.name]: e.target.checked }))}
+              onChange={e => setParameter(param.name, e.target.checked)}
               className="rounded border-input"
             />
             <span className="text-sm text-muted-foreground">{param.description || param.name}</span>
@@ -360,10 +187,7 @@ export default function Workspace() {
     }
   }
 
-  // 数据驱动：r2v 模型通过 referenceMediaType 判断
-  const showReferenceUpload = selectedModel?.referenceMediaType != null
-
-  // 按项目分组：canvas 记录按 projectId 聚合，非 canvas 记录单独展示
+  // 按项目分组
   const groupedRecords = useMemo(() => {
     if (!groupByProject)
       return null
@@ -400,7 +224,11 @@ export default function Workspace() {
     setTimeout(setCopiedId, 1500, null)
   }
 
-  // 分组模式下的项目分组渲染
+  async function confirmDelete() {
+    await removeRecord(deleteConfirm.id)
+    setDeleteConfirm({ open: false, id: '' })
+  }
+
   function renderGroupedRecords() {
     if (!groupedRecords)
       return null
@@ -433,13 +261,13 @@ export default function Workspace() {
                   <RecordCard
                     key={record.id}
                     record={record}
-                    models={models}
+                    models={useWorkspaceStore.getState().models}
                     expanded={expandedPrompts.has(record.id)}
                     copied={copiedId === record.id}
                     onToggleExpand={togglePrompt}
                     onCopyPrompt={copyPrompt}
-                    onRegenerate={handleRegenerate}
-                    onDelete={handleDelete}
+                    onRegenerate={regenerate}
+                    onDelete={id => setDeleteConfirm({ open: true, id })}
                     onPreview={setPreviewUrl}
                   />
                 ))}
@@ -460,13 +288,13 @@ export default function Workspace() {
                 <RecordCard
                   key={record.id}
                   record={record}
-                  models={models}
+                  models={useWorkspaceStore.getState().models}
                   expanded={expandedPrompts.has(record.id)}
                   copied={copiedId === record.id}
                   onToggleExpand={togglePrompt}
                   onCopyPrompt={copyPrompt}
-                  onRegenerate={handleRegenerate}
-                  onDelete={handleDelete}
+                  onRegenerate={regenerate}
+                  onDelete={id => setDeleteConfirm({ open: true, id })}
                   onPreview={setPreviewUrl}
                 />
               ))}
@@ -482,7 +310,6 @@ export default function Workspace() {
       <div className="grid gap-6 lg:grid-cols-2">
         {/* 左栏 — 生成控制区 */}
         <div className="space-y-4">
-          {/* 类别选择 */}
           <div className="flex gap-2">
             {(Object.entries(CATEGORY_CONFIG) as [Category, typeof CATEGORY_CONFIG[Category]][]).map(([key, cfg]) => {
               const Icon = cfg.icon
@@ -491,7 +318,7 @@ export default function Workspace() {
                   key={key}
                   variant={selectedCategory === key ? 'default' : 'outline'}
                   className={selectedCategory === key ? cfg.activeColor : ''}
-                  onClick={() => setSelectedCategory(key)}
+                  onClick={() => setCategory(key)}
                 >
                   <Icon className="size-4" />
                   {cfg.label}
@@ -500,7 +327,6 @@ export default function Workspace() {
             })}
           </div>
 
-          {/* 模型选择 */}
           <Card>
             <CardHeader className="pb-3">
               <CardTitle className="text-sm">模型选择</CardTitle>
@@ -508,7 +334,7 @@ export default function Workspace() {
             <CardContent>
               <Select
                 value={selectedModelId}
-                onChange={e => setSelectedModelId(e.target.value)}
+                onChange={e => setModelId(e.target.value)}
                 options={categoryModels.map(m => ({
                   label: `${m.name} — ${m.description}`,
                   value: m.id,
@@ -520,7 +346,6 @@ export default function Workspace() {
             </CardContent>
           </Card>
 
-          {/* 参考图上传（r2v 模型） — 移到参数设置上方 */}
           {showReferenceUpload && (
             <Card>
               <CardHeader className="pb-3">
@@ -534,16 +359,12 @@ export default function Workspace() {
                       accept="image/*"
                       multiple
                       className="hidden"
-                      onChange={handleReferenceUpload}
+                      onChange={e => e.target.files?.length && uploadReferenceFiles(e.target.files)}
                       disabled={uploadingRefs}
                     />
                     {uploadingRefs
-                      ? (
-                          <Loader2 className="size-5 animate-spin text-muted-foreground" />
-                        )
-                      : (
-                          <span className="text-sm text-muted-foreground">点击上传参考图片（最多 5 张）</span>
-                        )}
+                      ? <Loader2 className="size-5 animate-spin text-muted-foreground" />
+                      : <span className="text-sm text-muted-foreground">点击上传参考图片（最多 5 张）</span>}
                   </label>
                   {referenceFiles.length > 0 && (
                     <div className="flex gap-2 flex-wrap">
@@ -552,7 +373,7 @@ export default function Workspace() {
                           <img src={file.url} alt={file.name} className="size-full object-cover" />
                           <button
                             className="absolute -right-1 -top-1 flex size-5 items-center justify-center rounded-full bg-destructive text-white text-xs"
-                            onClick={() => setReferenceFiles(prev => prev.filter(f => f.id !== file.id))}
+                            onClick={() => useWorkspaceStore.getState().removeReferenceFile(file.id)}
                           >
                             ×
                           </button>
@@ -565,7 +386,6 @@ export default function Workspace() {
             </Card>
           )}
 
-          {/* 参数设置 */}
           {selectedModel && (
             <Card>
               <CardHeader className="pb-3">
@@ -587,12 +407,11 @@ export default function Workspace() {
             </Card>
           )}
 
-          {/* 生成按钮 */}
           <Button
             className="w-full"
             size="lg"
             disabled={loading || !canGenerate}
-            onClick={handleGenerate}
+            onClick={submit}
           >
             {loading
               ? (
@@ -633,21 +452,19 @@ export default function Workspace() {
                 </div>
               )}
 
-              {/* 分组模式 */}
               {groupedRecords && renderGroupedRecords()}
 
-              {/* 默认平铺模式 */}
               {!groupedRecords && records.map(record => (
                 <RecordCard
                   key={record.id}
                   record={record}
-                  models={models}
+                  models={useWorkspaceStore.getState().models}
                   expanded={expandedPrompts.has(record.id)}
                   copied={copiedId === record.id}
                   onToggleExpand={togglePrompt}
                   onCopyPrompt={copyPrompt}
-                  onRegenerate={handleRegenerate}
-                  onDelete={handleDelete}
+                  onRegenerate={regenerate}
+                  onDelete={id => setDeleteConfirm({ open: true, id })}
                   onPreview={setPreviewUrl}
                 />
               ))}
@@ -656,7 +473,6 @@ export default function Workspace() {
         </div>
       </div>
 
-      {/* 图片预览弹窗 */}
       <MediaPreviewDialog url={previewUrl} onClose={() => setPreviewUrl(null)} />
 
       <ConfirmDialog
