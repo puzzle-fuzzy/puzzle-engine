@@ -1,0 +1,203 @@
+/**
+ * 字幕生成路由 — 独立页面，独立 API 分组
+ *
+ * 端点：
+ *   POST /api/subtitle/projects          — 创建字幕项目（上传视频 → 提取音频 → ASR）
+ *   GET  /api/subtitle/projects          — 列表
+ *   GET  /api/subtitle/projects/:id      — 详情
+ *   DELETE /api/subtitle/projects/:id    — 删除
+ *   PATCH /api/subtitle/projects/:id/sentences — 更新字幕句子
+ *   PATCH /api/subtitle/projects/:id/style     — 更新样式配置
+ *   POST /api/subtitle/projects/:id/export     — 提交导出任务
+ */
+
+import type { SubtitleProjectRow, SubtitleStyleConfig } from '@excuse/db'
+import type { SubtitleMutationOkResponse, SubtitleProjectDTO, SubtitleProjectListResponse, SubtitleProjectResponse } from '@excuse/shared'
+import type { ServerConfig } from '../config'
+import {
+  deleteSubtitleProject,
+  getSubtitleProjectForAccount,
+  listSubtitleProjectsByAccount,
+  updateSubtitleSentences,
+  updateSubtitleStyle,
+} from '@excuse/db'
+import { ASRClient, AssetStorage } from '@excuse/provider'
+import { Elysia, t } from 'elysia'
+import * as svc from '../modules/subtitle/service'
+import { createRequireAuthPlugin } from '../plugins/auth'
+import { notFound } from '../utils/errors'
+
+export function createSubtitleRoutes(config: ServerConfig) {
+  const asrClient = new ASRClient({
+    apiKey: config.dashscopeApiKey,
+    baseUrl: config.dashscopeBaseUrl,
+  })
+  const storage = new AssetStorage({
+    storageRoot: config.storageRoot,
+    oss: config.oss,
+  })
+  const deps: svc.SubtitleDependencies = { asrClient, storage }
+
+  /** 从 DB 行序列化为前端兼容格式（Date→string） */
+  function serializeProject(project: SubtitleProjectRow): SubtitleProjectDTO {
+    return {
+      ...project,
+      createdAt: project.createdAt.toISOString(),
+      updatedAt: project.updatedAt.toISOString(),
+    }
+  }
+
+  return new Elysia({ prefix: '/api/subtitle' })
+    .use(createRequireAuthPlugin(config))
+
+    // 创建字幕项目 — 上传视频 → 提取音频 → 提交 ASR
+    .post('/projects', async ({ body, userId }) => {
+      const project = await svc.createAndStartProject(
+        userId,
+        body.videoFileId,
+        config,
+        deps,
+      )
+      return { success: true, data: serializeProject(project) } satisfies SubtitleProjectResponse
+    }, {
+      body: t.Object({
+        videoFileId: t.String(),
+      }),
+      detail: {
+        summary: '创建字幕项目',
+        description: '上传视频文件，自动提取音频并提交 ASR 转录任务',
+        tags: ['字幕'],
+        security: [{ bearerAuth: [] }],
+      },
+    })
+
+    // 列出用户的字幕项目
+    .get('/projects', async ({ userId }) => {
+      const projects = await listSubtitleProjectsByAccount(userId)
+      const serialized = projects.map(serializeProject)
+      return { success: true, items: serialized, total: serialized.length } satisfies SubtitleProjectListResponse
+    }, {
+      detail: {
+        summary: '列出字幕项目',
+        tags: ['字幕'],
+        security: [{ bearerAuth: [] }],
+      },
+    })
+
+    // 获取字幕项目详情
+    .get('/projects/:id', async ({ params: { id }, userId, set }) => {
+      const project = await getSubtitleProjectForAccount(id, userId)
+      if (!project)
+        return notFound(set, '字幕项目不存在或无权访问')
+      return { success: true, data: serializeProject(project) } satisfies SubtitleProjectResponse
+    }, {
+      params: t.Object({ id: t.String() }),
+      detail: {
+        summary: '获取字幕项目详情',
+        tags: ['字幕'],
+        security: [{ bearerAuth: [] }],
+      },
+    })
+
+    // 更新字幕句子（用户编辑后保存）
+    .patch('/projects/:id/sentences', async ({ params: { id }, body, userId, set }) => {
+      const project = await getSubtitleProjectForAccount(id, userId)
+      if (!project)
+        return notFound(set, '字幕项目不存在或无权访问')
+
+      await updateSubtitleSentences(id, body.sentences)
+      const updated = await getSubtitleProjectForAccount(id, userId)
+      if (!updated)
+        return notFound(set, '字幕项目不存在或无权访问')
+      return { success: true, data: serializeProject(updated) } satisfies SubtitleProjectResponse
+    }, {
+      params: t.Object({ id: t.String() }),
+      body: t.Object({
+        sentences: t.Array(t.Object({
+          id: t.String(),
+          text: t.String(),
+          beginTime: t.Number(),
+          endTime: t.Number(),
+          speakerId: t.Optional(t.Number()),
+        })),
+      }),
+      detail: {
+        summary: '更新字幕句子',
+        description: '用户编辑字幕后保存（合并、拆分、修改文字、调整时间戳）',
+        tags: ['字幕'],
+        security: [{ bearerAuth: [] }],
+      },
+    })
+
+    // 更新字幕样式配置
+    .patch('/projects/:id/style', async ({ params: { id }, body, userId, set }) => {
+      const project = await getSubtitleProjectForAccount(id, userId)
+      if (!project)
+        return notFound(set, '字幕项目不存在或无权访问')
+
+      await updateSubtitleStyle(id, body.styleConfig as SubtitleStyleConfig)
+      const updated = await getSubtitleProjectForAccount(id, userId)
+      if (!updated)
+        return notFound(set, '字幕项目不存在或无权访问')
+      return { success: true, data: serializeProject(updated) } satisfies SubtitleProjectResponse
+    }, {
+      params: t.Object({ id: t.String() }),
+      body: t.Object({
+        styleConfig: t.Object({
+          templateId: t.String(),
+          fontSize: t.Number(),
+          fontColor: t.String(),
+          outlineColor: t.String(),
+          outlineWidth: t.Number(),
+          position: t.String(),
+          marginV: t.Number(),
+          bold: t.Boolean(),
+        }),
+      }),
+      detail: {
+        summary: '更新字幕样式',
+        description: '选择预设模板或微调字号/颜色/位置等样式参数',
+        tags: ['字幕'],
+        security: [{ bearerAuth: [] }],
+      },
+    })
+
+    // 提交导出任务 — fire-and-forget
+    .post('/projects/:id/export', async ({ params: { id }, userId, set }) => {
+      const project = await getSubtitleProjectForAccount(id, userId)
+      if (!project)
+        return notFound(set, '字幕项目不存在或无权访问')
+
+      // fire-and-forget：立即返回，后台执行导出
+      svc.executeExport(id, userId, config, deps).catch((err) => {
+        console.error('字幕导出失败:', err)
+      })
+
+      return { success: true, message: '导出任务已提交' }
+    }, {
+      params: t.Object({ id: t.String() }),
+      detail: {
+        summary: '提交导出任务',
+        description: '将字幕烧录到视频中，fire-and-forget 模式',
+        tags: ['字幕'],
+        security: [{ bearerAuth: [] }],
+      },
+    })
+
+    // 删除字幕项目
+    .delete('/projects/:id', async ({ params: { id }, userId, set }) => {
+      const project = await getSubtitleProjectForAccount(id, userId)
+      if (!project)
+        return notFound(set, '字幕项目不存在或无权访问')
+
+      await deleteSubtitleProject(id)
+      return { success: true } satisfies SubtitleMutationOkResponse
+    }, {
+      params: t.Object({ id: t.String() }),
+      detail: {
+        summary: '删除字幕项目',
+        tags: ['字幕'],
+        security: [{ bearerAuth: [] }],
+      },
+    })
+}

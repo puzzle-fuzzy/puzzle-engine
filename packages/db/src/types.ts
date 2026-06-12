@@ -1,5 +1,5 @@
 import type { InferInsertModel, InferSelectModel } from 'drizzle-orm'
-import type { accounts, canvasCharacters, canvasContinuityReports, canvasLocations, canvasPipelinePhaseEnum, canvasPipelineRuns, canvasPipelineRunStatusEnum, canvasProjects, canvasProjectStatusEnum, canvasShots, canvasShotStatusEnum, creditAccounts, creditTransactions, generationCategoryEnum, generationRecords, generationStatusEnum, notifications, uploadedFiles, usageEvents, workflows, workflowSteps } from './schema'
+import type { accounts, canvasCharacters, canvasContinuityReports, canvasLocations, canvasPipelinePhaseEnum, canvasPipelineRuns, canvasPipelineRunStatusEnum, canvasProjects, canvasProjectStatusEnum, canvasShots, canvasShotStatusEnum, creditAccounts, creditTransactions, generationCategoryEnum, generationRecords, generationStatusEnum, notifications, subtitleProjects, subtitleProjectStatusEnum, uploadedFiles, usageEvents, workflows, workflowSteps } from './schema'
 
 // ===== Drizzle 行类型（从 schema 自动推导） =====
 
@@ -93,6 +93,12 @@ export type WorkflowStepRow = InferSelectModel<typeof workflowSteps>
 /** workflow_steps 表 — 插入参数类型 */
 export type WorkflowStepInsert = InferInsertModel<typeof workflowSteps>
 
+/** subtitle_projects 表 — 查询结果行类型 */
+export type SubtitleProjectRow = InferSelectModel<typeof subtitleProjects>
+
+/** subtitle_projects 表 — 插入参数类型 */
+export type SubtitleProjectInsert = InferInsertModel<typeof subtitleProjects>
+
 // ===== 枚举类型（从 pgEnum 定义推断） =====
 
 /** 生成内容类别：从 pgEnum 定义推断 */
@@ -112,6 +118,9 @@ export type CanvasPipelinePhase = typeof canvasPipelinePhaseEnum.enumValues exte
 
 /** 画布流水线运行状态：从 pgEnum 定义推断 */
 export type CanvasPipelineRunStatus = typeof canvasPipelineRunStatusEnum.enumValues extends (infer T)[] ? T : never
+
+/** 字幕项目状态：从 pgEnum 定义推断 */
+export type SubtitleProjectStatus = typeof subtitleProjectStatusEnum.enumValues extends (infer T)[] ? T : never
 
 // ===== 序列化工具类型 =====
 

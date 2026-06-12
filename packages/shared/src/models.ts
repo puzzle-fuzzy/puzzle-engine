@@ -78,6 +78,7 @@ export const MODEL_CATEGORIES = [
   { id: 'text' as const, name: '文本生成', color: 'blue' },
   { id: 'image' as const, name: '图像生成', color: 'purple' },
   { id: 'video' as const, name: '视频生成', color: 'pink' },
+  { id: 'subtitle' as const, name: '字幕生成', color: 'teal' },
 ] as const
 
 export type ModelCategory = typeof MODEL_CATEGORIES[number]['id']

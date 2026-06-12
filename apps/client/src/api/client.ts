@@ -1,4 +1,4 @@
-import type { AcceptedResponse, AuthCurrentUserResponse, AuthResponse, BillingStatisticsResponse, CanvasCharacterResponse, CanvasLocationResponse, CanvasMutationOkResponse, CanvasProjectListResponse, CanvasProjectResponse, CanvasShotResponse, DeleteGenerationRecordResponse, GenerateResponse, GenerationRecord, GenerationRecordListResponse, GenerationRecordResponse, ModelConfig, MutationOkResponse, UploadResponse } from '@excuse/shared'
+import type { AcceptedResponse, AuthCurrentUserResponse, AuthResponse, BillingStatisticsResponse, CanvasCharacterResponse, CanvasLocationResponse, CanvasMutationOkResponse, CanvasProjectListResponse, CanvasProjectResponse, CanvasShotResponse, DeleteGenerationRecordResponse, GenerateResponse, GenerationRecord, GenerationRecordListResponse, GenerationRecordResponse, ModelConfig, MutationOkResponse, SubtitleMutationOkResponse, SubtitleProjectDTO, SubtitleProjectListResponse, SubtitleProjectResponse, SubtitleSentence, SubtitleStyleConfig, UploadResponse } from '@excuse/shared'
 import type { App } from '../../../server/src/index'
 import { treaty } from '@elysia/eden'
 import { sseClient } from './sse'
@@ -389,5 +389,51 @@ export async function retryCanvasShot(shotId: string): Promise<AcceptedResponse>
 export async function retryFailedCanvasShots(projectId: string): Promise<AcceptedResponse> {
   return unwrapEden<AcceptedResponse>(
     await api.api.canvas.projects({ projectId })['retry-failed-shots'].post(),
+  )
+}
+
+// ===== 字幕 API =====
+
+export type SubtitleProject = SubtitleProjectDTO
+
+export async function createSubtitleProject(videoFileId: string): Promise<SubtitleProjectResponse> {
+  return unwrapEden<SubtitleProjectResponse>(
+    await api.api.subtitle.projects.post({ videoFileId }),
+  )
+}
+
+export async function listSubtitleProjects(): Promise<SubtitleProjectListResponse> {
+  return unwrapEden<SubtitleProjectListResponse>(
+    await api.api.subtitle.projects.get(),
+  )
+}
+
+export async function getSubtitleProject(id: string): Promise<SubtitleProjectResponse> {
+  return unwrapEden<SubtitleProjectResponse>(
+    await api.api.subtitle.projects({ id }).get(),
+  )
+}
+
+export async function updateSubtitleSentences(id: string, sentences: SubtitleSentence[]): Promise<SubtitleProjectResponse> {
+  return unwrapEden<SubtitleProjectResponse>(
+    await api.api.subtitle.projects({ id }).sentences.patch({ sentences }),
+  )
+}
+
+export async function updateSubtitleStyle(id: string, styleConfig: SubtitleStyleConfig): Promise<SubtitleProjectResponse> {
+  return unwrapEden<SubtitleProjectResponse>(
+    await api.api.subtitle.projects({ id }).style.patch({ styleConfig }),
+  )
+}
+
+export async function exportSubtitleProject(id: string): Promise<{ success: boolean, message: string }> {
+  return unwrapEden<{ success: boolean, message: string }>(
+    await api.api.subtitle.projects({ id }).export.post(),
+  )
+}
+
+export async function deleteSubtitleProject(id: string): Promise<SubtitleMutationOkResponse> {
+  return unwrapEden<SubtitleMutationOkResponse>(
+    await api.api.subtitle.projects({ id }).delete(),
   )
 }

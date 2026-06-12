@@ -8,7 +8,7 @@ import { accounts } from './accounts'
  * - image:  图片生成
  * - video:  视频生成
  */
-export const generationCategoryEnum = pgEnum('generation_category', ['text', 'image', 'video'])
+export const generationCategoryEnum = pgEnum('generation_category', ['text', 'image', 'video', 'subtitle'])
 
 /**
  * 生成任务状态枚举 — 完整状态机

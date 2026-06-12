@@ -60,7 +60,7 @@ function str(o: Record<string, unknown>, key: string): string | undefined {
 }
 
 const VALID_STATUSES: readonly string[] = ['pending', 'submitting', 'processing', 'saving_output', 'succeeded', 'failed', 'cancelled']
-const VALID_CATEGORIES: readonly string[] = ['text', 'image', 'video']
+const VALID_CATEGORIES: readonly string[] = ['text', 'image', 'video', 'subtitle']
 
 /**
  * 解析 generation_status 事件

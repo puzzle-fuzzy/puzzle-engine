@@ -1,0 +1,207 @@
+/**
+ * 字幕任务处理器 — Worker 专用
+ *
+ * 两类任务：
+ *   1. ASR 任务（asr_processing 状态） — 轮询 DashScope ASR 任务状态
+ *   2. 导出任务（exporting 状态） — FFmpeg 烧录字幕到视频
+ */
+
+import type { SubtitleProjectRow } from '@excuse/db'
+import type { ASRClient } from '@excuse/provider'
+import type { WorkerConfig } from './config'
+import {
+  getGenerationRecordById,
+  getUploadedFileById,
+  markGenerationFailed,
+  markGenerationSucceeded,
+  notifyGenerationStatus,
+  updateSubtitleExport,
+  updateSubtitleProjectStatus,
+  updateSubtitleSentences,
+} from '@excuse/db'
+import { AssetStorage, burnSubtitlesToVideo } from '@excuse/provider'
+import { createLogger, sentencesToAss } from '@excuse/shared'
+
+const logger = createLogger('subtitle-processor')
+
+/**
+ * 处理 ASR 字幕任务 — 轮询 DashScope 任务状态并解析转录结果
+ *
+ * 流程：
+ *   1. 获取关联的 generation_record（asrRecordId）
+ *   2. 用 ASRClient 查询 DashScope 任务状态
+ *   3. SUCCEEDED → 下载转录 JSON → 解析句子 → 更新项目 → 标记 record succeeded → SSE
+ *   4. FAILED → 更新项目状态 → 标记 record failed → SSE
+ *   5. PENDING/RUNNING → 跳过，下一轮继续
+ */
+export async function processASRTask(project: SubtitleProjectRow, asrClient: ASRClient): Promise<void> {
+  if (!project.asrRecordId) {
+    logger.warn({ projectId: project.id }, 'ASR task has no asrRecordId, skipping')
+    return
+  }
+
+  // 获取关联的 generation_record
+  const record = await getGenerationRecordById(project.asrRecordId)
+  if (!record || !record.taskId) {
+    logger.warn({ projectId: project.id, asrRecordId: project.asrRecordId }, 'ASR record not found or no taskId')
+    return
+  }
+
+  // 查询 DashScope 任务状态
+  const taskStatus = await asrClient.queryTask(record.taskId)
+
+  switch (taskStatus.status) {
+    case 'SUCCEEDED': {
+      // 下载转录 JSON
+      if (!taskStatus.transcriptionUrl) {
+        logger.error({ projectId: project.id }, 'ASR succeeded but no transcriptionUrl')
+        await updateSubtitleProjectStatus(project.id, 'failed', { errorMessage: 'ASR 完成但未返回转录结果' })
+        await markGenerationFailed(record.id, 'ASR 完成但未返回转录结果')
+        return
+      }
+
+      const response = await fetch(taskStatus.transcriptionUrl)
+      const rawJson = await response.json()
+
+      // 解析句子列表
+      const sentences = asrClient.parseTranscription(rawJson)
+
+      // 更新 subtitle_project
+      await updateSubtitleSentences(project.id, sentences, rawJson)
+      await updateSubtitleProjectStatus(project.id, 'subtitle_editing')
+
+      // 更新 generation_record
+      await markGenerationSucceeded(record.id, {
+        type: 'subtitle',
+        sentences,
+        transcriptionUrl: taskStatus.transcriptionUrl,
+      })
+
+      // SSE 通知
+      await notifyGenerationStatus({
+        accountId: project.accountId,
+        recordId: record.id,
+        status: 'succeeded',
+        category: 'subtitle',
+        model: 'paraformer-v2',
+        taskId: record.taskId,
+        traceId: record.traceId ?? undefined,
+      })
+
+      logger.info({ projectId: project.id, sentenceCount: sentences.length }, '✅ ASR task completed')
+      break
+    }
+
+    case 'FAILED': {
+      const errMsg = taskStatus.errorMessage || 'ASR 任务失败'
+      await updateSubtitleProjectStatus(project.id, 'failed', { errorMessage: errMsg })
+      await markGenerationFailed(record.id, errMsg)
+      await notifyGenerationStatus({
+        accountId: project.accountId,
+        recordId: record.id,
+        status: 'failed',
+        category: 'subtitle',
+        model: 'paraformer-v2',
+        taskId: record.taskId,
+        traceId: record.traceId ?? undefined,
+        errorMessage: errMsg,
+      })
+      logger.error({ projectId: project.id, error: errMsg }, '❌ ASR task failed')
+      break
+    }
+
+    case 'PENDING':
+    case 'RUNNING': {
+      logger.info({ projectId: project.id, status: taskStatus.status }, '⏳ ASR task still processing')
+      break
+    }
+
+    default: {
+      logger.warn({ projectId: project.id, status: taskStatus.status }, '⚠️ Unknown ASR task status')
+      break
+    }
+  }
+}
+
+/**
+ * 处理字幕导出任务 — FFmpeg 烧录 + 上传结果
+ *
+ * 流程：
+ *   1. 从项目获取 sentences + styleConfig
+ *   2. 生成 ASS 内容
+ *   3. 获取原始视频文件
+ *   4. FFmpeg 烧录字幕到视频
+ *   5. 上传导出视频到存储
+ *   6. 更新项目状态 → completed
+ */
+export async function processExportTask(project: SubtitleProjectRow, config: WorkerConfig): Promise<void> {
+  if (!project.sentences || project.sentences.length === 0) {
+    await updateSubtitleProjectStatus(project.id, 'failed', { errorMessage: '没有字幕内容，无法导出' })
+    return
+  }
+
+  const storage = new AssetStorage({
+    storageRoot: config.storageRoot,
+    oss: config.oss,
+  })
+
+  try {
+    // 生成 ASS 内容
+    const styleConfig = project.styleConfig ?? {
+      templateId: 'cinema',
+      fontSize: 24,
+      fontColor: '#FFFFFF',
+      outlineColor: '#000000',
+      outlineWidth: 2,
+      position: 'bottom',
+      marginV: 30,
+      bold: false,
+    }
+    const assContent = sentencesToAss(project.sentences, styleConfig)
+
+    // 获取原始视频文件路径
+    const file = await getUploadedFileById(project.videoFileId)
+    if (!file) {
+      await updateSubtitleProjectStatus(project.id, 'failed', { errorMessage: '原始视频文件不存在' })
+      return
+    }
+
+    const videoPath = file.publicUrl.startsWith('/') || file.publicUrl.startsWith('./')
+      ? `${config.storageRoot}/${file.storagePath}`
+      : file.publicUrl
+
+    // FFmpeg 烧录字幕
+    const { outputPath } = await burnSubtitlesToVideo(videoPath, assContent, config.storageRoot)
+
+    // 上传导出视频到存储
+    const videoBuffer = await Bun.file(outputPath).arrayBuffer()
+    const exportedVideoUrl = await storage.uploadGenerated(
+      Buffer.from(videoBuffer),
+      `subtitle/export_${project.id}.mp4`,
+      'video/mp4',
+    )
+
+    // 清理本地临时文件
+    try {
+      await Bun.file(outputPath).delete()
+    }
+    catch {}
+
+    // 创建导出 generation_record
+    await markGenerationSucceeded(project.exportRecordId!, {
+      type: 'video',
+      savedUrls: [exportedVideoUrl],
+    })
+
+    // 更新项目导出信息
+    await updateSubtitleExport(project.id, project.exportRecordId!, exportedVideoUrl)
+    await updateSubtitleProjectStatus(project.id, 'completed')
+
+    logger.info({ projectId: project.id }, '✅ Export task completed')
+  }
+  catch (err) {
+    const errorMsg = err instanceof Error ? err.message : String(err)
+    await updateSubtitleProjectStatus(project.id, 'failed', { errorMessage: errorMsg })
+    logger.error({ err, projectId: project.id }, '❌ Export task failed')
+  }
+}

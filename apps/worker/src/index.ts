@@ -1,13 +1,19 @@
 import type { WorkerHealthState } from './health'
 import type { TaskResult } from './task-processor'
-import { pollPendingVideoTasks } from '@excuse/db'
+import { pollExportingProjects, pollPendingASRProjects, pollPendingVideoTasks } from '@excuse/db'
+import { ASRClient } from '@excuse/provider'
 import { createLogger } from '@excuse/shared'
 import { loadConfig } from './config'
 import { createHealthServer } from './health'
+import { processASRTask, processExportTask } from './subtitle-processor'
 import { createTaskProcessor } from './task-processor'
 
 const config = loadConfig()
 const processor = createTaskProcessor(config)
+const asrClient = new ASRClient({
+  apiKey: config.dashscopeApiKey,
+  baseUrl: config.dashscopeBaseUrl,
+})
 const logger = createLogger('worker')
 
 /**
@@ -114,6 +120,34 @@ async function main() {
           case 'ignored':
             taskLogger.warn({ status: result.status }, '⚠️ Unknown task status')
             break
+        }
+      }
+
+      // ── 轮询 ASR 字幕任务 ────────────────────────────────
+      const asrProjects = await pollPendingASRProjects()
+      for (const project of asrProjects) {
+        if (!running)
+          break
+        try {
+          await processASRTask(project, asrClient)
+          healthState.totalTasksProcessed++
+        }
+        catch (err) {
+          logger.error({ err, projectId: project.id }, 'ASR task processing error')
+        }
+      }
+
+      // ── 轮询字幕导出任务 ──────────────────────────────────
+      const exportProjects = await pollExportingProjects()
+      for (const project of exportProjects) {
+        if (!running)
+          break
+        try {
+          await processExportTask(project, config)
+          healthState.totalTasksProcessed++
+        }
+        catch (err) {
+          logger.error({ err, projectId: project.id }, 'Export task processing error')
         }
       }
     }
