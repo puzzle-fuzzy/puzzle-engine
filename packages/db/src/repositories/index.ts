@@ -1,4 +1,6 @@
 export * from './accounts.repo'
+export * from './api-keys.repo'
+export * from './audit-logs.repo'
 export * from './canvas-characters.repo'
 export * from './canvas-continuity.repo'
 export * from './canvas-locations.repo'
