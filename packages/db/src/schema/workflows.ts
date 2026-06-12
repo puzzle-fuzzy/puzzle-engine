@@ -24,10 +24,10 @@ export const workflowStepStatusEnum = pgEnum('workflow_step_status', [
 ])
 
 /**
- * 工作流表 — 通用流水线定义和执行实例
+ * 工作流表 — 通用流水线预研数据模型
  *
- * 替代 canvas-specific pipeline，提供通用工作流编排能力。
- * 每个工作流由有序步骤组成，步骤间可定义依赖关系。
+ * 当前只提供 DB/repository 基础设施，不代表已替代 Canvas pipeline。
+ * 真正启用前还需要补齐 runner、锁续约、步骤执行协议和恢复扫描。
  */
 export const workflows = pgTable('workflows', {
   id: uuid('id').defaultRandom().primaryKey(),
