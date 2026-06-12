@@ -13,13 +13,15 @@ import type {
   OutputResult,
   ProcessingOutputResult,
   Serialize,
+  SubtitleOutputResult,
   TextOutputResult,
   VideoOutputResult,
 } from '@excuse/db'
+import type { ListResponse, MutationOkResponse, RecordResponse } from './api-response'
 
 // 重导出域类型，保持下游 import 不变
 export type { CostDetail, GenerationCategory, GenerationInputParams, GenerationNotifyPayload, GenerationStatus }
-export type { ImageOutputResult, OutputResult, ProcessingOutputResult, TextOutputResult, VideoOutputResult }
+export type { ImageOutputResult, OutputResult, ProcessingOutputResult, SubtitleOutputResult, TextOutputResult, VideoOutputResult }
 
 // ===== SSE → GenerationRecord 运行时解析 =====
 
@@ -35,6 +37,9 @@ export function isVideoOutput(o: OutputResult | null | undefined): o is VideoOut
 }
 export function isProcessingOutput(o: OutputResult | null | undefined): o is ProcessingOutputResult {
   return o != null && o.type === 'processing'
+}
+export function isSubtitleOutput(o: OutputResult | null | undefined): o is SubtitleOutputResult {
+  return o != null && o.type === 'subtitle'
 }
 
 // ===== SSE → GenerationRecord 运行时解析 =====
@@ -56,6 +61,8 @@ export function parseOutputResult(data: unknown): OutputResult | null {
         return { type: 'video', savedUrls: Array.isArray(o.savedUrls) ? o.savedUrls as string[] : [], originalUrl: typeof o.originalUrl === 'string' ? o.originalUrl : undefined, video_url: typeof o.video_url === 'string' ? o.video_url : undefined }
       case 'processing':
         return { type: 'processing', taskId: typeof o.taskId === 'string' ? o.taskId : undefined, status: typeof o.status === 'string' ? o.status : undefined }
+      case 'subtitle':
+        return { type: 'subtitle', sentences: Array.isArray(o.sentences) ? o.sentences as SubtitleOutputResult['sentences'] : [], transcriptionUrl: typeof o.transcriptionUrl === 'string' ? o.transcriptionUrl : undefined }
       default:
         break
     }
@@ -124,11 +131,19 @@ export interface GenerateRequest {
   referenceFileIds?: string[]
 }
 
-export interface GenerateResponse {
-  success: boolean
-  /** 生成成功时包含完整记录，失败时仅包含 id/错误信息 */
-  record?: GenerationRecord
-  /** 失败时的错误信息 */
-  error?: string
-  errorMessage?: string
+export interface GenerationRecordSuccessResponse extends RecordResponse<GenerationRecord> {
+  duplicated?: true
 }
+
+export interface GenerationRecordFailedResponse {
+  success: false
+  record: GenerationRecord
+}
+
+export type GenerateResponse = GenerationRecordSuccessResponse | GenerationRecordFailedResponse
+
+export type GenerationRecordResponse = RecordResponse<GenerationRecord>
+
+export type GenerationRecordListResponse = ListResponse<GenerationRecord>
+
+export type DeleteGenerationRecordResponse = MutationOkResponse

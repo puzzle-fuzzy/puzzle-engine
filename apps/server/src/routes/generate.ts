@@ -1,4 +1,5 @@
 import type { GenerationCategory, GenerationInputParams, GenerationRecordRow, GenerationStatus } from '@excuse/db'
+import type { DeleteGenerationRecordResponse, GenerateResponse, GenerationRecord, GenerationRecordListResponse, GenerationRecordResponse } from '@excuse/shared'
 import type { ServerConfig } from '../config'
 import { calculateCost } from '@excuse/billing'
 import {
@@ -46,7 +47,7 @@ export function createGenerateRoutes(config: ServerConfig) {
   const deps: svc.GenerationDependencies = { client, storage }
 
   /** 从 DB 行序列化为前端兼容的 GenerationRecord（Date→string） */
-  function serializeRecord(record: GenerationRecordRow) {
+  function serializeRecord(record: GenerationRecordRow): GenerationRecord {
     return {
       ...record,
       createdAt: record.createdAt.toISOString(),
@@ -111,7 +112,7 @@ export function createGenerateRoutes(config: ServerConfig) {
       const dedupeResult = await svc.checkDedupe(dedupeKey, userId)
       if (dedupeResult.duplicated) {
         const updated = await getGenerationRecordById(dedupeResult.record.id)
-        return { success: true, record: serializeRecord(updated ?? dedupeResult.record), duplicated: true }
+        return { success: true, record: serializeRecord(updated ?? dedupeResult.record), duplicated: true } satisfies GenerateResponse
       }
 
       // 预估费用 — 使用 extractBillingParams 从 ValidatedModelParameters 提取计费字段
@@ -152,9 +153,9 @@ export function createGenerateRoutes(config: ServerConfig) {
       audit('generate', { accountId: userId, targetId: result.record?.id })
 
       if (result.success) {
-        return { success: true, record: serializeRecord(result.record) }
+        return { success: true, record: serializeRecord(result.record) } satisfies GenerateResponse
       }
-      return { success: false, record: serializeRecord(result.record) }
+      return { success: false, record: serializeRecord(result.record) } satisfies GenerateResponse
     }, {
       body: t.Object({
         model: t.String(),
@@ -189,7 +190,7 @@ export function createGenerateRoutes(config: ServerConfig) {
       const rows = await listGenerationRecords({ accountId: userId, category, status, limit, offset })
       const records = rows.map(serializeRecord)
 
-      return { records, total: records.length }
+      return { success: true, items: records, total: records.length } satisfies GenerationRecordListResponse
     }, {
       query: t.Object({
         category: t.Optional(t.String()),
@@ -217,7 +218,7 @@ export function createGenerateRoutes(config: ServerConfig) {
         return forbidden(set, '无权查看该记录')
       }
 
-      return { success: true, record: serializeRecord(record) }
+      return { success: true, record: serializeRecord(record) } satisfies GenerationRecordResponse
     }, {
       params: t.Object({
         id: t.String(),
@@ -241,7 +242,7 @@ export function createGenerateRoutes(config: ServerConfig) {
       }
 
       await deleteGenerationRecord(params.id)
-      return { success: true }
+      return { success: true } satisfies DeleteGenerationRecordResponse
     }, {
       params: t.Object({
         id: t.String(),
@@ -337,9 +338,9 @@ export function createGenerateRoutes(config: ServerConfig) {
       }, deps)
 
       if (result.success) {
-        return { success: true, record: serializeRecord(result.record) }
+        return { success: true, record: serializeRecord(result.record) } satisfies GenerateResponse
       }
-      return { success: false, record: serializeRecord(result.record) }
+      return { success: false, record: serializeRecord(result.record) } satisfies GenerateResponse
     }, {
       params: t.Object({
         id: t.String(),
@@ -366,7 +367,7 @@ export function createGenerateRoutes(config: ServerConfig) {
       }
 
       const updatedRecord = await svc.cancelGeneration(record.id, userId, record, deps)
-      return { success: true, record: serializeRecord(updatedRecord) }
+      return { success: true, record: serializeRecord(updatedRecord) } satisfies GenerationRecordResponse
     }, {
       params: t.Object({
         id: t.String(),

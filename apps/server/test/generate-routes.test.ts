@@ -431,7 +431,7 @@ describe('generate routes', () => {
         headers: { Authorization: `Bearer ${token}` },
       })
 
-      expect(data?.records).toHaveLength(2)
+      expect(data?.items).toHaveLength(2)
       expect(data?.total).toBe(2)
     })
 
@@ -442,7 +442,7 @@ describe('generate routes', () => {
         headers: { Authorization: `Bearer ${token}` },
       })
 
-      expect(data?.records).toHaveLength(0)
+      expect(data?.items).toHaveLength(0)
       expect(data?.total).toBe(0)
     })
 
@@ -454,7 +454,7 @@ describe('generate routes', () => {
         headers: { Authorization: `Bearer ${token}` },
       })
 
-      expect(data?.records).toHaveLength(1)
+      expect(data?.items).toHaveLength(1)
       expect(mockListRecords).toHaveBeenCalledWith(
         expect.objectContaining({ category: 'text' }),
       )

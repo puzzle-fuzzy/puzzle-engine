@@ -33,7 +33,7 @@ export default function Assets() {
   const loadRecords = useCallback(async () => {
     try {
       const data = await fetchRecords({ limit: 200 })
-      setRecords(data.records.filter(r => r.status === 'succeeded'))
+      setRecords(data.items.filter(r => r.status === 'succeeded'))
     }
     catch {
       toast.error('加载资产列表失败')

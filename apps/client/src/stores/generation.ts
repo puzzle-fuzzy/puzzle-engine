@@ -34,7 +34,7 @@ export const useGenerationStore = create<GenerationState>((set, get) => ({
     set({ loadingRecords: true })
     try {
       const data = await fetchRecords({ limit: 100 })
-      set({ records: data.records.map(normalizeRecord), loadingRecords: false })
+      set({ records: data.items.map(normalizeRecord), loadingRecords: false })
     }
     catch {
       set({ loadingRecords: false })

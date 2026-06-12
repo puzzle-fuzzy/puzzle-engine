@@ -1,4 +1,4 @@
-import type { AcceptedResponse, AuthCurrentUserResponse, AuthResponse, BillingStatisticsResponse, CharacterDTO, GenerateResponse, GenerationRecord, LocationDTO, ModelConfig, MutationOkResponse, ProjectDTO, ShotDTO, UploadResponse } from '@excuse/shared'
+import type { AcceptedResponse, AuthCurrentUserResponse, AuthResponse, BillingStatisticsResponse, CharacterDTO, DeleteGenerationRecordResponse, GenerateResponse, GenerationRecord, GenerationRecordListResponse, GenerationRecordResponse, LocationDTO, ModelConfig, MutationOkResponse, ProjectDTO, ShotDTO, UploadResponse } from '@excuse/shared'
 import type { App } from '../../../server/src/index'
 import { treaty } from '@elysia/eden'
 import { sseClient } from './sse'
@@ -161,8 +161,8 @@ export async function fetchRecords(params?: {
   status?: string
   limit?: number
   offset?: number
-}): Promise<{ records: GenerationRecord[], total: number }> {
-  return unwrapEden<{ records: GenerationRecord[], total: number }>(
+}): Promise<GenerationRecordListResponse> {
+  return unwrapEden<GenerationRecordListResponse>(
     await api.api.records.get({
       query: {
         category: params?.category || undefined,
@@ -174,14 +174,14 @@ export async function fetchRecords(params?: {
   )
 }
 
-export async function fetchRecord(id: string): Promise<{ success: boolean, record: GenerationRecord }> {
-  return unwrapEden<{ success: boolean, record: GenerationRecord }>(
+export async function fetchRecord(id: string): Promise<GenerationRecordResponse> {
+  return unwrapEden<GenerationRecordResponse>(
     await api.api.records({ id }).get(),
   )
 }
 
-export async function deleteRecord(id: string): Promise<{ success: boolean }> {
-  return unwrapEden<{ success: boolean }>(
+export async function deleteRecord(id: string): Promise<DeleteGenerationRecordResponse> {
+  return unwrapEden<DeleteGenerationRecordResponse>(
     await api.api.records({ id }).delete(),
   )
 }
@@ -192,8 +192,8 @@ export async function retryRecord(id: string): Promise<GenerateResponse> {
   )
 }
 
-export async function cancelRecord(id: string): Promise<{ success: boolean, record: GenerationRecord }> {
-  return unwrapEden<{ success: boolean, record: GenerationRecord }>(
+export async function cancelRecord(id: string): Promise<GenerationRecordResponse> {
+  return unwrapEden<GenerationRecordResponse>(
     await api.api.records({ id }).cancel.post(),
   )
 }
