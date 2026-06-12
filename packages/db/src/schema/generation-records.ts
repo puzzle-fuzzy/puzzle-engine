@@ -84,6 +84,9 @@ export const generationRecords = pgTable('generation_records', {
   /** 重试次数，每次 retry 时递增 */
   retryCount: integer('retry_count').default(0).notNull(),
 
+  /** 追踪 ID，跨 server/worker/SSE 关联同一次生成请求的全链路日志 */
+  traceId: varchar('trace_id', { length: 36 }),
+
   /** 去重键 = model + hash(params)，防止同参数重复提交 */
   dedupeKey: varchar('dedupe_key', { length: 255 }).unique(),
 
@@ -95,4 +98,5 @@ export const generationRecords = pgTable('generation_records', {
 }, table => [
   index('idx_gen_records_account_created').on(table.accountId, table.createdAt),
   index('idx_gen_records_status_category').on(table.status, table.category),
+  index('idx_gen_records_trace_id').on(table.traceId),
 ])

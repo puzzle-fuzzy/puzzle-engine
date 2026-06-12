@@ -15,6 +15,7 @@ export interface GenerationNotifyPayload {
   category: GenerationCategory
   model: string
   taskId: string
+  traceId?: string | null
   outputResult?: OutputResult
   errorMessage?: string
   cost?: CostDetail
@@ -32,6 +33,7 @@ export interface GenerationNotifyPayload {
 export interface SSEGenerationStatusEvent {
   id: string
   taskId: string
+  traceId?: string | null
   status: GenerationStatus
   category: GenerationCategory
   model: string

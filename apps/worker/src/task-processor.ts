@@ -72,6 +72,7 @@ export function createTaskProcessor(config: WorkerConfig, deps?: Partial<TaskPro
     id: string
     accountId: string
     taskId: string | null
+    traceId: string | null
     model: string
     status: string
     category: GenerationCategory
@@ -99,6 +100,7 @@ export function createTaskProcessor(config: WorkerConfig, deps?: Partial<TaskPro
         category: record.category,
         model: record.model,
         taskId,
+        traceId: record.traceId ?? undefined,
         errorMessage: 'Task timed out (>4h)',
       })
       return { action: 'completed', taskId }
@@ -141,6 +143,7 @@ export function createTaskProcessor(config: WorkerConfig, deps?: Partial<TaskPro
           category: record.category,
           model: record.model,
           taskId,
+          traceId: record.traceId ?? undefined,
           outputResult: output,
           cost: actualCost ?? undefined,
           canvasMeta,
@@ -171,6 +174,7 @@ export function createTaskProcessor(config: WorkerConfig, deps?: Partial<TaskPro
           category: record.category,
           model: record.model,
           taskId,
+          traceId: record.traceId ?? undefined,
           errorMessage: errMsg,
           canvasMeta,
         })

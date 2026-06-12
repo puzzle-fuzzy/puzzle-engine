@@ -41,6 +41,7 @@ export interface GenerationContext {
   recordId: string
   accountId: string
   taskId: string
+  traceId?: string
   modelConfig: ModelConfig
   category: GenerationCategory
   parameters: Record<string, unknown>
@@ -116,7 +117,7 @@ export async function executeGeneration(
   ctx: GenerationContext,
   deps: GenerationDependencies,
 ): Promise<GenerationResult> {
-  const { recordId, accountId, taskId, modelConfig, category, parameters, referenceUrls } = ctx
+  const { recordId, accountId, taskId, traceId, modelConfig, category, parameters, referenceUrls } = ctx
   const { client, storage } = deps
   const model = modelConfig.id
 
@@ -132,6 +133,7 @@ export async function executeGeneration(
       category,
       model,
       taskId,
+      traceId,
       errorMessage: result.error,
     })
     const updated = await getGenerationRecordById(recordId)
@@ -151,6 +153,7 @@ export async function executeGeneration(
       category,
       model,
       taskId: result.providerTaskId,
+      traceId,
     })
     const updated = await getGenerationRecordById(recordId)
     return { success: true, record: updated! }
@@ -175,6 +178,7 @@ export async function executeGeneration(
     category,
     model,
     taskId,
+    traceId,
     outputResult,
     cost: actualCost,
   })
@@ -210,6 +214,7 @@ export async function cancelGeneration(
     category: record.category,
     model: record.model,
     taskId: record.taskId,
+    traceId: record.traceId,
     errorMessage: '用户取消',
   })
 

@@ -94,6 +94,7 @@ export async function startSSEListener() {
       const event: SSEGenerationStatusEvent = {
         id: payload.recordId,
         taskId: payload.taskId,
+        traceId: payload.traceId,
         status: payload.status,
         category: payload.category,
         model: payload.model,
@@ -104,7 +105,7 @@ export async function startSSEListener() {
 
       dispatchToUser(payload.accountId, 'generation_status', event)
       logger.info(
-        { userId: payload.accountId, recordId: payload.recordId, status: payload.status },
+        { userId: payload.accountId, recordId: payload.recordId, traceId: payload.traceId, status: payload.status },
         'SSE event dispatched',
       )
 

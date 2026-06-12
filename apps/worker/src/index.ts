@@ -70,7 +70,7 @@ async function main() {
         if (!running)
           break // 退出信号检查
 
-        const taskLogger = logger.child({ taskId: record.taskId })
+        const taskLogger = logger.child({ taskId: record.taskId, traceId: record.traceId })
         currentTaskPromise = processor.processTask(record)
 
         const result = await currentTaskPromise

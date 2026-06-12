@@ -108,11 +108,13 @@ export function createGenerateRoutes(config: ServerConfig) {
       // 预估费用
       const estimatedCost = calculateCost(modelConfig, parameters)
       const taskId = `gen_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
+      const traceId = crypto.randomUUID()
 
       // 创建数据库记录 — 此时所有前置校验已完成，不会有脏记录风险
       const record = await createGenerationRecord({
         accountId: userId,
         taskId,
+        traceId,
         model,
         category,
         status: 'pending',
@@ -121,7 +123,7 @@ export function createGenerateRoutes(config: ServerConfig) {
         dedupeKey,
       })
 
-      // 调用 service 执行核心业务流程（provider 调用 + 三分支处理 + DB + SSE）
+      // 调用 service 执行核心业务流程（provider 调用 + 三分枝处理 + DB + SSE）
       const result = await svc.executeGeneration({
         recordId: record.id,
         accountId: userId,
@@ -296,6 +298,7 @@ export function createGenerateRoutes(config: ServerConfig) {
         recordId: record.id,
         accountId: userId,
         taskId: newTaskId,
+        traceId: record.traceId ?? undefined,
         modelConfig,
         category: modelConfig.category,
         parameters,
