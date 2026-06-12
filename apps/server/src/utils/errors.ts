@@ -1,3 +1,5 @@
+import type { ApiErrorResponse } from '@excuse/shared'
+
 /**
  * HTTP 错误响应工具 — 统一状态码 + 错误体格式
  *
@@ -11,38 +13,42 @@
 /** Elysia Context['set'] 的最小类型约束 */
 interface SetStatus { status?: number | string | undefined }
 
+function apiError(message: string): ApiErrorResponse {
+  return { success: false, error: message }
+}
+
 /** 未认证 (未登录或 token 失效) */
 export function unauthorized(set: SetStatus, message = '请先登录') {
   set.status = 401
-  return { success: false, error: message } as const
+  return apiError(message)
 }
 
 /** 无权操作 (资源不属于当前用户) */
 export function forbidden(set: SetStatus, message = '无权操作') {
   set.status = 403
-  return { success: false, error: message } as const
+  return apiError(message)
 }
 
 /** 资源不存在 */
 export function notFound(set: SetStatus, message = '资源不存在') {
   set.status = 404
-  return { success: false, error: message } as const
+  return apiError(message)
 }
 
 /** 状态冲突 (重复创建、状态前置条件不满足) */
 export function conflict(set: SetStatus, message: string) {
   set.status = 409
-  return { success: false, error: message } as const
+  return apiError(message)
 }
 
 /** 参数校验失败 */
 export function validationError(set: SetStatus, message: string) {
   set.status = 422
-  return { success: false, error: message } as const
+  return apiError(message)
 }
 
 /** 服务端非预期错误 — 用于 handler 中显式返回 500 的场景 */
 export function internalError(set: SetStatus, message = '服务端内部错误') {
   set.status = 500
-  return { success: false, error: message } as const
+  return apiError(message)
 }

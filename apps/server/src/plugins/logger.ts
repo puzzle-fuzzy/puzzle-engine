@@ -1,3 +1,4 @@
+import type { ApiErrorResponse } from '@excuse/shared'
 import { logger } from '@excuse/shared'
 import { Elysia } from 'elysia'
 import { recordRequest } from '../services/metrics'
@@ -48,5 +49,5 @@ export const loggerPlugin = new Elysia({
 
     // 返回结构化 500 JSON 错误体 — 与 utils/errors.ts 格式一致
     set.status = 500
-    return { success: false, error: '服务端内部错误' }
+    return { success: false, error: '服务端内部错误' } satisfies ApiErrorResponse
   })

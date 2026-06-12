@@ -61,3 +61,10 @@ export interface ApiErrorResponse {
   success: false
   error: string
 }
+
+/**
+ * 限流错误响应 — 在统一错误体基础上附带重试建议秒数。
+ */
+export interface RateLimitErrorResponse extends ApiErrorResponse {
+  retryAfter: number
+}

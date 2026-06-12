@@ -1,3 +1,4 @@
+import type { ApiErrorResponse } from '@excuse/shared'
 import type { Elysia } from 'elysia'
 import type { ServerConfig } from '../config'
 import { bearer } from '@elysia/bearer'
@@ -95,7 +96,7 @@ export function createRequireAuthPlugin(config: ServerConfig) {
       .use(createAuthPlugin(config))
       .resolve(({ userId }) => {
         if (!userId) {
-          return status(401, { success: false, error: '请先登录' })
+          return status(401, { success: false, error: '请先登录' } satisfies ApiErrorResponse)
         }
         return { userId }
       })

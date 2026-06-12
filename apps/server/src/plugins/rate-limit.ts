@@ -1,3 +1,4 @@
+import type { RateLimitErrorResponse } from '@excuse/shared'
 import { rateLimit } from 'elysia-rate-limit'
 
 /**
@@ -20,7 +21,7 @@ export const rateLimitPlugin = rateLimit({
     success: false,
     error: '请求过于频繁，请稍后再试',
     retryAfter: 60,
-  }), {
+  } satisfies RateLimitErrorResponse), {
     status: 429,
     headers: { 'Content-Type': 'application/json', 'Retry-After': '60' },
   }),
