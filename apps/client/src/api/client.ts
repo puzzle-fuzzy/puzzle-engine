@@ -75,6 +75,17 @@ interface EdenError {
   value?: unknown
 }
 
+interface ApiErrorValue {
+  error: string
+}
+
+function isApiErrorValue(value: unknown): value is ApiErrorValue {
+  return typeof value === 'object'
+    && value !== null
+    && 'error' in value
+    && typeof value.error === 'string'
+}
+
 /**
  * 解包 Eden Treaty 响应：提取 data 或抛出结构化错误
  *
@@ -90,8 +101,8 @@ interface EdenError {
 function unwrapEden<T>(response: { data: unknown, error: unknown }): T {
   if (response.error) {
     const edenErr = response.error as EdenError
-    const message = typeof edenErr.value === 'object' && edenErr.value !== null
-      ? ((edenErr.value as Record<string, unknown>).error as string) || edenErr.statusText || '请求失败'
+    const message = isApiErrorValue(edenErr.value)
+      ? edenErr.value.error || edenErr.statusText || '请求失败'
       : edenErr.message || edenErr.statusText || '请求失败'
     const error = new Error(message) as Error & { status?: number }
     error.status = edenErr.status
