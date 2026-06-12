@@ -139,7 +139,10 @@ export function createGenerateRoutes(config: ServerConfig) {
 
       audit('generate', { accountId: userId, targetId: result.record?.id })
 
-      return { success: result.success, record: serializeRecord(result.record) }
+      if (result.success) {
+        return { success: true, record: serializeRecord(result.record) }
+      }
+      return { success: false, record: serializeRecord(result.record) }
     }, {
       body: t.Object({
         model: t.String(),
@@ -307,7 +310,10 @@ export function createGenerateRoutes(config: ServerConfig) {
         estimatedCost,
       }, deps)
 
-      return { success: result.success, record: serializeRecord(result.record) }
+      if (result.success) {
+        return { success: true, record: serializeRecord(result.record) }
+      }
+      return { success: false, record: serializeRecord(result.record) }
     }, {
       params: t.Object({
         id: t.String(),

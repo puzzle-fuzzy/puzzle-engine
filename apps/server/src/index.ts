@@ -96,6 +96,7 @@ const app = new Elysia()
     origin: [config.frontendUrl, 'http://localhost:8007'],
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
+    credentials: true,
   }))
   .use(staticPlugin({
     assets: uploadsDir,

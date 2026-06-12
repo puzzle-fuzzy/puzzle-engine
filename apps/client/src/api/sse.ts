@@ -1,7 +1,7 @@
 import type { SSEGenerationStatusEvent, SSENotificationEvent, SSEPipelineNodeEvent } from '@excuse/shared'
 import { parseSSEGenerationStatusEvent, parseSSENotificationEvent, parseSSEPipelineNodeEvent } from '@excuse/shared'
 import { fetchEventSource } from '@microsoft/fetch-event-source'
-import { getAuthToken, setAuthToken } from './client'
+import { getAuthToken, resolveApiBaseUrl, setAuthToken } from './client'
 
 /**
  * SSE 事件类型映射 — 服务器推送的事件名与 payload 结构
@@ -60,7 +60,7 @@ class SSEClient {
     this.isConnecting = true
     this.abortController = new AbortController()
 
-    const baseUrl = import.meta.env.VITE_API_BASE_URL ?? ''
+    const baseUrl = resolveApiBaseUrl()
     const notifyOpen = this.notifyOpen.bind(this)
 
     fetchEventSource(`${baseUrl}/api/sse`, {

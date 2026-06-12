@@ -60,6 +60,12 @@ export interface SSEPipelineNodeEvent {
   error?: string
 }
 
+/** fire-and-forget 类接口的统一受理响应 */
+export interface AcceptedResponse {
+  accepted: true
+  runId?: string
+}
+
 // ===== 画布布局类型（前端 UI 状态，后端不解释） =====
 
 // ===== SSE 事件 =====

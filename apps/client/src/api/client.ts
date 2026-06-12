@@ -1,4 +1,4 @@
-import type { AuthResponse, BillingStatistics, GenerateResponse, GenerationRecord, ModelConfig, ProjectDTO } from '@excuse/shared'
+import type { AcceptedResponse, AuthResponse, BillingStatistics, GenerateResponse, GenerationRecord, ModelConfig, ProjectDTO } from '@excuse/shared'
 import type { App } from '../../../server/src/index'
 import { treaty } from '@elysia/eden'
 import { sseClient } from './sse'
@@ -40,19 +40,29 @@ export function getAuthToken() {
 
 // ===== Eden Treaty 客户端 =====
 
-export const api = treaty<App>(import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:5007')
+function normalizeApiBaseUrl(baseUrl: string | undefined): string {
+  if (!baseUrl)
+    return ''
+  return baseUrl.replace(/\/api\/?$/, '')
+}
+
+export function resolveApiBaseUrl() {
+  const normalized = normalizeApiBaseUrl(import.meta.env.VITE_API_BASE_URL)
+  if (normalized)
+    return normalized
+  if (typeof window !== 'undefined' && window.location?.origin)
+    return window.location.origin
+  return 'http://localhost:5007'
+}
+
+export const api = treaty<App>(resolveApiBaseUrl())
 
 // ===== 导出共享类型 =====
 
 export type { ModelConfig, ModelParameter } from '@excuse/shared'
-export type { GenerateResponse, GenerationRecord } from '@excuse/shared'
+export type { AcceptedResponse, GenerateResponse, GenerationRecord } from '@excuse/shared'
 export type { BillingStatistics } from '@excuse/shared'
 export type CostDetail = GenerationRecord['cost']
-
-interface AcceptedResponse {
-  accepted: true
-  runId?: string
-}
 
 /**
  * Eden 响应中的错误结构

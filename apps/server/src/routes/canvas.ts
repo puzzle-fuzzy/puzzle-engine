@@ -47,6 +47,7 @@ import {
   listPipelineRunsByProject,
   updateCanvasProject,
 } from '@excuse/db'
+import type { AcceptedResponse } from '@excuse/shared'
 import { createLogger } from '@excuse/shared'
 import { Elysia, t } from 'elysia'
 import * as svc from '../modules/canvas/service'
@@ -55,6 +56,10 @@ import { dispatchToUser } from '../services/sse-manager'
 import { conflict, notFound, validationError } from '../utils/errors'
 
 const logger = createLogger('canvas-routes')
+
+function acceptedResponse(runId?: string): AcceptedResponse {
+  return runId ? { accepted: true, runId } : { accepted: true }
+}
 
 /**
  * fire-and-forget 包装器 — 管道阶段的后台执行与结果推送
@@ -187,7 +192,7 @@ export function createCanvasRoutes(config: ServerConfig) {
         return conflict(set, `该阶段已有进行中的任务`)
       const run = await createPipelineRun({ projectId, phase, createdBy: userId })
       fireAndForgetWithRun(userId, projectId, phase, run.id, svc.analyzeProject(projectId, config, run.id))
-      return { accepted: true, runId: run.id }
+      return acceptedResponse(run.id)
     })
 
     .post('/projects/:projectId/characters', async ({ params: { projectId }, userId, set }) => {
@@ -200,7 +205,7 @@ export function createCanvasRoutes(config: ServerConfig) {
         return conflict(set, `该阶段已有进行中的任务`)
       const run = await createPipelineRun({ projectId, phase, createdBy: userId })
       fireAndForgetWithRun(userId, projectId, phase, run.id, svc.generateCharacters(projectId, config, run.id))
-      return { accepted: true, runId: run.id }
+      return acceptedResponse(run.id)
     })
 
     .post('/projects/:projectId/locations', async ({ params: { projectId }, userId, set }) => {
@@ -213,7 +218,7 @@ export function createCanvasRoutes(config: ServerConfig) {
         return conflict(set, `该阶段已有进行中的任务`)
       const run = await createPipelineRun({ projectId, phase, createdBy: userId })
       fireAndForgetWithRun(userId, projectId, phase, run.id, svc.generateLocations(projectId, config, run.id))
-      return { accepted: true, runId: run.id }
+      return acceptedResponse(run.id)
     })
 
     .post('/projects/:projectId/character-refs', async ({ params: { projectId }, userId, set }) => {
@@ -226,7 +231,7 @@ export function createCanvasRoutes(config: ServerConfig) {
         return conflict(set, `该阶段已有进行中的任务`)
       const run = await createPipelineRun({ projectId, phase, createdBy: userId })
       fireAndForgetWithRun(userId, projectId, phase, run.id, svc.generateCharacterRefs(projectId, config, run.id))
-      return { accepted: true, runId: run.id }
+      return acceptedResponse(run.id)
     })
 
     .post('/projects/:projectId/location-refs', async ({ params: { projectId }, userId, set }) => {
@@ -239,7 +244,7 @@ export function createCanvasRoutes(config: ServerConfig) {
         return conflict(set, `该阶段已有进行中的任务`)
       const run = await createPipelineRun({ projectId, phase, createdBy: userId })
       fireAndForgetWithRun(userId, projectId, phase, run.id, svc.generateLocationRefs(projectId, config, run.id))
-      return { accepted: true, runId: run.id }
+      return acceptedResponse(run.id)
     })
 
     .post('/projects/:projectId/storyboard', async ({ params: { projectId }, userId, set }) => {
@@ -252,7 +257,7 @@ export function createCanvasRoutes(config: ServerConfig) {
         return conflict(set, `该阶段已有进行中的任务`)
       const run = await createPipelineRun({ projectId, phase, createdBy: userId })
       fireAndForgetWithRun(userId, projectId, phase, run.id, svc.generateStoryboard(projectId, config, run.id))
-      return { accepted: true, runId: run.id }
+      return acceptedResponse(run.id)
     })
 
     .post('/projects/:projectId/continuity', async ({ params: { projectId }, userId, set }) => {
@@ -265,7 +270,7 @@ export function createCanvasRoutes(config: ServerConfig) {
         return conflict(set, `该阶段已有进行中的任务`)
       const run = await createPipelineRun({ projectId, phase, createdBy: userId })
       fireAndForgetWithRun(userId, projectId, phase, run.id, svc.checkContinuity(projectId, run.id))
-      return { accepted: true, runId: run.id }
+      return acceptedResponse(run.id)
     })
 
     .post('/projects/:projectId/rebuild-prompts', async ({ params: { projectId }, userId, set }) => {
@@ -278,7 +283,7 @@ export function createCanvasRoutes(config: ServerConfig) {
         return conflict(set, `该阶段已有进行中的任务`)
       const run = await createPipelineRun({ projectId, phase, createdBy: userId })
       fireAndForgetWithRun(userId, projectId, phase, run.id, svc.rebuildShotPrompts(projectId, run.id))
-      return { accepted: true, runId: run.id }
+      return acceptedResponse(run.id)
     })
 
     .post('/projects/:projectId/generate-videos', async ({ params: { projectId }, userId, set }) => {
@@ -291,7 +296,7 @@ export function createCanvasRoutes(config: ServerConfig) {
         return conflict(set, `该阶段已有进行中的任务`)
       const run = await createPipelineRun({ projectId, phase, createdBy: userId })
       fireAndForgetWithRun(userId, projectId, phase, run.id, svc.generateVideos(projectId, config, run.id))
-      return { accepted: true, runId: run.id }
+      return acceptedResponse(run.id)
     })
 
     .post('/projects/:projectId/layout', async ({ params: { projectId }, body, userId, set }) => {
@@ -449,7 +454,7 @@ export function createCanvasRoutes(config: ServerConfig) {
           error: err instanceof Error ? err.message : String(err),
         })
       })
-      return { accepted: true }
+      return acceptedResponse()
     })
 
     // 批量重试项目中所有失败的镜头
@@ -467,6 +472,6 @@ export function createCanvasRoutes(config: ServerConfig) {
           error: err instanceof Error ? err.message : String(err),
         })
       })
-      return { accepted: true }
+      return acceptedResponse()
     })
 }

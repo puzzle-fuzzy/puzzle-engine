@@ -20,6 +20,7 @@ import { ScrollArea } from '@/components/ui/scroll-area'
 import { Select } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import { CATEGORY_CONFIG } from '@/lib/generation-utils'
+import { checkCanGenerate } from '@/stores/workspace'
 import { useGenerationStore } from '@/stores/generation'
 import { useWorkspaceStore } from '@/stores/workspace'
 
@@ -38,6 +39,7 @@ export default function Workspace() {
   const uploadingRefs = useWorkspaceStore(s => s.uploadingRefs)
   const referenceFiles = useWorkspaceStore(s => s.referenceFiles)
   const mediaUploadState = useWorkspaceStore(s => s.mediaUploadState)
+  const models = useWorkspaceStore(s => s.models)
 
   const setCategory = useWorkspaceStore(s => s.setCategory)
   const setModelId = useWorkspaceStore(s => s.setModelId)
@@ -50,10 +52,10 @@ export default function Workspace() {
   const uploadMediaParam = useWorkspaceStore(s => s.uploadMediaParam)
   const clearMediaUpload = useWorkspaceStore(s => s.clearMediaUpload)
 
-  const categoryModels = useWorkspaceStore(s => s.categoryModels())
-  const selectedModel = useWorkspaceStore(s => s.selectedModel())
-  const canGenerate = useWorkspaceStore(s => s.canGenerate())
-  const showReferenceUpload = useWorkspaceStore(s => s.showReferenceUpload())
+  const categoryModels = useMemo(() => models.filter(m => m.category === selectedCategory), [models, selectedCategory])
+  const selectedModel = useMemo(() => models.find(m => m.id === selectedModelId), [models, selectedModelId])
+  const canGenerate = useMemo(() => selectedModel ? checkCanGenerate(selectedModel, parameters) : false, [selectedModel, parameters])
+  const showReferenceUpload = useMemo(() => selectedModel?.referenceMediaType != null, [selectedModel])
 
   // Generation store — records + projects
   const records = useGenerationStore(s => s.records)
