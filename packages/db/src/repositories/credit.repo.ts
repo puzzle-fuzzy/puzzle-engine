@@ -46,6 +46,11 @@ export async function reserveCredit(opts: {
   description?: string
 }): Promise<CreditTransactionRow> {
   const { accountId, generationRecordId, amountCents, description } = opts
+  assertPositiveAmount(amountCents)
+
+  const existing = await getCreditTransactionByRecordAndType(generationRecordId, 'reserve')
+  if (existing)
+    return existing
 
   // 原子扣减：只有 availableCents >= amountCents 时才更新
   const [updated] = await getDb()
@@ -104,6 +109,11 @@ export async function debitCredit(opts: {
   description?: string
 }): Promise<CreditTransactionRow> {
   const { accountId, generationRecordId, actualCents, description } = opts
+  assertPositiveAmount(actualCents)
+
+  const existing = await getCreditTransactionByRecordAndType(generationRecordId, 'debit')
+  if (existing)
+    return existing
 
   // 查找 usage event 获取预留金额
   const [event] = await getDb()
@@ -114,20 +124,25 @@ export async function debitCredit(opts: {
 
   const reservedCents = event?.reservedCents ?? 0
   const refundCents = Math.max(0, reservedCents - actualCents)
+  const extraDebitCents = Math.max(0, actualCents - reservedCents)
 
-  // 原子更新：冻结减少 reservedCents，可用增加 refundCents（差额退还）
+  // 原子更新：冻结减少预留金额；实际费用低于预留时退差额，高于预留时从可用余额补扣差额。
   const [updated] = await getDb()
     .update(creditAccounts)
     .set({
       frozenCents: sql`${creditAccounts.frozenCents} - ${reservedCents}`,
-      availableCents: sql`${creditAccounts.availableCents} + ${refundCents}`,
+      availableCents: sql`${creditAccounts.availableCents} + ${refundCents} - ${extraDebitCents}`,
       updatedAt: new Date(),
     })
-    .where(eq(creditAccounts.accountId, accountId))
+    .where(and(
+      eq(creditAccounts.accountId, accountId),
+      sql`${creditAccounts.frozenCents} >= ${reservedCents}`,
+      sql`${creditAccounts.availableCents} >= ${extraDebitCents}`,
+    ))
     .returning()
 
   if (!updated) {
-    throw new CreditError('ACCOUNT_NOT_FOUND', `账户不存在: ${accountId}`)
+    throw new CreditError('INSUFFICIENT_BALANCE', `余额不足，无法完成实际扣款: ${accountId}`)
   }
 
   // 写交易流水（幂等：唯一索引防止重复）
@@ -164,6 +179,10 @@ export async function refundCredit(opts: {
 }): Promise<CreditTransactionRow> {
   const { accountId, generationRecordId, description } = opts
 
+  const existing = await getCreditTransactionByRecordAndType(generationRecordId, 'refund')
+  if (existing)
+    return existing
+
   // 查找 usage event 获取预留金额
   const [event] = await getDb()
     .select()
@@ -172,6 +191,9 @@ export async function refundCredit(opts: {
     .limit(1)
 
   const reservedCents = event?.reservedCents ?? 0
+  if (reservedCents <= 0) {
+    throw new CreditError('NO_RESERVED_CREDIT', `生成记录没有可退还的冻结金额: ${generationRecordId}`)
+  }
 
   // 原子更新：冻结减少，可用增加
   const [updated] = await getDb()
@@ -181,11 +203,14 @@ export async function refundCredit(opts: {
       availableCents: sql`${creditAccounts.availableCents} + ${reservedCents}`,
       updatedAt: new Date(),
     })
-    .where(eq(creditAccounts.accountId, accountId))
+    .where(and(
+      eq(creditAccounts.accountId, accountId),
+      sql`${creditAccounts.frozenCents} >= ${reservedCents}`,
+    ))
     .returning()
 
   if (!updated) {
-    throw new CreditError('ACCOUNT_NOT_FOUND', `账户不存在: ${accountId}`)
+    throw new CreditError('ACCOUNT_NOT_FOUND', `账户不存在或冻结金额不足: ${accountId}`)
   }
 
   // 写交易流水（幂等）
@@ -272,13 +297,43 @@ export async function listCreditTransactions(opts: {
 // ===== Error =====
 
 export class CreditError extends Error {
-  readonly code: 'INSUFFICIENT_BALANCE' | 'ACCOUNT_NOT_FOUND' | 'ALREADY_RESERVED'
+  readonly code: CreditErrorCode
   constructor(
-    code: 'INSUFFICIENT_BALANCE' | 'ACCOUNT_NOT_FOUND' | 'ALREADY_RESERVED',
+    code: CreditErrorCode,
     message: string,
   ) {
     super(message)
     this.name = 'CreditError'
     this.code = code
   }
+}
+
+export type CreditErrorCode
+  = | 'INSUFFICIENT_BALANCE'
+    | 'ACCOUNT_NOT_FOUND'
+    | 'ALREADY_RESERVED'
+    | 'INVALID_AMOUNT'
+    | 'NO_RESERVED_CREDIT'
+
+type GenerationCreditTransactionType = 'reserve' | 'debit' | 'refund'
+
+function assertPositiveAmount(amountCents: number) {
+  if (!Number.isInteger(amountCents) || amountCents <= 0) {
+    throw new CreditError('INVALID_AMOUNT', `金额必须是正整数分: ${amountCents}`)
+  }
+}
+
+async function getCreditTransactionByRecordAndType(
+  generationRecordId: string,
+  type: GenerationCreditTransactionType,
+): Promise<CreditTransactionRow | null> {
+  const [row] = await getDb()
+    .select()
+    .from(creditTransactions)
+    .where(and(
+      eq(creditTransactions.generationRecordId, generationRecordId),
+      eq(creditTransactions.type, type),
+    ))
+    .limit(1)
+  return row ?? null
 }

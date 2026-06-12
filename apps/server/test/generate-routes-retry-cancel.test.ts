@@ -33,6 +33,9 @@ const mockDeleteRecord = mock<(id: string) => Promise<void>>(() => Promise.resol
 const mockMarkFailed = mock<(id: string, error: string) => Promise<void>>(() => Promise.resolve(undefined))
 const mockMarkProcessing = mock<(id: string, data: Record<string, unknown>) => Promise<void>>(() => Promise.resolve(undefined))
 const mockMarkSucceeded = mock<(id: string, output: unknown, cost: unknown) => Promise<void>>(() => Promise.resolve(undefined))
+const mockReserveCredit = mock<(opts: Record<string, unknown>) => Promise<void>>(() => Promise.resolve(undefined))
+const mockDebitCredit = mock<(opts: Record<string, unknown>) => Promise<void>>(() => Promise.resolve(undefined))
+const mockRefundCredit = mock<(opts: Record<string, unknown>) => Promise<void>>(() => Promise.resolve(undefined))
 const mockCalculateCost = mock<() => Record<string, unknown>>(() => ({ unit: 'token', totalPriceCents: 1, totalPrice: 0.01 }))
 const mockGenerate = mock<(model: string, params: Record<string, unknown>, refs?: string[]) => Promise<MockProviderResult>>(() =>
   Promise.resolve({ type: 'failed', success: false, error: 'mock error' }),
@@ -51,6 +54,9 @@ mock.module('@excuse/db', () => ({
   markGenerationFailed: mockMarkFailed,
   markGenerationProcessing: mockMarkProcessing,
   markGenerationSucceeded: mockMarkSucceeded,
+  reserveCredit: mockReserveCredit,
+  debitCredit: mockDebitCredit,
+  refundCredit: mockRefundCredit,
   notifyGenerationStatus: mockNotifyStatus,
   getUploadedFilesByIdsForAccount: mockGetUploadedFilesByIdsForAccount,
   cancelGenerationRecord: mockCancelRecord,
@@ -124,6 +130,9 @@ describe('generate routes — retry & cancel', () => {
       mockMarkFailed,
       mockMarkProcessing,
       mockMarkSucceeded,
+      mockReserveCredit,
+      mockDebitCredit,
+      mockRefundCredit,
       mockCalculateCost,
       mockGenerate,
       mockNotifyStatus,
@@ -212,6 +221,16 @@ describe('generate routes — retry & cancel', () => {
 
       expect(data?.success).toBe(true)
       expect(mockResetToPending).toHaveBeenCalledWith('rec-failed-001')
+      expect(mockReserveCredit).toHaveBeenCalledWith(expect.objectContaining({
+        accountId: 'acc-001',
+        generationRecordId: 'rec-failed-001',
+        amountCents: 1,
+      }))
+      expect(mockDebitCredit).toHaveBeenCalledWith(expect.objectContaining({
+        accountId: 'acc-001',
+        generationRecordId: 'rec-failed-001',
+        actualCents: 1,
+      }))
       expect(mockMarkSucceeded).toHaveBeenCalled()
       expect(mockNotifyStatus).toHaveBeenCalled()
     })
@@ -226,6 +245,10 @@ describe('generate routes — retry & cancel', () => {
       )
 
       expect(data?.success).toBe(false)
+      expect(mockRefundCredit).toHaveBeenCalledWith(expect.objectContaining({
+        accountId: 'acc-001',
+        generationRecordId: 'rec-failed-001',
+      }))
       expect(mockMarkFailed).toHaveBeenCalled()
     })
 
@@ -324,7 +347,7 @@ describe('generate routes — retry & cancel', () => {
     })
 
     it('成功取消 processing 任务', async () => {
-      const record = makeProcessingRecord()
+      const record = makeProcessingRecord({ cost: { unit: 'video', totalPriceCents: 1, totalPrice: 0.01 } })
       mockGetRecordById
         .mockResolvedValueOnce(record)
         .mockResolvedValueOnce({ ...record, status: 'failed', errorMessage: '用户取消' })
@@ -336,6 +359,10 @@ describe('generate routes — retry & cancel', () => {
 
       expect(data?.success).toBe(true)
       expect(mockCancelRecord).toHaveBeenCalledWith('rec-proc-001')
+      expect(mockRefundCredit).toHaveBeenCalledWith(expect.objectContaining({
+        accountId: 'acc-001',
+        generationRecordId: 'rec-proc-001',
+      }))
       expect(mockNotifyStatus).toHaveBeenCalled()
     })
 

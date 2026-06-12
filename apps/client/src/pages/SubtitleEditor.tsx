@@ -1,6 +1,6 @@
 import type { SubtitleSentence, SubtitleStyleConfig } from '@excuse/shared'
 import { SUBTITLE_STYLE_PRESETS } from '@excuse/shared'
-import { ArrowLeft, Download, Loader2, Save, Scissors } from 'lucide-react'
+import { ArrowLeft, Download, Loader2, RefreshCcw, Save, Scissors } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router'
 import { toast } from 'sonner'
@@ -40,11 +40,15 @@ export default function SubtitleEditor() {
   const updateStyle = useSubtitleStore(s => s.updateStyle)
   const exportProject = useSubtitleStore(s => s.exportProject)
   const exporting = useSubtitleStore(s => s.exporting)
+  const retryProject = useSubtitleStore(s => s.retryProject)
+  const loading = useSubtitleStore(s => s.loading)
 
   const [selectedSentenceIndex, setSelectedSentenceIndex] = useState<number | null>(null)
   const [editingSentences, setEditingSentences] = useState<SubtitleSentence[]>([])
   const [selectedPreset, setSelectedPreset] = useState<string>('cinema')
   const [saving, setSaving] = useState(false)
+  /** 是否已从服务器加载过句子 — 防止 SSE 刷新覆盖本地编辑 */
+  const [sentencesLoaded, setSentencesLoaded] = useState(false)
 
   useEffect(() => {
     if (id) {
@@ -52,14 +56,27 @@ export default function SubtitleEditor() {
     }
   }, [id, selectProject])
 
+  // 仅在首次加载或 ASR 完成后（句子数量变化）同步 editingSentences
+  // 避免 SSE 刷新覆盖用户正在编辑的内容
   useEffect(() => {
-    if (currentProject?.sentences) {
+    if (!currentProject?.sentences)
+      return
+    if (!sentencesLoaded) {
+      // 首次加载 — 同步服务器数据
       setEditingSentences(currentProject.sentences)
+      setSentencesLoaded(true)
+    }
+    else {
+      // SSE 更新 — 仅在句子数量发生变化时同步（如 ASR 完成）
+      // 用户主动修改（文字/时间）不会改变句子数量，不会被覆盖
+      if (editingSentences.length !== currentProject.sentences.length) {
+        setEditingSentences(currentProject.sentences)
+      }
     }
     if (currentProject?.styleConfig) {
       setSelectedPreset(currentProject.styleConfig.templateId)
     }
-  }, [currentProject?.sentences, currentProject?.styleConfig])
+  }, [currentProject?.sentences?.length, currentProject?.sentences, currentProject?.styleConfig?.templateId])
 
   const canEdit = currentProject?.status === 'subtitle_editing'
   const canExport = currentProject?.status === 'subtitle_editing' || currentProject?.status === 'completed'
@@ -82,6 +99,19 @@ export default function SubtitleEditor() {
   async function handleExport() {
     try {
       await exportProject()
+    }
+    catch {
+      // error handled in store
+    }
+  }
+
+  async function handleRetry() {
+    try {
+      await retryProject(currentProject!.id)
+      // retry 在同一项目上操作（ID 不变），刷新详情即可
+      await selectProject(currentProject!.id)
+      // 重新加载后 reset editingSentences
+      setSentencesLoaded(false)
     }
     catch {
       // error handled in store
@@ -134,11 +164,11 @@ export default function SubtitleEditor() {
   }
 
   function handleStyleOverride(key: keyof SubtitleStyleConfig, value: unknown) {
-    const preset = SUBTITLE_STYLE_PRESETS.find(p => p.id === selectedPreset)
-    const base = preset?.config ?? currentProject?.styleConfig
-    if (!base)
+    // 基于当前 styleConfig（包含之前的修改）而非 preset 基础值
+    const current = currentProject?.styleConfig
+    if (!current)
       return
-    const updated = { ...base, [key]: value }
+    const updated = { ...current, [key]: value }
     updateStyle(updated as SubtitleStyleConfig)
   }
 
@@ -159,9 +189,15 @@ export default function SubtitleEditor() {
           返回列表
         </Button>
         <div className="flex items-center gap-2">
-          <span className={`text-sm ${canEdit ? 'text-green-600' : 'text-blue-500'}`}>
+          <span className={`text-sm ${canEdit ? 'text-green-600' : currentProject.status === 'failed' ? 'text-destructive' : 'text-blue-500'}`}>
             {STATUS_LABELS[currentProject.status] || currentProject.status}
           </span>
+          {currentProject.status === 'failed' && (
+            <Button onClick={handleRetry} disabled={loading} size="sm" variant="outline">
+              {loading ? <Loader2 className="size-4 animate-spin" /> : <RefreshCcw className="size-4" />}
+              重试
+            </Button>
+          )}
           {canEdit && (
             <Button onClick={handleSave} disabled={saving} size="sm">
               {saving ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />}

@@ -7,6 +7,7 @@ import {
   exportSubtitleProject,
   getSubtitleProject,
   listSubtitleProjects,
+  retrySubtitleProject,
   updateSubtitleSentences,
   updateSubtitleStyle,
 } from '@/api/client'
@@ -24,6 +25,7 @@ export interface SubtitleState {
   updateSentences: (sentences: SubtitleSentence[]) => Promise<void>
   updateStyle: (styleConfig: SubtitleStyleConfig) => Promise<void>
   exportProject: () => Promise<void>
+  retryProject: (id: string) => Promise<void>
   deleteProject: (id: string) => Promise<void>
   updateProjectFromSSE: (partial: Partial<SubtitleProjectDTO>) => void
 }
@@ -106,6 +108,28 @@ export const useSubtitleStore = create<SubtitleState>((set, get) => ({
     }
     finally {
       set({ exporting: false })
+    }
+  },
+
+  retryProject: async (id: string) => {
+    set({ loading: true })
+    try {
+      const { data } = await retrySubtitleProject(id)
+      // retry 在同一个项目上操作（ID 不变），更新当前数据即可
+      set(state => ({
+        projects: state.projects.map(p => p.id === id ? data : p),
+        currentProject: state.currentProject?.id === id ? data : state.currentProject,
+        loading: false,
+      }))
+      // 重试后项目状态可能已变，刷新详情确保同步
+      if (useSubtitleStore.getState().currentProject?.id === id) {
+        await useSubtitleStore.getState().selectProject(id)
+      }
+      toast.success('重试任务已提交')
+    }
+    catch (err) {
+      toast.error(err instanceof Error ? err.message : '重试失败')
+      set({ loading: false })
     }
   },
 

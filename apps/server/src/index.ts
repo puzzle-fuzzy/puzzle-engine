@@ -5,6 +5,7 @@ import { staticPlugin } from '@elysia/static'
 import { openapi } from '@elysiajs/openapi'
 import { swagger } from '@elysiajs/swagger'
 import { logger } from '@excuse/shared'
+import { checkFFmpegAsync } from '@excuse/provider'
 import { Elysia } from 'elysia'
 import { loadConfig } from './config'
 import { createAuthPlugin } from './plugins/auth'
@@ -151,3 +152,10 @@ logger.info(
   { host: app.server?.hostname, port: app.server?.port },
   '🦊 Excuse API is running',
 )
+
+// ── 启动后环境检查：FFmpeg + libass ──────────────────
+checkFFmpegAsync().then((warnings) => {
+  for (const w of warnings) {
+    logger.warn(w)
+  }
+})

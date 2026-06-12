@@ -41,4 +41,12 @@ describe('credit lifecycle', () => {
   it('listCreditTransactions 导出为函数', () => {
     expect(typeof listCreditTransactions).toBe('function')
   })
+
+  it('reserveCredit 拒绝 0 金额', async () => {
+    await expect(reserveCredit({
+      accountId: '00000000-0000-0000-0000-000000000001',
+      generationRecordId: '00000000-0000-0000-0000-000000000002',
+      amountCents: 0,
+    })).rejects.toMatchObject({ code: 'INVALID_AMOUNT' })
+  })
 })

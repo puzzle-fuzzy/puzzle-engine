@@ -1,6 +1,6 @@
 export { ASRClient } from './asr-client'
 export type { ASRConfig, ASROptions, ASRSubmitResult, ASRTaskStatus } from './asr-client'
-export { extractAudioFromVideo, getMediaDurationMs, getVideoResolution } from './audio-extractor'
+export { checkFFmpegAsync, extractAudioFromVideo, getMediaDurationMs, getVideoResolution } from './audio-extractor'
 export type { AudioExtractionResult } from './audio-extractor'
 export { DashScopeClient } from './dashscope-client'
 export { getDashScopeErrorMessage, parseDashScopeError } from './dashscope-errors'

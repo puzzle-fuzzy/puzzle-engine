@@ -9,13 +9,13 @@ import { sseClient } from '../src/api/sse'
  * SSE 客户端测试 — Vitest mock fetchEventSource
  *
  * 覆盖：
- *   - 连接建立（Bearer token header）
+ *   - 连接建立（Bearer token header / httpOnly cookie）
  *   - 事件解析与分发（generation_status, pipeline_node_update, notification, heartbeat）
  *   - 非法 JSON 事件不崩溃连接
  *   - 401/403 认证失败 → 停止重连 + 清理登录态
  *   - 5xx/网络错误 → 自动重连
  *   - disconnect() → abort fetch 流 + 不重连
- *   - 无 token → 不连接
+ *   - 无内存 token → 仍可通过 httpOnly cookie 连接
  */
 
 // ── Mock fetchEventSource — 可控的 SSE 流模拟 ──────────────
@@ -23,6 +23,7 @@ import { sseClient } from '../src/api/sse'
 interface FetchEventSourceInit {
   signal?: AbortSignal
   headers?: Record<string, string>
+  credentials?: RequestCredentials
   onopen?: (response: Response) => Promise<void>
   onmessage?: (msg: { event: string, data: string }) => void
   onerror?: (err: unknown) => unknown | number | void
@@ -60,6 +61,7 @@ vi.mock('@microsoft/fetch-event-source', () => ({
 // Mock auth client
 vi.mock('../src/api/client', () => ({
   getAuthToken: vi.fn(() => 'valid-jwt-token'),
+  resolveApiBaseUrl: vi.fn(() => ''),
   setAuthToken: vi.fn(),
 }))
 
@@ -103,13 +105,16 @@ describe('sSEClient', () => {
 
       expect(capturedInit).not.toBeNull()
       expect(capturedInit!.headers).toEqual({ Authorization: 'Bearer my-jwt-token' })
+      expect(capturedInit!.credentials).toBe('include')
     })
 
-    it('无 token 时不连接', () => {
+    it('无内存 token 时仍通过 httpOnly cookie 连接', () => {
       vi.mocked(getAuthToken).mockReturnValue(null)
       sseClient.connect()
 
-      expect(capturedInit).toBeNull()
+      expect(capturedInit).not.toBeNull()
+      expect(capturedInit!.headers).toBeUndefined()
+      expect(capturedInit!.credentials).toBe('include')
     })
 
     it('已在连接时不重复连接', async () => {

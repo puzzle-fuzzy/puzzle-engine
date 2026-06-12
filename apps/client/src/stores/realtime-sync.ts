@@ -1,7 +1,8 @@
-import type { SSEPipelineNodeEvent } from '@excuse/shared'
+import type { SSEGenerationStatusEvent, SSEPipelineNodeEvent } from '@excuse/shared'
 import { create } from 'zustand'
 import { sseClient } from '@/api/sse'
 import { useGenerationStore } from './generation'
+import { useSubtitleStore } from './subtitle'
 
 interface PhaseDoneEvent {
   key: string
@@ -40,8 +41,19 @@ export const useRealtimeSync = create<RealtimeSyncState>((set, get) => ({
       handlePipelineNodeUpdate(event, set, get)
     })
 
-    const unsubGeneration = sseClient.on('generation_status', (event) => {
-      useGenerationStore.getState().updateRecordFromSSE(event)
+    const unsubGeneration = sseClient.on('generation_status', (event: SSEGenerationStatusEvent) => {
+      if (event.category === 'subtitle') {
+        // 字幕任务的状态变更 — 刷新当前项目详情
+        const currentProject = useSubtitleStore.getState().currentProject
+        if (currentProject) {
+          useSubtitleStore.getState().selectProject(currentProject.id)
+        }
+        // 同时更新项目列表
+        useSubtitleStore.getState().loadProjects()
+      }
+      else {
+        useGenerationStore.getState().updateRecordFromSSE(event)
+      }
     })
 
     const unsubOpen = sseClient.onOpen(() => {

@@ -120,6 +120,20 @@
       "when": 1781247742091,
       "tag": "0016_amused_pet_avengers",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1781270433805,
+      "tag": "0017_married_titanium_man",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1781276118646,
+      "tag": "0018_talented_marauders",
+      "breakpoints": true
     }
   ]
 }

@@ -9,6 +9,8 @@ mock.module('@excuse/db', () => ({
   markGenerationProcessing: async () => {},
   markGenerationSucceeded: async () => {},
   notifyGenerationStatus: async () => {},
+  debitCredit: async () => {},
+  refundCredit: async () => {},
   updateCanvasProject: async () => {},
   updateCanvasShot: async () => {},
   listCanvasShotsByProject: async () => [],
@@ -30,6 +32,8 @@ function createMockDeps(overrides: Partial<TaskProcessorDeps> = {}): TaskProcess
     markGenerationSucceeded: async () => {},
     markGenerationProcessing: async () => {},
     notifyGenerationStatus: async () => {},
+    debitCredit: async () => {},
+    refundCredit: async () => {},
     ...overrides,
   }
 }
@@ -110,9 +114,13 @@ describe('processTask', () => {
 
   it('should mark as failed when task is stale', async () => {
     const failed: Array<{ id: string, msg: string }> = []
+    const refunds: Array<{ generationRecordId: string }> = []
     const deps = createMockDeps({
       markGenerationFailed: async (id, msg) => {
         failed.push({ id, msg })
+      },
+      refundCredit: async (opts) => {
+        refunds.push({ generationRecordId: opts.generationRecordId })
       },
     })
     const { processTask } = createTestProcessor(deps)
@@ -120,12 +128,14 @@ describe('processTask', () => {
     // createdAt 设为 2 秒前，超过 staleTimeoutMs=1000
     const result = await processTask(createRecord({
       createdAt: new Date(Date.now() - 2000),
+      cost: { unit: 'video', totalPriceCents: 1, totalPrice: 0.01 },
     }))
 
     expect(result.action).toBe('completed')
     expect(failed).toHaveLength(1)
     expect(failed[0]!.id).toBe('rec-001')
     expect(failed[0]!.msg).toContain('timed out')
+    expect(refunds).toEqual([{ generationRecordId: 'rec-001' }])
   })
 
   // ── SUCCEEDED ─────────────────────────────────────
@@ -133,6 +143,7 @@ describe('processTask', () => {
   it('should download, calculate cost and mark succeeded', async () => {
     const succeeded: Array<{ id: string, output: OutputResult }> = []
     const downloaded: string[][] = []
+    const debits: Array<{ generationRecordId: string, actualCents: number }> = []
     const deps = createMockDeps({
       queryTask: async () => ({
         status: 'SUCCEEDED',
@@ -145,10 +156,13 @@ describe('processTask', () => {
       markGenerationSucceeded: async (id, output, _cost) => {
         succeeded.push({ id, output })
       },
+      debitCredit: async (opts) => {
+        debits.push({ generationRecordId: opts.generationRecordId, actualCents: opts.actualCents })
+      },
     })
 
     const { processTask } = createTestProcessor(deps)
-    const result = await processTask(createRecord())
+    const result = await processTask(createRecord({ cost: { unit: 'video', totalPriceCents: 1, totalPrice: 0.01 } }))
 
     expect(result.action).toBe('completed')
     expect(downloaded).toHaveLength(1)
@@ -159,6 +173,7 @@ describe('processTask', () => {
     const output = succeeded[0]!.output as VideoOutputResult
     expect(output.savedUrls).toEqual(['/api/uploads/task-001/video.mp4'])
     expect(output.originalUrl).toBe('https://cdn/video.mp4')
+    expect(debits).toEqual([{ generationRecordId: 'rec-001', actualCents: 1 }])
   })
 
   it('should handle SUCCEEDED with no video URL', async () => {
@@ -185,6 +200,7 @@ describe('processTask', () => {
 
   it('should mark as failed with error message', async () => {
     const failed: Array<{ id: string, msg: string }> = []
+    const refunds: Array<{ generationRecordId: string }> = []
     const deps = createMockDeps({
       queryTask: async () => ({
         status: 'FAILED',
@@ -193,14 +209,18 @@ describe('processTask', () => {
       markGenerationFailed: async (id, msg) => {
         failed.push({ id, msg })
       },
+      refundCredit: async (opts) => {
+        refunds.push({ generationRecordId: opts.generationRecordId })
+      },
     })
 
     const { processTask } = createTestProcessor(deps)
-    const result = await processTask(createRecord())
+    const result = await processTask(createRecord({ cost: { unit: 'video', totalPriceCents: 1, totalPrice: 0.01 } }))
 
     expect(result.action).toBe('completed')
     expect(failed).toHaveLength(1)
     expect(failed[0]!.msg).toBe('Model internal error')
+    expect(refunds).toEqual([{ generationRecordId: 'rec-001' }])
   })
 
   it('should use default error message when missing', async () => {

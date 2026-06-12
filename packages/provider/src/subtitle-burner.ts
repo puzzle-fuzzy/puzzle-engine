@@ -4,11 +4,14 @@
  * 用 Bun.spawn 调用 ffmpeg 命令行工具，
  * 将 ASS 字幕文件烧录（hardsub）到视频中。
  *
- * 命令模板：
- *   ffmpeg -i <video> -vf "ass=<ass_path>" -c:a copy <output>
+ * 前置条件：ffmpeg 必须编译时包含 libass（提供 ass 滤镜）。
+ * macOS 开发环境需安装 ffmpeg-full（brew install ffmpeg-full）。
+ * Docker 环境需 apt-get install ffmpeg（Debian/Ubuntu 的 ffmpeg 包含 libass）。
  *
- * 或者直接从 ASS 内容字符串写入临时文件再烧录。
+ * 所有本地路径转为绝对路径，避免 FFmpeg 解析相对路径出错。
  */
+
+import { resolve } from 'node:path'
 
 export interface BurnResult {
   /** 输出视频文件路径 */
@@ -20,29 +23,25 @@ export interface BurnResult {
 /**
  * 将 ASS 字幕烧录到视频中
  *
- * 步骤：
- *   1. 将 assContent 写入临时 ASS 文件
- *   2. 用 FFmpeg -vf "ass=<path>" 烧录字幕到视频
- *   3. 返回输出视频路径和文件大小
- *
- * @param videoPath - 输入视频文件的本地路径
+ * @param videoPath - 输入视频文件路径（本地绝对路径或 URL）
  * @param assContent - ASS 格式字幕内容字符串
- * @param outputDir - 输出目录（默认与视频同目录）
- * @returns 输出视频路径和文件大小
+ * @param outputDir - 输出目录（必须为绝对路径或可 resolve 为绝对路径）
  */
 export async function burnSubtitlesToVideo(
   videoPath: string,
   assContent: string,
   outputDir?: string,
 ): Promise<BurnResult> {
-  const dir = outputDir ?? videoPath.substring(0, videoPath.lastIndexOf('/'))
+  const dir = outputDir
+    ? resolve(outputDir)
+    : resolve(videoPath.substring(0, videoPath.lastIndexOf('/')))
 
   // 1. 写入临时 ASS 文件
-  const assPath = `${dir}/subtitle_${Date.now()}.ass`
+  const assPath = resolve(`${dir}/subtitle_${Date.now()}.ass`)
   await Bun.write(assPath, assContent)
 
   // 2. FFmpeg 烧录字幕
-  const outputPath = `${dir}/output_${Date.now()}.mp4`
+  const outputPath = resolve(`${dir}/output_${Date.now()}.mp4`)
 
   const proc = Bun.spawn([
     'ffmpeg',
@@ -51,8 +50,8 @@ export async function burnSubtitlesToVideo(
     '-vf',
     `ass=${assPath}`,
     '-c:a',
-    'copy', // 音频直接复制，不重新编码
-    '-y', // 覆盖已存在的输出文件
+    'copy',
+    '-y',
     outputPath,
   ], {
     stdout: 'pipe',
@@ -62,7 +61,8 @@ export async function burnSubtitlesToVideo(
   const exitCode = await proc.exited
   if (exitCode !== 0) {
     const stderr = await new Response(proc.stderr).text()
-    throw new Error(`FFmpeg 字幕烧录失败 (exit=${exitCode}): ${stderr.slice(0, 500)}`)
+    try { await Bun.file(assPath).delete() } catch {}
+    throw new Error(`FFmpeg 字幕烧录失败 (exit=${exitCode}): ${stderr.slice(-2000)}`)
   }
 
   // 3. 获取输出文件大小
@@ -70,12 +70,7 @@ export async function burnSubtitlesToVideo(
   const fileSize = file.size
 
   // 4. 清理临时 ASS 文件
-  try {
-    await Bun.file(assPath).delete()
-  }
-  catch {
-    // 临时文件清理失败不影响结果
-  }
+  try { await Bun.file(assPath).delete() } catch {}
 
   return { outputPath, fileSize }
 }

@@ -1,6 +1,9 @@
 FROM oven/bun:1.3 AS base
 WORKDIR /app
 
+# Install ffmpeg for audio extraction and subtitle burning
+RUN apt-get update && apt-get install -y ffmpeg && rm -rf /var/lib/apt/lists/*
+
 # Install dependencies
 COPY package.json bun.lock ./
 COPY packages/shared/package.json packages/shared/

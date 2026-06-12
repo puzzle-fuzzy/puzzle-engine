@@ -41,6 +41,12 @@ export function conflict(set: SetStatus, message: string) {
   return apiError(message)
 }
 
+/** 余额不足或支付前置条件不满足 */
+export function paymentRequired(set: SetStatus, message: string) {
+  set.status = 402
+  return apiError(message)
+}
+
 /** 参数校验失败 */
 export function validationError(set: SetStatus, message: string) {
   set.status = 422

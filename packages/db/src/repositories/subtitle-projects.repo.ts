@@ -41,7 +41,7 @@ export async function listSubtitleProjectsByAccount(accountId: string) {
 }
 
 /** 更新字幕项目状态 */
-export async function updateSubtitleProjectStatus(id: string, status: SubtitleProjectRow['status'], extra?: Partial<{ audioFileUrl: string, videoDurationMs: number, asrRecordId: string, errorMessage: string }>) {
+export async function updateSubtitleProjectStatus(id: string, status: SubtitleProjectRow['status'], extra?: Partial<{ audioFileUrl: string, videoDurationMs: number, asrRecordId: string, errorMessage: string | null }>) {
   const updateData: Partial<typeof subtitleProjects.$inferInsert> = {
     status,
     updatedAt: new Date(),
@@ -54,7 +54,7 @@ export async function updateSubtitleProjectStatus(id: string, status: SubtitlePr
     if (extra.asrRecordId !== undefined)
       updateData.asrRecordId = extra.asrRecordId
     if (extra.errorMessage !== undefined)
-      updateData.errorMessage = extra.errorMessage
+      updateData.errorMessage = extra.errorMessage ?? null
   }
   await getDb()
     .update(subtitleProjects)

@@ -11,9 +11,9 @@
     "test": "bun test",
     "test:db": "bun scripts/test-db.ts",
     "db:generate": "drizzle-kit generate",
-    "db:migrate": "bun --env-file ../../.env run src/migrate.ts",
-    "db:push": "bun --env-file ../../.env run drizzle-kit push",
-    "db:studio": "bun --env-file ../../.env run drizzle-kit studio",
+    "db:migrate": "bun --env-file ../../.env src/migrate.ts",
+    "db:push": "bun --env-file ../../.env drizzle-kit push",
+    "db:studio": "bun --env-file ../../.env drizzle-kit studio",
     "db:test:create": "docker exec excuse-postgres psql -U excuse -d excuse -c 'CREATE DATABASE excuse_test OWNER excuse;'",
     "db:test:reset": "docker exec excuse-postgres psql -U excuse -d excuse -c 'DROP DATABASE IF EXISTS excuse_test;' && docker exec excuse-postgres psql -U excuse -d excuse -c 'CREATE DATABASE excuse_test OWNER excuse;'"
   },

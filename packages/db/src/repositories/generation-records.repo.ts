@@ -63,7 +63,7 @@ export async function listGenerationRecords(filter: ListGenerationRecordsFilter 
 export async function markGenerationFailed(id: string, errorMessage: string) {
   await getDb()
     .update(generationRecords)
-    .set({ status: 'failed', errorMessage, updatedAt: new Date() })
+    .set({ status: 'failed', errorMessage, dedupeKey: null, updatedAt: new Date() })
     .where(eq(generationRecords.id, id))
 }
 
@@ -170,7 +170,7 @@ export async function resetGenerationToPending(id: string) {
 export async function cancelGenerationRecord(id: string) {
   await getDb()
     .update(generationRecords)
-    .set({ status: 'cancelled', errorMessage: '用户取消', updatedAt: new Date() })
+    .set({ status: 'cancelled', errorMessage: '用户取消', dedupeKey: null, updatedAt: new Date() })
     .where(eq(generationRecords.id, id))
 }
 

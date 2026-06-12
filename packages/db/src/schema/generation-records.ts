@@ -60,7 +60,7 @@ export const generationRecords = pgTable('generation_records', {
   /** 使用的 AI 模型标识，如 wanx-v1、qwen-vl 等 */
   model: varchar('model', { length: 100 }).notNull(),
 
-  /** 生成内容类别：text / image / video */
+  /** 生成内容类别：text / image / video / subtitle */
   category: generationCategoryEnum('category').notNull(),
 
   /** 任务状态，默认 pending */

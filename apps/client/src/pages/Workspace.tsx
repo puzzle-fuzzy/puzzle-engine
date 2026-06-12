@@ -20,9 +20,8 @@ import { ScrollArea } from '@/components/ui/scroll-area'
 import { Select } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import { CATEGORY_CONFIG } from '@/lib/generation-utils'
-import { checkCanGenerate } from '@/stores/workspace'
 import { useGenerationStore } from '@/stores/generation'
-import { useWorkspaceStore } from '@/stores/workspace'
+import { checkCanGenerate, useWorkspaceStore } from '@/stores/workspace'
 
 export default function Workspace() {
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)

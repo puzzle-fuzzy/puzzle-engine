@@ -1,7 +1,7 @@
 import type { WorkerHealthState } from './health'
 import type { TaskResult } from './task-processor'
 import { pollExportingProjects, pollPendingASRProjects, pollPendingVideoTasks } from '@excuse/db'
-import { ASRClient } from '@excuse/provider'
+import { ASRClient, checkFFmpegAsync } from '@excuse/provider'
 import { createLogger } from '@excuse/shared'
 import { loadConfig } from './config'
 import { createHealthServer } from './health'
@@ -81,6 +81,12 @@ for (const signal of ['SIGINT', 'SIGTERM'] as const) {
  *   - 半完成状态: pollPendingVideoTasks 会重新捞取 processing 但 provider 已返回结果的任务
  */
 async function main() {
+  // ── 启动前环境检查 ──────────────────────────────────
+  const ffmpegWarnings = await checkFFmpegAsync()
+  for (const w of ffmpegWarnings) {
+    logger.warn(w)
+  }
+
   logger.info({ pollIntervalMs: config.pollIntervalMs, healthPort }, '🤖 Worker started')
 
   while (running) {

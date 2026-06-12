@@ -46,15 +46,13 @@ class SSEClient {
 
   /**
    * 建立 SSE 连接
-   * 仅在已认证时（有 token）才连接
+   * 登录后优先使用内存 JWT；刷新页面后内存 JWT 会丢失，此时依赖 httpOnly cookie 认证。
    */
   connect() {
     if (this.abortController || this.isConnecting)
       return
 
     const token = getAuthToken()
-    if (!token)
-      return
 
     this.intentionallyClosed = false
     this.isConnecting = true
@@ -65,9 +63,8 @@ class SSEClient {
 
     fetchEventSource(`${baseUrl}/api/sse`, {
       signal: this.abortController.signal,
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
+      credentials: 'include',
+      ...(token && { headers: { Authorization: `Bearer ${token}` } }),
       async onopen(response) {
         if (response.ok && response.headers.get('content-type')?.includes('text/event-stream')) {
           notifyOpen()

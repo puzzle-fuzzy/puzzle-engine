@@ -9,15 +9,19 @@
  *   PATCH /api/subtitle/projects/:id/sentences — 更新字幕句子
  *   PATCH /api/subtitle/projects/:id/style     — 更新样式配置
  *   POST /api/subtitle/projects/:id/export     — 提交导出任务
+ *   POST /api/subtitle/projects/:id/retry      — 重试失败项目
  */
 
 import type { SubtitleProjectRow, SubtitleStyleConfig } from '@excuse/db'
 import type { SubtitleMutationOkResponse, SubtitleProjectDTO, SubtitleProjectListResponse, SubtitleProjectResponse } from '@excuse/shared'
 import type { ServerConfig } from '../config'
 import {
+  createGenerationRecord,
   deleteSubtitleProject,
   getSubtitleProjectForAccount,
   listSubtitleProjectsByAccount,
+  updateSubtitleExport,
+  updateSubtitleProjectStatus,
   updateSubtitleSentences,
   updateSubtitleStyle,
 } from '@excuse/db'
@@ -149,7 +153,7 @@ export function createSubtitleRoutes(config: ServerConfig) {
           fontColor: t.String(),
           outlineColor: t.String(),
           outlineWidth: t.Number(),
-          position: t.String(),
+          position: t.Union([t.Literal('top'), t.Literal('center'), t.Literal('bottom')]),
           marginV: t.Number(),
           bold: t.Boolean(),
         }),
@@ -162,23 +166,61 @@ export function createSubtitleRoutes(config: ServerConfig) {
       },
     })
 
-    // 提交导出任务 — fire-and-forget
+    // 提交导出任务 — fire-and-forget（创建 record → 状态改为 exporting → Worker 处理）
     .post('/projects/:id/export', async ({ params: { id }, userId, set }) => {
       const project = await getSubtitleProjectForAccount(id, userId)
       if (!project)
         return notFound(set, '字幕项目不存在或无权访问')
 
-      // fire-and-forget：立即返回，后台执行导出
-      svc.executeExport(id, userId, config, deps).catch((err) => {
-        console.error('字幕导出失败:', err)
+      if (project.status !== 'subtitle_editing')
+        return notFound(set, '项目状态不是"字幕编辑"，无法导出')
+
+      if (!project.sentences || project.sentences.length === 0)
+        return notFound(set, '没有字幕内容，无法导出')
+
+      // 创建导出 generation_record，Worker 通过 exportRecordId 关联
+      const exportRecord = await createGenerationRecord({
+        accountId: userId,
+        taskId: `export_${crypto.randomUUID()}_${project.id}`,
+        traceId: crypto.randomUUID(),
+        model: 'ffmpeg-burn',
+        category: 'subtitle',
+        status: 'processing',
+        inputParams: { projectId: project.id } as Record<string, unknown>,
       })
 
-      return { success: true, message: '导出任务已提交' }
+      // 设置 exportRecordId + 状态为 exporting → Worker 轮询处理
+      await updateSubtitleExport(project.id, exportRecord.id)
+      await updateSubtitleProjectStatus(project.id, 'exporting')
+
+      return { success: true } satisfies SubtitleMutationOkResponse
     }, {
       params: t.Object({ id: t.String() }),
       detail: {
         summary: '提交导出任务',
         description: '将字幕烧录到视频中，fire-and-forget 模式',
+        tags: ['字幕'],
+        security: [{ bearerAuth: [] }],
+      },
+    })
+
+    // 重试失败项目 — 智能跳过已完成的步骤
+    .post('/projects/:id/retry', async ({ params: { id }, userId, set }) => {
+      const project = await getSubtitleProjectForAccount(id, userId)
+      if (!project)
+        return notFound(set, '字幕项目不存在或无权访问')
+
+      if (project.status !== 'failed')
+        return notFound(set, '只有失败状态的项目才能重试')
+
+      const retried = await svc.retryProject(project, userId, config, deps)
+
+      return { success: true, data: serializeProject(retried) } satisfies SubtitleProjectResponse
+    }, {
+      params: t.Object({ id: t.String() }),
+      detail: {
+        summary: '重试失败项目',
+        description: '对失败状态的项目重试，复用已上传的视频重新执行提取音频和 ASR 管道',
         tags: ['字幕'],
         security: [{ bearerAuth: [] }],
       },

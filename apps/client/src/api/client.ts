@@ -426,9 +426,15 @@ export async function updateSubtitleStyle(id: string, styleConfig: SubtitleStyle
   )
 }
 
-export async function exportSubtitleProject(id: string): Promise<{ success: boolean, message: string }> {
-  return unwrapEden<{ success: boolean, message: string }>(
+export async function exportSubtitleProject(id: string): Promise<SubtitleMutationOkResponse> {
+  return unwrapEden<SubtitleMutationOkResponse>(
     await api.api.subtitle.projects({ id }).export.post(),
+  )
+}
+
+export async function retrySubtitleProject(id: string): Promise<SubtitleProjectResponse> {
+  return unwrapEden<SubtitleProjectResponse>(
+    await api.api.subtitle.projects({ id }).retry.post(),
   )
 }
 

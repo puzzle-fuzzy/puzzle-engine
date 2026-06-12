@@ -146,14 +146,14 @@ export class ASRClient {
    * 查询异步转录任务状态
    *
    * 复用 DashScope 的通用任务查询端点 /api/v1/tasks/{task_id}
-   * 返回格式与视频任务查询相同（task_status + results）
+   * 注意：此端点需要 GET 方法（与视频任务的查询方式一致）
    */
   async queryTask(taskId: string): Promise<ASRTaskStatus> {
     const url = `${this.baseUrl}/tasks/${taskId}`
 
     try {
       const response = await fetch(url, {
-        method: 'POST',
+        method: 'GET',
         headers: this.headers,
       })
 

@@ -18,6 +18,7 @@ import type { CostDetail, ModelConfig } from '@excuse/shared'
 import { calculateCost } from '@excuse/billing'
 import {
   cancelGenerationRecord,
+  debitCredit,
   findGenerationByDedupeKeyForAccount,
   getGenerationRecordById,
   getUploadedFilesByIdsForAccount,
@@ -25,6 +26,7 @@ import {
   markGenerationProcessing,
   markGenerationSucceeded,
   notifyGenerationStatus,
+  refundCredit,
 } from '@excuse/db'
 import { extractBillingParams } from '@excuse/shared'
 import { extractImageUrls, parseProviderOutput } from './output-parser'
@@ -128,6 +130,12 @@ export async function executeGeneration(
   // === 分支 1: provider 调用失败 ===
   if (result.type === 'failed' || !result.success) {
     await markGenerationFailed(recordId, result.error)
+    await refundReservedCredit({
+      accountId,
+      recordId,
+      estimatedCost: ctx.estimatedCost,
+      description: `生成失败退款：${model}`,
+    })
     await notifyGenerationStatus({
       accountId,
       recordId,
@@ -174,6 +182,12 @@ export async function executeGeneration(
   const actualCost = { ...calculateCost(modelConfig, extractBillingParams(parameters), result.usage), billable: true, source: 'actual' as const }
 
   await markGenerationSucceeded(recordId, outputResult, actualCost)
+  await debitReservedCredit({
+    accountId,
+    recordId,
+    actualCost,
+    description: `生成成功扣款：${model}`,
+  })
   await notifyGenerationStatus({
     accountId,
     recordId,
@@ -210,6 +224,12 @@ export async function cancelGeneration(
   }
 
   await cancelGenerationRecord(recordId)
+  await refundReservedCredit({
+    accountId,
+    recordId,
+    estimatedCost: record.cost,
+    description: `生成取消退款：${record.model}`,
+  })
   await notifyGenerationStatus({
     accountId,
     recordId,
@@ -223,4 +243,35 @@ export async function cancelGeneration(
 
   const updated = await getGenerationRecordById(recordId)
   return updated!
+}
+
+async function debitReservedCredit(opts: {
+  accountId: string
+  recordId: string
+  actualCost: CostDetail
+  description: string
+}) {
+  if (opts.actualCost.totalPriceCents <= 0)
+    return
+  await debitCredit({
+    accountId: opts.accountId,
+    generationRecordId: opts.recordId,
+    actualCents: opts.actualCost.totalPriceCents,
+    description: opts.description,
+  })
+}
+
+async function refundReservedCredit(opts: {
+  accountId: string
+  recordId: string
+  estimatedCost: CostDetail | null
+  description: string
+}) {
+  if (!opts.estimatedCost || opts.estimatedCost.totalPriceCents <= 0)
+    return
+  await refundCredit({
+    accountId: opts.accountId,
+    generationRecordId: opts.recordId,
+    description: opts.description,
+  })
 }

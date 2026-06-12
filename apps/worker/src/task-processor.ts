@@ -4,11 +4,13 @@ import type { CostDetail, GenerationCategory, GenerationNotifyPayload, Generatio
 import type { WorkerConfig } from './config'
 import { calculateCost } from '@excuse/billing'
 import {
+  debitCredit,
   listCanvasShotsByProject,
   markGenerationFailed,
   markGenerationProcessing,
   markGenerationSucceeded,
   notifyGenerationStatus,
+  refundCredit,
   updateCanvasProject,
   updateCanvasShot,
 } from '@excuse/db'
@@ -39,6 +41,8 @@ export interface TaskProcessorDeps {
   markGenerationSucceeded: (id: string, output: OutputResult, cost?: CostDetail) => Promise<void>
   markGenerationProcessing: (id: string) => Promise<void>
   notifyGenerationStatus: (payload: GenerationNotifyPayload) => Promise<void>
+  debitCredit: (opts: { accountId: string, generationRecordId: string, actualCents: number, description?: string }) => Promise<unknown>
+  refundCredit: (opts: { accountId: string, generationRecordId: string, description?: string }) => Promise<unknown>
 }
 
 /**
@@ -64,6 +68,8 @@ export function createTaskProcessor(config: WorkerConfig, deps?: Partial<TaskPro
   const succeed = deps?.markGenerationSucceeded ?? markGenerationSucceeded
   const processing = deps?.markGenerationProcessing ?? markGenerationProcessing
   const notify = deps?.notifyGenerationStatus ?? notifyGenerationStatus
+  const debit = deps?.debitCredit ?? debitCredit
+  const refund = deps?.refundCredit ?? refundCredit
 
   return { processTask }
 
@@ -95,6 +101,7 @@ export function createTaskProcessor(config: WorkerConfig, deps?: Partial<TaskPro
     const elapsed = Date.now() - new Date(record.createdAt).getTime()
     if (elapsed > config.staleTimeoutMs) {
       await fail(record.id, 'Task timed out (>4h)')
+      await refundReservedCredit(record, refund, '视频任务超时退款')
       await notify({
         accountId: record.accountId,
         recordId: record.id,
@@ -141,6 +148,14 @@ export function createTaskProcessor(config: WorkerConfig, deps?: Partial<TaskPro
         }
 
         await succeed(record.id, output, actualCost ?? undefined)
+        if (actualCost?.totalPriceCents && actualCost.totalPriceCents > 0) {
+          await debit({
+            accountId: record.accountId,
+            generationRecordId: record.id,
+            actualCents: actualCost.totalPriceCents,
+            description: `视频生成成功扣款：${record.model}`,
+          })
+        }
 
         await notify({
           accountId: record.accountId,
@@ -173,6 +188,7 @@ export function createTaskProcessor(config: WorkerConfig, deps?: Partial<TaskPro
       case 'FAILED': {
         const errMsg = taskStatus.errorMessage || 'DashScope task failed'
         await fail(record.id, errMsg)
+        await refundReservedCredit(record, refund, `视频生成失败退款：${record.model}`)
         await notify({
           accountId: record.accountId,
           recordId: record.id,
@@ -212,6 +228,20 @@ export function createTaskProcessor(config: WorkerConfig, deps?: Partial<TaskPro
         return { action: 'ignored', taskId, status: taskStatus.status }
     }
   }
+}
+
+async function refundReservedCredit(
+  record: { id: string, accountId: string, cost: CostDetail | null },
+  refund: TaskProcessorDeps['refundCredit'],
+  description: string,
+) {
+  if (!record.cost || record.cost.totalPriceCents <= 0)
+    return
+  await refund({
+    accountId: record.accountId,
+    generationRecordId: record.id,
+    description,
+  })
 }
 
 // ── 工具函数 ────────────────────────────────────────────

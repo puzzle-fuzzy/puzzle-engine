@@ -148,7 +148,23 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
 
   loadModels: async () => {
     const data = await fetchModels()
-    set({ models: data.models })
+    const { selectedCategory, selectedModelId } = get()
+    const models = data.models
+    // 如果当前没有选中模型，自动选中当前分类的第一个模型
+    if (!selectedModelId || !models.some(m => m.id === selectedModelId)) {
+      const categoryModels = models.filter(m => m.category === selectedCategory)
+      if (categoryModels.length > 0) {
+        const model = categoryModels[0]
+        set({
+          models,
+          selectedModelId: model.id,
+          parameters: buildInitialParameters(model),
+          mediaUploadState: {},
+        })
+        return
+      }
+    }
+    set({ models })
   },
 
   setCategory: (category) => {

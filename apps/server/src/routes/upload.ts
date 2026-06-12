@@ -7,8 +7,12 @@ import { createRequireAuthPlugin } from '../plugins/auth'
 import { audit } from '../services/audit'
 import { forbidden, notFound, validationError } from '../utils/errors'
 
-const ALLOWED_MIME_TYPES = ['image/png', 'image/jpeg', 'image/webp', 'image/gif']
-const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10MB
+const ALLOWED_MIME_TYPES = [
+  'image/png', 'image/jpeg', 'image/webp', 'image/gif',
+  // 字幕功能支持的视频格式
+  'video/mp4', 'video/webm', 'video/quicktime', 'video/x-msvideo',
+]
+const MAX_FILE_SIZE = 200 * 1024 * 1024 // 200MB（视频文件更大）
 
 /**
  * DB row → DTO 序列化（Date → string）
@@ -50,7 +54,7 @@ export function createUploadRoutes(config: ServerConfig) {
       }
 
       if (!ALLOWED_MIME_TYPES.includes(file.type)) {
-        return validationError(set, `不支持的文件类型: ${file.type}，仅允许 PNG/JPEG/WebP/GIF`)
+        return validationError(set, `不支持的文件类型: ${file.type}，仅允许 PNG/JPEG/WebP/GIF/MP4/WebM/MOV/AVI`)
       }
 
       if (file.size > MAX_FILE_SIZE) {
@@ -80,7 +84,7 @@ export function createUploadRoutes(config: ServerConfig) {
       }),
       detail: {
         summary: '上传文件',
-        description: '上传图片文件（PNG/JPEG/WebP/GIF，最大 10MB），保存到存储并创建 DB 记录',
+        description: '上传图片或视频文件（PNG/JPEG/WebP/GIF/MP4/WebM/MOV/AVI，最大 200MB），保存到存储并创建 DB 记录',
         tags: ['上传'],
         security: [{ bearerAuth: [] }],
       },

@@ -4,8 +4,11 @@ import type { ServerConfig } from '../config'
 import { calculateCost } from '@excuse/billing'
 import {
   createGenerationRecord,
+  debitCredit,
   markGenerationFailed,
   markGenerationSucceeded,
+  refundCredit,
+  reserveCredit,
 } from '@excuse/db'
 import { DashScopeClient, getModelById, getModelsByCategory, validateAndMerge } from '@excuse/provider'
 import { extractBillingParams, resolveModelId } from '@excuse/shared'
@@ -115,23 +118,56 @@ export function createOpenAIGatewayRoutes(config: ServerConfig) {
         dedupeKey,
       })
 
+      if (estimatedCost.totalPriceCents > 0) {
+        try {
+          await reserveCredit({
+            accountId: userId,
+            generationRecordId: record.id,
+            amountCents: estimatedCost.totalPriceCents,
+            description: `OpenAI 网关预留：${modelConfig.id}`,
+          })
+        }
+        catch (error) {
+          const message = error instanceof Error ? error.message : 'Insufficient balance'
+          await markGenerationFailed(record.id, message)
+          const err = openaiError(message, 'insufficient_quota', 'insufficient_balance', 402)
+          set.status = err.status
+          return err.response
+        }
+      }
+
       // 调用 provider — ValidatedModelParameters 保证参数已通过校验
       const result = await client.chatCompletion(modelConfig.id, validatedParams)
 
       if (result.type === 'failed' || !result.success) {
         await markGenerationFailed(record.id, result.error)
+        if (estimatedCost.totalPriceCents > 0) {
+          await refundCredit({
+            accountId: userId,
+            generationRecordId: record.id,
+            description: `OpenAI 网关失败退款：${modelConfig.id}`,
+          })
+        }
         const err = openaiError(result.error, 'server_error', 'generation_failed', 500)
         set.status = err.status
         return err.response
       }
 
       // 计算实际成本
-      calculateCost(modelConfig, extractBillingParams(validatedParams), result.usage)
+      const actualCost = { ...calculateCost(modelConfig, extractBillingParams(validatedParams), result.usage), billable: true, source: 'actual' as const }
       const text = result.output.text
 
       // 更新记录为成功
       const textOutput: OutputResult = { type: 'text' as const, text }
-      await markGenerationSucceeded(record.id, textOutput)
+      await markGenerationSucceeded(record.id, textOutput, actualCost)
+      if (actualCost.totalPriceCents > 0) {
+        await debitCredit({
+          accountId: userId,
+          generationRecordId: record.id,
+          actualCents: actualCost.totalPriceCents,
+          description: `OpenAI 网关扣款：${modelConfig.id}`,
+        })
+      }
 
       // 组装 OpenAI 响应
       const promptTokens = result.usage?.inputTokens ?? 0

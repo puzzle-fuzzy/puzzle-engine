@@ -14,6 +14,8 @@ const CanvasEditor = lazy(() => import('./pages/CanvasEditor'))
 const Layout = lazy(() => import('./pages/Layout'))
 const Login = lazy(() => import('./pages/Login'))
 const Register = lazy(() => import('./pages/Register'))
+const Subtitle = lazy(() => import('./pages/Subtitle'))
+const SubtitleEditor = lazy(() => import('./pages/SubtitleEditor'))
 const Workspace = lazy(() => import('./pages/Workspace'))
 
 function RouteFallback() {
@@ -49,6 +51,8 @@ function App() {
                 <Route path="/" element={<Workspace />} />
                 <Route path="/canvas" element={<Canvas />} />
                 <Route path="/canvas/:projectId" element={<CanvasEditor />} />
+                <Route path="/subtitle" element={<Subtitle />} />
+                <Route path="/subtitle/:id" element={<SubtitleEditor />} />
                 <Route path="/assets" element={<Assets />} />
                 <Route path="/billing" element={<Billing />} />
               </Route>

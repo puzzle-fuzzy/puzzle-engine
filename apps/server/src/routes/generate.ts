@@ -7,6 +7,8 @@ import {
   deleteGenerationRecord,
   getGenerationRecordById,
   listGenerationRecords,
+  markGenerationFailed,
+  reserveCredit,
   resetGenerationToPending,
 } from '@excuse/db'
 import { AssetStorage, DashScopeClient, getModelById, validateAndMerge } from '@excuse/provider'
@@ -17,7 +19,7 @@ import { createRequireAuthPlugin } from '../plugins/auth'
 import { audit } from '../services/audit'
 import { checkCategoryRateLimit } from '../utils/category-rate-limit'
 import { createDedupeKey } from '../utils/dedupe-key'
-import { forbidden, notFound, validationError } from '../utils/errors'
+import { forbidden, notFound, paymentRequired, validationError } from '../utils/errors'
 
 /**
  * 生成任务路由 — CRUD + retry/cancel
@@ -135,6 +137,22 @@ export function createGenerateRoutes(config: ServerConfig) {
         cost: { ...estimatedCost, estimated: true, billable: false, source: 'estimated' },
         dedupeKey,
       })
+
+      if (estimatedCost.totalPriceCents > 0) {
+        try {
+          await reserveCredit({
+            accountId: userId,
+            generationRecordId: record.id,
+            amountCents: estimatedCost.totalPriceCents,
+            description: `生成任务预留：${modelConfig.id}`,
+          })
+        }
+        catch (error) {
+          const message = error instanceof Error ? error.message : '余额不足，无法发起生成'
+          await markGenerationFailed(record.id, message)
+          return paymentRequired(set, message)
+        }
+      }
 
       // 调用 service 执行核心业务流程（provider 调用 + 三分枝处理 + DB + SSE）
       const result = await svc.executeGeneration({
@@ -322,6 +340,22 @@ export function createGenerateRoutes(config: ServerConfig) {
 
       // 预估费用 — 使用 extractBillingParams 从 ValidatedModelParameters 提取计费字段
       const estimatedCost = calculateCost(modelConfig, extractBillingParams(validatedParams))
+
+      if (estimatedCost.totalPriceCents > 0) {
+        try {
+          await reserveCredit({
+            accountId: userId,
+            generationRecordId: record.id,
+            amountCents: estimatedCost.totalPriceCents,
+            description: `重试生成任务预留：${modelConfig.id}`,
+          })
+        }
+        catch (error) {
+          const message = error instanceof Error ? error.message : '余额不足，无法重试生成'
+          await markGenerationFailed(record.id, message)
+          return paymentRequired(set, message)
+        }
+      }
 
       // 调用 service 执行核心业务流程（与 POST /generate 共享同一逻辑）
       const result = await svc.executeGeneration({

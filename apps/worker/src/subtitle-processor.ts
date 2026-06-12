@@ -124,19 +124,29 @@ export async function processASRTask(project: SubtitleProjectRow, asrClient: ASR
 }
 
 /**
- * 处理字幕导出任务 — FFmpeg 烧录 + 上传结果
+ * 处理字幕导出任务 — FFmpeg 烧录 + 上传结果 + SSE 通知
  *
  * 流程：
- *   1. 从项目获取 sentences + styleConfig
- *   2. 生成 ASS 内容
- *   3. 获取原始视频文件
- *   4. FFmpeg 烧录字幕到视频
- *   5. 上传导出视频到存储
- *   6. 更新项目状态 → completed
+ *   1. 校验 exportRecordId 和 sentences
+ *   2. 从项目获取 sentences + styleConfig
+ *   3. 生成 ASS 内容
+ *   4. 获取原始视频文件
+ *   5. FFmpeg 烧录字幕到视频
+ *   6. 上传导出视频到存储
+ *   7. 更新 generation_record → succeeded
+ *   8. 更新项目状态 → completed
+ *   9. SSE 通知客户端
  */
 export async function processExportTask(project: SubtitleProjectRow, config: WorkerConfig): Promise<void> {
+  if (!project.exportRecordId) {
+    logger.warn({ projectId: project.id }, 'Export task has no exportRecordId, skipping')
+    return
+  }
+
   if (!project.sentences || project.sentences.length === 0) {
     await updateSubtitleProjectStatus(project.id, 'failed', { errorMessage: '没有字幕内容，无法导出' })
+    await markGenerationFailed(project.exportRecordId, '没有字幕内容，无法导出')
+    await notifyExportFailed(project)
     return
   }
 
@@ -163,6 +173,8 @@ export async function processExportTask(project: SubtitleProjectRow, config: Wor
     const file = await getUploadedFileById(project.videoFileId)
     if (!file) {
       await updateSubtitleProjectStatus(project.id, 'failed', { errorMessage: '原始视频文件不存在' })
+      await markGenerationFailed(project.exportRecordId, '原始视频文件不存在')
+      await notifyExportFailed(project, '原始视频文件不存在')
       return
     }
 
@@ -187,21 +199,48 @@ export async function processExportTask(project: SubtitleProjectRow, config: Wor
     }
     catch {}
 
-    // 创建导出 generation_record
-    await markGenerationSucceeded(project.exportRecordId!, {
+    // 更新 generation_record → succeeded
+    await markGenerationSucceeded(project.exportRecordId, {
       type: 'video',
       savedUrls: [exportedVideoUrl],
     })
 
-    // 更新项目导出信息
-    await updateSubtitleExport(project.id, project.exportRecordId!, exportedVideoUrl)
+    // 更新项目导出信息 + 状态 → completed
+    await updateSubtitleExport(project.id, project.exportRecordId, exportedVideoUrl)
     await updateSubtitleProjectStatus(project.id, 'completed')
+
+    // SSE 通知 — 导出成功
+    const exportRecord = await getGenerationRecordById(project.exportRecordId)
+    await notifyGenerationStatus({
+      accountId: project.accountId,
+      recordId: project.exportRecordId,
+      status: 'succeeded',
+      category: 'subtitle',
+      model: 'ffmpeg-burn',
+      taskId: exportRecord?.taskId ?? null,
+      traceId: exportRecord?.traceId ?? undefined,
+    })
 
     logger.info({ projectId: project.id }, '✅ Export task completed')
   }
   catch (err) {
     const errorMsg = err instanceof Error ? err.message : String(err)
     await updateSubtitleProjectStatus(project.id, 'failed', { errorMessage: errorMsg })
+    await markGenerationFailed(project.exportRecordId, errorMsg)
+    await notifyExportFailed(project, errorMsg)
     logger.error({ err, projectId: project.id }, '❌ Export task failed')
   }
+}
+
+/** 导出失败时发送 SSE 通知 */
+async function notifyExportFailed(project: SubtitleProjectRow, errorMessage?: string) {
+  await notifyGenerationStatus({
+    accountId: project.accountId,
+    recordId: project.exportRecordId!,
+    status: 'failed',
+    category: 'subtitle',
+    model: 'ffmpeg-burn',
+    taskId: null,
+    errorMessage: errorMessage ?? '导出失败',
+  })
 }

@@ -1,0 +1,1 @@
+ALTER TABLE "generation_records" ALTER COLUMN "dedupe_key" SET DATA TYPE text;

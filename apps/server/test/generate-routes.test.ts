@@ -40,6 +40,9 @@ const mockDeleteRecord = mock<(id: string) => Promise<void>>(() => Promise.resol
 const mockMarkFailed = mock<(id: string, error: string) => Promise<void>>(() => Promise.resolve(undefined))
 const mockMarkProcessing = mock<(id: string, data: Record<string, unknown>) => Promise<void>>(() => Promise.resolve(undefined))
 const mockMarkSucceeded = mock<(id: string, output: unknown, cost: unknown) => Promise<void>>(() => Promise.resolve(undefined))
+const mockReserveCredit = mock<(opts: Record<string, unknown>) => Promise<void>>(() => Promise.resolve(undefined))
+const mockDebitCredit = mock<(opts: Record<string, unknown>) => Promise<void>>(() => Promise.resolve(undefined))
+const mockRefundCredit = mock<(opts: Record<string, unknown>) => Promise<void>>(() => Promise.resolve(undefined))
 const mockCalculateCost = mock<() => Record<string, unknown>>(() => ({ unit: 'token', totalPriceCents: 1, totalPrice: 0.01 }))
 const mockGenerate = mock<(model: string, params: Record<string, unknown>, refs?: string[]) => Promise<MockProviderResult>>(() =>
   Promise.resolve({ type: 'failed', success: false, error: 'mock error' }),
@@ -60,6 +63,9 @@ mock.module('@excuse/db', () => ({
   markGenerationFailed: mockMarkFailed,
   markGenerationProcessing: mockMarkProcessing,
   markGenerationSucceeded: mockMarkSucceeded,
+  reserveCredit: mockReserveCredit,
+  debitCredit: mockDebitCredit,
+  refundCredit: mockRefundCredit,
   notifyGenerationStatus: mockNotifyStatus,
   getUploadedFilesByIdsForAccount: mockGetUploadedFilesByIdsForAccount,
   cancelGenerationRecord: mockCancelRecord,
@@ -156,6 +162,9 @@ describe('generate routes', () => {
     mockMarkFailed.mockClear()
     mockMarkProcessing.mockClear()
     mockMarkSucceeded.mockClear()
+    mockReserveCredit.mockClear()
+    mockDebitCredit.mockClear()
+    mockRefundCredit.mockClear()
     mockCalculateCost.mockClear()
     mockGenerate.mockClear()
     mockNotifyStatus.mockClear()
@@ -256,6 +265,16 @@ describe('generate routes', () => {
 
       expect(data?.success).toBe(true)
       expect(data?.record?.status).toBe('succeeded')
+      expect(mockReserveCredit).toHaveBeenCalledWith(expect.objectContaining({
+        accountId: 'acc-001',
+        generationRecordId: 'rec-001',
+        amountCents: 1,
+      }))
+      expect(mockDebitCredit).toHaveBeenCalledWith(expect.objectContaining({
+        accountId: 'acc-001',
+        generationRecordId: 'rec-001',
+        actualCents: 1,
+      }))
       expect(mockMarkSucceeded).toHaveBeenCalled()
     })
 
@@ -304,6 +323,10 @@ describe('generate routes', () => {
       expect(data?.success).toBe(false)
       expect(data?.record?.status).toBe('failed')
       expect(mockMarkFailed).toHaveBeenCalled()
+      expect(mockRefundCredit).toHaveBeenCalledWith(expect.objectContaining({
+        accountId: 'acc-001',
+        generationRecordId: 'rec-001',
+      }))
     })
 
     it('缺少 prompt 参数时由模型验证层拒绝', async () => {
@@ -335,7 +358,7 @@ describe('generate routes', () => {
         taskId: 'dashscope-task-123',
         output: { type: 'processing', taskId: 'dashscope-task-123', status: 'submitted' },
       })
-      mockCalculateCost.mockReturnValue({ unit: 'video', totalPriceCents: 0, totalPrice: 0 })
+      mockCalculateCost.mockReturnValue({ unit: 'video', totalPriceCents: 1, totalPrice: 0.01 })
 
       const { data } = await client.api.generate.post(
         { model: 'wan2.1-i2v-t2v-720p', parameters: { prompt: '一段视频' } },
@@ -344,6 +367,12 @@ describe('generate routes', () => {
 
       expect(data?.success).toBe(true)
       expect(data?.record?.status).toBe('processing')
+      expect(mockReserveCredit).toHaveBeenCalledWith(expect.objectContaining({
+        accountId: 'acc-001',
+        generationRecordId: 'rec-001',
+        amountCents: 1,
+      }))
+      expect(mockDebitCredit).not.toHaveBeenCalled()
       expect(mockMarkProcessing).toHaveBeenCalledWith(
         'rec-001',
         expect.objectContaining({ taskId: 'dashscope-task-123' }),

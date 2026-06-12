@@ -34,6 +34,9 @@ const mockRecord = makeRecord({
 const mockCreateGenerationRecord = mock<(values: Record<string, unknown>) => Promise<GenerationRecordRow>>(() => Promise.resolve(mockRecord))
 const mockMarkGenerationFailed = mock<(id: string, error: string) => Promise<void>>(() => Promise.resolve(undefined))
 const mockMarkGenerationSucceeded = mock<(id: string, output: Record<string, unknown>, cost?: Record<string, unknown>) => Promise<void>>(() => Promise.resolve(undefined))
+const mockReserveCredit = mock<(opts: Record<string, unknown>) => Promise<void>>(() => Promise.resolve(undefined))
+const mockDebitCredit = mock<(opts: Record<string, unknown>) => Promise<void>>(() => Promise.resolve(undefined))
+const mockRefundCredit = mock<(opts: Record<string, unknown>) => Promise<void>>(() => Promise.resolve(undefined))
 const mockFindApiKeyByHash = mock<(hash: string) => Promise<{ id: string, accountId: string } | null>>(() => Promise.resolve(null))
 const mockTouchApiKeyLastUsed = mock<(id: string) => Promise<void>>(() => Promise.resolve(undefined))
 const mockGetAccountById = mock<() => Promise<unknown>>(() => Promise.resolve(makeAccount()))
@@ -48,6 +51,9 @@ mock.module('@excuse/db', () => ({
   createGenerationRecord: mockCreateGenerationRecord,
   markGenerationFailed: mockMarkGenerationFailed,
   markGenerationSucceeded: mockMarkGenerationSucceeded,
+  reserveCredit: mockReserveCredit,
+  debitCredit: mockDebitCredit,
+  refundCredit: mockRefundCredit,
   findApiKeyByHash: mockFindApiKeyByHash,
   touchApiKeyLastUsed: mockTouchApiKeyLastUsed,
   getAccountById: mockGetAccountById,
@@ -90,7 +96,7 @@ mock.module('@excuse/provider', () => ({
 }))
 
 mock.module('@excuse/billing', () => ({
-  calculateCost: () => ({ unit: 'token', totalPriceCents: 0, totalPrice: 0 }),
+  calculateCost: () => ({ unit: 'token', totalPriceCents: 1, totalPrice: 0.01 }),
   aggregateStatistics: () => ({ totalCents: 0, totalYuan: 0, byCategory: [], byModel: [], dailyTrend: [] }),
 }))
 
@@ -135,6 +141,9 @@ describe('OpenAI 网关', () => {
     mockCreateGenerationRecord.mockImplementation(() => Promise.resolve(mockRecord))
     mockMarkGenerationFailed.mockImplementation(() => Promise.resolve(undefined))
     mockMarkGenerationSucceeded.mockImplementation(() => Promise.resolve(undefined))
+    mockReserveCredit.mockClear()
+    mockDebitCredit.mockClear()
+    mockRefundCredit.mockClear()
     mockChatCompletion.mockImplementation(() => Promise.resolve({
       success: true,
       output: { text: 'Hello! How can I help you?' },
@@ -166,6 +175,16 @@ describe('OpenAI 网关', () => {
       expect(result.usage.total_tokens).toBe(30)
       expect(mockCreateGenerationRecord).toHaveBeenCalled()
       expect(mockMarkGenerationSucceeded).toHaveBeenCalled()
+      expect(mockReserveCredit).toHaveBeenCalledWith(expect.objectContaining({
+        accountId: 'acc-001',
+        generationRecordId: 'rec-gw-001',
+        amountCents: 1,
+      }))
+      expect(mockDebitCredit).toHaveBeenCalledWith(expect.objectContaining({
+        accountId: 'acc-001',
+        generationRecordId: 'rec-gw-001',
+        actualCents: 1,
+      }))
     })
 
     it('模型别名解析 — gpt-4 → qwen-max', async () => {

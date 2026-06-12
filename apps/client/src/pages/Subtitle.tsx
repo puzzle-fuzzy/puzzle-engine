@@ -1,4 +1,4 @@
-import { FileVideo, Loader2, Upload } from 'lucide-react'
+import { FileVideo, Loader2, RefreshCcw, Upload } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router'
 import { toast } from 'sonner'
@@ -35,6 +35,7 @@ export default function Subtitle() {
   const loadProjects = useSubtitleStore(s => s.loadProjects)
   const createProject = useSubtitleStore(s => s.createProject)
   const deleteProject = useSubtitleStore(s => s.deleteProject)
+  const retryProject = useSubtitleStore(s => s.retryProject)
 
   const navigate = useNavigate()
   const [creating, setCreating] = useState(false)
@@ -93,6 +94,12 @@ export default function Subtitle() {
   async function confirmDelete() {
     await deleteProject(deleteConfirm.id)
     setDeleteConfirm({ open: false, id: '' })
+  }
+
+  async function handleRetry(projectId: string) {
+    await retryProject(projectId)
+    // retry 在同一项目上操作，刷新列表同步状态
+    await loadProjects()
   }
 
   function formatDate(dateStr: string) {
@@ -182,17 +189,33 @@ export default function Subtitle() {
                 {project.errorMessage && (
                   <p className="mt-2 text-xs text-destructive truncate">{project.errorMessage}</p>
                 )}
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="mt-2 text-xs text-muted-foreground hover:text-destructive"
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    setDeleteConfirm({ open: true, id: project.id })
-                  }}
-                >
-                  删除
-                </Button>
+                <div className="flex gap-1 mt-2">
+                  {project.status === 'failed' && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-xs text-muted-foreground hover:text-green-600"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        handleRetry(project.id)
+                      }}
+                    >
+                      <RefreshCcw className="size-3" />
+                      重试
+                    </Button>
+                  )}
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="text-xs text-muted-foreground hover:text-destructive"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      setDeleteConfirm({ open: true, id: project.id })
+                    }}
+                  >
+                    删除
+                  </Button>
+                </div>
               </CardContent>
             </Card>
           ))}
