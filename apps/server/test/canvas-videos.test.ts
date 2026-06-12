@@ -27,10 +27,12 @@ const modelWithNegativePrompt: ModelConfig = {
   ],
 }
 
-function makeDeps(modelConfig: ModelConfig) {
+function makeDeps(modelConfig: ModelConfig, overrides?: {
+  mergeWithDefaults?: (modelConfig: ModelConfig, params: Record<string, unknown>) => Record<string, unknown>
+}) {
   return {
     getModelById: (model: string) => model === modelConfig.id ? modelConfig : undefined,
-    mergeWithDefaults: (_modelConfig: ModelConfig, params: Record<string, unknown>) => params,
+    mergeWithDefaults: overrides?.mergeWithDefaults ?? ((_modelConfig: ModelConfig, params: Record<string, unknown>) => params),
     validateModelParameters: (config: ModelConfig, params: Record<string, unknown>) => {
       const errors: Array<{ field: string, message: string }> = []
 
@@ -81,6 +83,17 @@ describe('canvas videos', () => {
           duration: 99,
         }, makeDeps(baseVideoModel)),
       ).toThrow('视频参数校验失败')
+    })
+
+    it('rejects malformed parameters after provider defaults are merged', () => {
+      expect(() =>
+        prepareCanvasVideoParams('test-video', {
+          videoPrompt: 'stable cinematic shot',
+          duration: 5,
+        }, makeDeps(baseVideoModel, {
+          mergeWithDefaults: (_modelConfig, params) => ({ ...params, resolution: '4K' }),
+        })),
+      ).toThrow('resolution 必须是 720P 或 1080P')
     })
   })
 })
