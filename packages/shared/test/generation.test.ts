@@ -98,6 +98,7 @@ describe('parseOutputResult', () => {
       type: 'video',
       savedUrls: ['https://saved/v.mp4'],
       originalUrl: undefined,
+      video_url: 'https://cdn/v.mp4',
     })
     expect(isVideoOutput(result)).toBe(true)
   })
@@ -156,7 +157,7 @@ describe('parseOutputResult', () => {
 
   it('respects explicit type field for all variants', () => {
     expect(parseOutputResult({ type: 'image', savedUrls: [] })).toEqual({ type: 'image', savedUrls: [], urls: undefined })
-    expect(parseOutputResult({ type: 'video', savedUrls: [], originalUrl: 'x' })).toEqual({ type: 'video', savedUrls: [], originalUrl: 'x' })
+    expect(parseOutputResult({ type: 'video', savedUrls: [], originalUrl: 'x' })).toEqual({ type: 'video', savedUrls: [], originalUrl: 'x', video_url: undefined })
     expect(parseOutputResult({ type: 'processing', taskId: 't1' })).toEqual({ type: 'processing', taskId: 't1', status: undefined })
   })
 })

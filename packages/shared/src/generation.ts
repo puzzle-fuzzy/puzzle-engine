@@ -51,7 +51,7 @@ export function parseOutputResult(data: unknown): OutputResult | null {
       case 'image':
         return { type: 'image', savedUrls: Array.isArray(o.savedUrls) ? o.savedUrls as string[] : [], urls: Array.isArray(o.urls) ? o.urls as string[] : undefined }
       case 'video':
-        return { type: 'video', savedUrls: Array.isArray(o.savedUrls) ? o.savedUrls as string[] : [], originalUrl: typeof o.originalUrl === 'string' ? o.originalUrl : undefined }
+        return { type: 'video', savedUrls: Array.isArray(o.savedUrls) ? o.savedUrls as string[] : [], originalUrl: typeof o.originalUrl === 'string' ? o.originalUrl : undefined, video_url: typeof o.video_url === 'string' ? o.video_url : undefined }
       case 'processing':
         return { type: 'processing', taskId: typeof o.taskId === 'string' ? o.taskId : undefined, status: typeof o.status === 'string' ? o.status : undefined }
       default:
@@ -64,7 +64,7 @@ export function parseOutputResult(data: unknown): OutputResult | null {
     return { type: 'text', text: o.text } satisfies TextOutputResult
   if ('savedUrls' in o && Array.isArray(o.savedUrls)) {
     if ('originalUrl' in o || 'video_url' in o)
-      return { type: 'video', savedUrls: o.savedUrls as string[], originalUrl: typeof o.originalUrl === 'string' ? o.originalUrl : undefined } satisfies VideoOutputResult
+      return { type: 'video', savedUrls: o.savedUrls as string[], originalUrl: typeof o.originalUrl === 'string' ? o.originalUrl : undefined, video_url: typeof o.video_url === 'string' ? o.video_url : undefined } satisfies VideoOutputResult
     return { type: 'image', savedUrls: o.savedUrls as string[], urls: Array.isArray(o.urls) ? o.urls as string[] : undefined } satisfies ImageOutputResult
   }
   if ('taskId' in o || 'status' in o)

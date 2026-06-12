@@ -5,6 +5,15 @@ import { create } from 'zustand'
 import { fetchRecords, listCanvasProjects } from '@/api/client'
 import { sseClient } from '@/api/sse'
 
+/** 将后端原始 GenerationRecord 的 outputResult/cost 规范化为前端可用的域类型 */
+function normalizeRecord(raw: GenerationRecord): GenerationRecord {
+  return {
+    ...raw,
+    outputResult: raw.outputResult ? parseOutputResult(raw.outputResult) : raw.outputResult,
+    cost: raw.cost ? parseCostDetail(raw.cost) : raw.cost,
+  }
+}
+
 interface GenerationState {
   records: GenerationRecord[]
   projectMap: Map<string, ProjectDTO>
@@ -27,7 +36,7 @@ export const useGenerationStore = create<GenerationState>((set, get) => ({
     set({ loadingRecords: true })
     try {
       const data = await fetchRecords({ limit: 100 })
-      set({ records: data.records, loadingRecords: false })
+      set({ records: data.records.map(normalizeRecord), loadingRecords: false })
     }
     catch {
       set({ loadingRecords: false })
@@ -47,7 +56,7 @@ export const useGenerationStore = create<GenerationState>((set, get) => ({
   },
 
   addRecord: (record) => {
-    set({ records: [record, ...get().records] })
+    set({ records: [normalizeRecord(record), ...get().records] })
   },
 
   removeRecord: (id) => {

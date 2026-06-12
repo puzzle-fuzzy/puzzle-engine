@@ -230,7 +230,7 @@ export default function RecordCard({
           <div className="mt-2">
             {isImageOutput(record.outputResult) && (
               <div className="flex gap-2 flex-wrap">
-                {record.outputResult.savedUrls.map(url => (
+                {(record.outputResult.savedUrls.length > 0 ? record.outputResult.savedUrls : record.outputResult.urls || []).map(url => (
                   <img
                     key={url}
                     src={url}
@@ -248,7 +248,7 @@ export default function RecordCard({
             )}
             {isVideoOutput(record.outputResult) && (
               <div className="flex gap-2">
-                {record.outputResult.savedUrls.map(url => (
+                {(record.outputResult.savedUrls.length > 0 ? record.outputResult.savedUrls : record.outputResult.video_url ? [record.outputResult.video_url] : record.outputResult.originalUrl ? [record.outputResult.originalUrl] : []).map(url => (
                   <video
                     key={url}
                     src={url}
