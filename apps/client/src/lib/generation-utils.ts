@@ -2,6 +2,7 @@ import { isImageOutput, isVideoOutput, parseOutputResult } from '@excuse/shared'
 import currency from 'currency.js'
 import {
   AlertCircle,
+  AudioLines,
   CheckCircle2,
   Clock,
   FileText,
@@ -17,6 +18,7 @@ export const CATEGORY_CONFIG = {
   text: { label: '文本生成', color: 'bg-blue-500', icon: FileText, activeColor: 'bg-blue-500 text-white' },
   image: { label: '图像生成', color: 'bg-purple-500', icon: ImageIcon, activeColor: 'bg-purple-500 text-white' },
   video: { label: '视频生成', color: 'bg-pink-500', icon: Video, activeColor: 'bg-pink-500 text-white' },
+  subtitle: { label: '字幕生成', color: 'bg-teal-500', icon: AudioLines, activeColor: 'bg-teal-500 text-white' },
 } as const
 
 export type Category = keyof typeof CATEGORY_CONFIG
@@ -79,6 +81,19 @@ export function isImageUrl(url: string) {
 /** 判断 URL 是否为视频 */
 export function isVideoUrl(url: string) {
   return /\.(?:mp4|webm|mov|avi)(?:\?.*)?$/i.test(url) || url.includes('/video')
+}
+
+/** 判断 URL 是否为音频 */
+export function isAudioUrl(url: string) {
+  return /\.(?:mp3|wav|flac|ogg|m4a|aac)(?:\?.*)?$/i.test(url) || url.includes('/audio')
+}
+
+/** 将毫秒格式化为 M:SS */
+export function formatMs(ms: number): string {
+  const totalSeconds = Math.floor(ms / 1000)
+  const minutes = Math.floor(totalSeconds / 60)
+  const seconds = totalSeconds % 60
+  return `${minutes}:${seconds.toString().padStart(2, '0')}`
 }
 
 /** 将整数分格式化为人民币字符串 */

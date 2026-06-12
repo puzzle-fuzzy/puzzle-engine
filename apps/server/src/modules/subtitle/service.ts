@@ -198,7 +198,7 @@ export async function retryProject(
       status: 'processing',
       inputParams: { audioUrl: project.audioFileUrl, projectId: project.id },
       cost: { ...calculateCost(
-        { id: 'paraformer-v2', category: 'subtitle', pricing: { inputPriceCents: 66, unit: 'video' } } as any,
+        { id: 'paraformer-v2', category: 'subtitle', pricing: { inputPriceCents: 0.008, unit: 'audio' } },
         { duration: (project.videoDurationMs || 0) / 1000 },
       ), estimated: true, billable: false, source: 'estimated' },
     })
@@ -245,7 +245,8 @@ export async function retryProject(
       'audio/wav',
     )
 
-    try { await Bun.file(audioPath).delete() } catch {}
+    try { await Bun.file(audioPath).delete() }
+    catch {}
 
     await updateSubtitleProjectStatus(project.id, 'asr_processing', {
       audioFileUrl,
@@ -261,7 +262,7 @@ export async function retryProject(
     }
 
     const estimatedCost = calculateCost(
-      { id: 'paraformer-v2', category: 'subtitle', pricing: { inputPriceCents: 66, unit: 'video' } } as any,
+      { id: 'paraformer-v2', category: 'subtitle', pricing: { inputPriceCents: 0.008, unit: 'audio' } },
       { duration: (videoDurationMs || audioDurationMs) / 1000 },
     )
 

@@ -1,7 +1,7 @@
+import type { CostDetail } from '@excuse/shared'
 import type { GenerationRecord, ModelConfig } from '@/api/client'
 import type { Category } from '@/lib/generation-utils'
-import { isImageOutput, isTextOutput, isVideoOutput } from '@excuse/shared'
-import currency from 'currency.js'
+import { isImageOutput, isVideoOutput } from '@excuse/shared'
 import {
   Copy,
   Download,
@@ -12,7 +12,10 @@ import {
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
-import { CATEGORY_CONFIG, formatDuration, formatTime, getAssetUrls, HIDDEN_PARAMS, isImageUrl, isUrl, isVideoUrl, STATUS_CONFIG } from '@/lib/generation-utils'
+import { CATEGORY_CONFIG, formatDuration, formatTime, getAssetUrls, HIDDEN_PARAMS, STATUS_CONFIG } from '@/lib/generation-utils'
+import CostDetailPanel from './CostDetailPanel'
+import OutputPreview from './OutputPreview'
+import ReferenceMedia from './ReferenceMedia'
 
 interface RecordCardProps {
   record: GenerationRecord
@@ -46,9 +49,6 @@ export default function RecordCard({
   const prompt = String(record.inputParams?.prompt || '')
   const visibleParams = Object.entries(record.inputParams || {}).filter(
     ([k, v]) => !HIDDEN_PARAMS.has(k) && v != null && v !== '' && v !== undefined,
-  )
-  const mediaUrlParams = Object.entries(record.inputParams || {}).filter(
-    ([, v]) => isUrl(v),
   )
   const isPending = record.status === 'pending' || record.status === 'submitting' || record.status === 'processing' || record.status === 'saving_output'
   const duration = formatDuration(record.createdAt, isPending ? null : record.updatedAt)
@@ -132,133 +132,20 @@ export default function RecordCard({
           </div>
         )}
 
-        {/* 费用 */}
+        {/* 费用明细 */}
         {record.cost && (
-          <div className="mt-1.5 text-xs text-muted-foreground space-y-0.5">
-            <div className="flex flex-wrap gap-x-3 gap-y-0.5">
-              {record.cost.unit && (
-                <span>
-                  {'计费: '}
-                  {record.cost.unit}
-                </span>
-              )}
-              {record.cost.quantity != null && (
-                <span>
-                  {'数量: '}
-                  {record.cost.quantity}
-                </span>
-              )}
-              {record.cost.unitPrice != null && (
-                <span>
-                  单价: ¥
-                  {Number(record.cost.unitPrice).toFixed(4)}
-                </span>
-              )}
-              {record.cost.inputTokens != null && (
-                <span>
-                  {'输入 Tokens: '}
-                  {record.cost.inputTokens}
-                </span>
-              )}
-              {record.cost.outputTokens != null && (
-                <span>
-                  {'输出 Tokens: '}
-                  {record.cost.outputTokens}
-                </span>
-              )}
-              {record.cost.resolution && (
-                <span>
-                  {'分辨率: '}
-                  {record.cost.resolution}
-                </span>
-              )}
-              {record.cost.duration != null && (
-                <span>
-                  {'时长: '}
-                  {record.cost.duration}
-                  s
-                </span>
-              )}
-            </div>
-            {record.cost.totalPriceCents != null && (
-              <p className="font-medium text-foreground">
-                总计: ¥
-                {currency(record.cost.totalPriceCents, { fromCents: true, precision: 4 }).format()}
-                {record.cost.estimated && ' (预估)'}
-              </p>
-            )}
+          <div className="mt-1.5">
+            <CostDetailPanel cost={record.cost as CostDetail} />
           </div>
         )}
 
         {/* 参考素材 */}
-        {mediaUrlParams.length > 0 && (
-          <div className="mt-2">
-            <p className="mb-1 text-[10px] font-medium text-muted-foreground">参考素材</p>
-            <div className="flex gap-1.5 flex-wrap">
-              {mediaUrlParams.map(([key, url]) => {
-                const u = url as string
-                if (isImageUrl(u)) {
-                  return (
-                    <img
-                      key={key}
-                      src={u}
-                      alt={key}
-                      className="size-16 cursor-pointer rounded border object-cover hover:opacity-80 transition-opacity"
-                      onClick={() => onPreview(u)}
-                    />
-                  )
-                }
-                if (isVideoUrl(u)) {
-                  return (
-                    <video key={key} src={u} className="w-full max-w-xs rounded-lg border" controls />
-                  )
-                }
-                return (
-                  <Badge key={key} variant="outline" className="text-[10px]">
-                    {key}
-                    :
-                    {u.slice(0, 30)}
-                  </Badge>
-                )
-              })}
-            </div>
-          </div>
-        )}
+        <ReferenceMedia inputParams={record.inputParams} />
 
         {/* 输出预览 */}
         {record.outputResult && (
           <div className="mt-2">
-            {isImageOutput(record.outputResult) && (
-              <div className="flex gap-2 flex-wrap">
-                {getAssetUrls(record.outputResult).map(url => (
-                  <img
-                    key={url}
-                    src={url}
-                    alt="生成图片"
-                    className="size-28 cursor-pointer rounded-lg border object-cover hover:opacity-80 transition-opacity"
-                    onClick={() => onPreview(url)}
-                  />
-                ))}
-              </div>
-            )}
-            {isTextOutput(record.outputResult) && (
-              <pre className="max-h-60 overflow-auto whitespace-pre-wrap rounded-lg bg-muted p-2 text-xs">
-                {record.outputResult.text}
-              </pre>
-            )}
-            {isVideoOutput(record.outputResult) && (
-              <div className="flex gap-2">
-                {getAssetUrls(record.outputResult).map(url => (
-                  <video
-                    key={url}
-                    src={url}
-                    className="w-full max-w-xs rounded-lg border aspect-video object-cover"
-                    controls
-                    loop
-                  />
-                ))}
-              </div>
-            )}
+            <OutputPreview output={record.outputResult} onPreview={onPreview} />
           </div>
         )}
 

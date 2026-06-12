@@ -90,7 +90,7 @@ export function parseCostDetail(data: unknown): CostDetail | null {
     const totalPriceCents = typeof o.totalPriceCents === 'number' ? o.totalPriceCents : 0
     const totalPrice = typeof o.totalPrice === 'number' ? o.totalPrice : totalPriceCents / 100
     return {
-      unit: (['token', 'image', 'video'].includes(o.unit as string) ? o.unit : 'token') as CostDetail['unit'],
+      unit: (['token', 'image', 'video', 'audio'].includes(o.unit as string) ? o.unit : 'token') as CostDetail['unit'],
       totalPriceCents,
       totalPrice,
       quantity: typeof o.quantity === 'number' ? o.quantity : undefined,

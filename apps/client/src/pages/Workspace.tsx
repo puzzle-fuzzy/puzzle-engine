@@ -1,8 +1,7 @@
-import type { GenerationRecord, ModelParameter } from '@/api/client'
+import type { ModelParameter } from '@/api/client'
 import type { Category } from '@/lib/generation-utils'
 import {
   FileText,
-  FolderOpen,
   Loader2,
   Sparkles,
   Upload,
@@ -10,8 +9,8 @@ import {
   X,
 } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
+import RecordCard from '@/components/generation/RecordCard'
 import MediaPreviewDialog from '@/components/MediaPreviewDialog'
-import RecordCard from '@/components/RecordCard'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
@@ -27,7 +26,6 @@ export default function Workspace() {
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
   const [expandedPrompts, setExpandedPrompts] = useState<Set<string>>(() => new Set())
   const [copiedId, setCopiedId] = useState<string | null>(null)
-  const [groupByProject, setGroupByProject] = useState(false)
   const [deleteConfirm, setDeleteConfirm] = useState<{ open: boolean, id: string }>({ open: false, id: '' })
 
   // Workspace store — form state, models, submission logic
@@ -56,19 +54,16 @@ export default function Workspace() {
   const canGenerate = useMemo(() => selectedModel ? checkCanGenerate(selectedModel, parameters) : false, [selectedModel, parameters])
   const showReferenceUpload = useMemo(() => selectedModel?.referenceMediaType != null, [selectedModel])
 
-  // Generation store — records + projects
+  // Generation store — records
   const records = useGenerationStore(s => s.records)
-  const projectMap = useGenerationStore(s => s.projectMap)
   const fetchRecords = useGenerationStore(s => s.fetchRecords)
-  const fetchProjects = useGenerationStore(s => s.fetchProjects)
 
   useEffect(() => {
     loadModels()
   }, [loadModels])
   useEffect(() => {
-    fetchProjects()
     fetchRecords()
-  }, [fetchProjects, fetchRecords])
+  }, [fetchRecords])
 
   // 渲染媒体上传控件
   function renderMediaUpload(param: ModelParameter) {
@@ -193,27 +188,6 @@ export default function Workspace() {
     }
   }
 
-  // 按项目分组
-  const groupedRecords = useMemo(() => {
-    if (!groupByProject)
-      return null
-    const projectGroups = new Map<string, GenerationRecord[]>()
-    const standalone: GenerationRecord[] = []
-    for (const r of records) {
-      const p = r.inputParams
-      if (p?.source === 'canvas' && p.projectId) {
-        const pid = String(p.projectId)
-        const arr = projectGroups.get(pid) || []
-        arr.push(r)
-        projectGroups.set(pid, arr)
-      }
-      else {
-        standalone.push(r)
-      }
-    }
-    return { projectGroups, standalone }
-  }, [records, groupByProject])
-
   function togglePrompt(id: string) {
     setExpandedPrompts((prev) => {
       const next = new Set(prev)
@@ -233,82 +207,6 @@ export default function Workspace() {
   async function confirmDelete() {
     await removeRecord(deleteConfirm.id)
     setDeleteConfirm({ open: false, id: '' })
-  }
-
-  function renderGroupedRecords() {
-    if (!groupedRecords)
-      return null
-    const entries = [...groupedRecords.projectGroups.entries()]
-    const standalone = groupedRecords.standalone
-
-    return (
-      <>
-        {entries.map(([projectId, groupRecords]) => {
-          const project = projectMap.get(projectId)
-          const projectName = project?.title || `项目 ${projectId.slice(0, 8)}`
-          const hasProcessing = groupRecords.some(r => r.status === 'pending' || r.status === 'processing')
-          const allFailed = groupRecords.every(r => r.status === 'failed')
-          const statusText = hasProcessing ? '生成中' : allFailed ? '全部失败' : '已完成'
-          const statusColor = hasProcessing ? 'text-blue-500' : allFailed ? 'text-destructive' : 'text-green-600'
-          return (
-            <div key={projectId}>
-              <div className="flex items-center gap-2 mb-1 px-1">
-                <FolderOpen className="size-4 text-muted-foreground" />
-                <span className="text-sm font-medium">{projectName}</span>
-                <span className={`text-xs ${statusColor}`}>{statusText}</span>
-                <span className="text-xs text-muted-foreground">
-                  {groupRecords.length}
-                  {' '}
-                  条记录
-                </span>
-              </div>
-              <div className="space-y-2">
-                {groupRecords.map(record => (
-                  <RecordCard
-                    key={record.id}
-                    record={record}
-                    models={useWorkspaceStore.getState().models}
-                    expanded={expandedPrompts.has(record.id)}
-                    copied={copiedId === record.id}
-                    onToggleExpand={togglePrompt}
-                    onCopyPrompt={copyPrompt}
-                    onRegenerate={regenerate}
-                    onDelete={id => setDeleteConfirm({ open: true, id })}
-                    onPreview={setPreviewUrl}
-                  />
-                ))}
-              </div>
-            </div>
-          )
-        })}
-        {standalone.length > 0 && (
-          <>
-            {entries.length > 0 && (
-              <div className="flex items-center gap-2 mb-1 px-1">
-                <FileText className="size-4 text-muted-foreground" />
-                <span className="text-sm font-medium text-muted-foreground">独立记录</span>
-              </div>
-            )}
-            <div className="space-y-2">
-              {standalone.map(record => (
-                <RecordCard
-                  key={record.id}
-                  record={record}
-                  models={useWorkspaceStore.getState().models}
-                  expanded={expandedPrompts.has(record.id)}
-                  copied={copiedId === record.id}
-                  onToggleExpand={togglePrompt}
-                  onCopyPrompt={copyPrompt}
-                  onRegenerate={regenerate}
-                  onDelete={id => setDeleteConfirm({ open: true, id })}
-                  onPreview={setPreviewUrl}
-                />
-              ))}
-            </div>
-          </>
-        )}
-      </>
-    )
   }
 
   return (
@@ -437,18 +335,7 @@ export default function Workspace() {
 
         {/* 右栏 — 生成记录 */}
         <div className="space-y-2">
-          <div className="flex items-center justify-between">
-            <h3 className="text-sm font-semibold text-muted-foreground">生成记录</h3>
-            <Button
-              variant={groupByProject ? 'default' : 'outline'}
-              size="sm"
-              className="h-6 text-xs"
-              onClick={() => setGroupByProject(v => !v)}
-            >
-              <FolderOpen className="size-3.5" />
-              按项目排布
-            </Button>
-          </div>
+          <h3 className="text-sm font-semibold text-muted-foreground">生成记录</h3>
           <ScrollArea className="h-[calc(100vh-8rem)]">
             <div className="space-y-3 pr-2">
               {records.length === 0 && (
@@ -458,9 +345,7 @@ export default function Workspace() {
                 </div>
               )}
 
-              {groupedRecords && renderGroupedRecords()}
-
-              {!groupedRecords && records.map(record => (
+              {records.map(record => (
                 <RecordCard
                   key={record.id}
                   record={record}
