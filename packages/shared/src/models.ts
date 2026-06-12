@@ -23,14 +23,27 @@ export interface ModelPricing {
 
 /**
  * 参数到请求体的映射规则
- * 让客户端无需 model-name 分支即可构建正确的 API 请求
+ *
+ * 设计约束：
+ *   - Key 是 ModelParameter.name，Value 决定该参数在 DashScope API 请求体中的位置
+ *   - applyMappings 遍历此表做 switch 分发，DashScopeClient 不含任何 model-name 分支
+ *   - 新增模型只需在 model-configs.ts 声明 inputMapping + requestType，无需改 client 代码
+ *   - 每个 required 参数必须在 inputMapping 中有映射（model-configs 测试强制）
+ *   - 'ignored' 用于 UI-only 参数（如 watermark 开关），不进入 API 请求
+ *
+ * 映射目标与 DashScope API 请求体结构的对应关系：
+ *   prompt     → input.prompt（chat 模型包装为 messages[].content）
+ *   media      → input.media[{type, url}]（参考图/视频素材）
+ *   mediaField → input[<field>]（模型特有字段如 audio_url、negative_prompt）
+ *   parameter  → parameters[<paramName>]（通用参数如 size、seed、duration）
+ *   ignored    → 跳过，不写入请求体
  */
 export type InputMapping
-  = | { target: 'prompt' } // → input.prompt（或 chat/image 模型的 messages content）
-    | { target: 'media', mediaType: string } // → input.media[].{type, url}
-    | { target: 'mediaField', field: string } // → input.<field>（如 audio_url、media_type）
-    | { target: 'parameter' } // → parameters.<paramName>
-    | { target: 'ignored' } // 仅 UI 展示，不发 API
+  = | { target: 'prompt' }
+    | { target: 'media', mediaType: string }
+    | { target: 'mediaField', field: string }
+    | { target: 'parameter' }
+    | { target: 'ignored' }
 
 /**
  * 请求体形状
