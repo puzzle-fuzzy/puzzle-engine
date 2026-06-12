@@ -1,5 +1,6 @@
 import { logger } from '@excuse/shared'
 import { Elysia } from 'elysia'
+import { recordRequest } from '../services/metrics'
 
 /**
  * HTTP 请求日志插件
@@ -10,6 +11,7 @@ import { Elysia } from 'elysia'
  *
  * 同时将 logger 实例挂载到 Elysia context，
  * 路由 handler 中可通过 context.log 使用。
+ * 每个请求结束后记录到 metrics。
  */
 export const loggerPlugin = new Elysia({
   name: 'logger',
@@ -30,15 +32,19 @@ export const loggerPlugin = new Elysia({
     const duration = start ? Number((performance.now() - start).toFixed(2)) : -1
     const method = request.method
     const url = new URL(request.url).pathname
-    const status = set.status ?? 200
+    const status = typeof set.status === 'number' ? set.status : 200
 
     log.info({ res: { method, url, status, duration: `${duration}ms` } }, '→ response sent')
+
+    recordRequest(status, duration)
   })
   .onError(({ request, error, log, set }) => {
     const method = request.method
     const url = new URL(request.url).pathname
 
     log?.error({ err: error, res: { method, url } }, 'Unhandled error')
+
+    recordRequest(500, 0)
 
     // 返回结构化 500 JSON 错误体 — 与 utils/errors.ts 格式一致
     set.status = 500
