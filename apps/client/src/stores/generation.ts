@@ -45,7 +45,7 @@ export const useGenerationStore = create<GenerationState>((set, get) => ({
     try {
       const data = await listCanvasProjects()
       const map = new Map<string, ProjectDTO>()
-      for (const p of data.data) {
+      for (const p of data.items) {
         map.set(p.id, p)
       }
       set({ projectMap: map })

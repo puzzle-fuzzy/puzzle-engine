@@ -1,4 +1,4 @@
-import type { AcceptedResponse, AuthCurrentUserResponse, AuthResponse, BillingStatisticsResponse, CharacterDTO, DeleteGenerationRecordResponse, GenerateResponse, GenerationRecord, GenerationRecordListResponse, GenerationRecordResponse, LocationDTO, ModelConfig, MutationOkResponse, ProjectDTO, ShotDTO, UploadResponse } from '@excuse/shared'
+import type { AcceptedResponse, AuthCurrentUserResponse, AuthResponse, BillingStatisticsResponse, CanvasCharacterResponse, CanvasLocationResponse, CanvasMutationOkResponse, CanvasProjectListResponse, CanvasProjectResponse, CanvasShotResponse, DeleteGenerationRecordResponse, GenerateResponse, GenerationRecord, GenerationRecordListResponse, GenerationRecordResponse, ModelConfig, MutationOkResponse, UploadResponse } from '@excuse/shared'
 import type { App } from '../../../server/src/index'
 import { treaty } from '@elysia/eden'
 import { sseClient } from './sse'
@@ -221,33 +221,33 @@ export async function fetchBillingStatistics(): Promise<BillingStatisticsRespons
 export async function createCanvasProject(params: {
   title?: string
   storyText: string
-}): Promise<{ success: boolean, data: ProjectDTO }> {
-  return unwrapEden<{ success: boolean, data: ProjectDTO }>(
+}): Promise<CanvasProjectResponse> {
+  return unwrapEden<CanvasProjectResponse>(
     await api.api.canvas.projects.post(params),
   )
 }
 
-export async function listCanvasProjects(): Promise<{ success: boolean, data: ProjectDTO[] }> {
-  return unwrapEden<{ success: boolean, data: ProjectDTO[] }>(
+export async function listCanvasProjects(): Promise<CanvasProjectListResponse> {
+  return unwrapEden<CanvasProjectListResponse>(
     await api.api.canvas.projects.get(),
   )
 }
 
-export async function getCanvasProject(projectId: string): Promise<{ success: boolean, data: ProjectDTO }> {
-  return unwrapEden<{ success: boolean, data: ProjectDTO }>(
+export async function getCanvasProject(projectId: string): Promise<CanvasProjectResponse> {
+  return unwrapEden<CanvasProjectResponse>(
     await api.api.canvas.projects({ projectId }).get(),
   )
 }
 
-export async function deleteCanvasProject(projectId: string): Promise<{ success: boolean }> {
-  return unwrapEden<{ success: boolean }>(
+export async function deleteCanvasProject(projectId: string): Promise<CanvasMutationOkResponse> {
+  return unwrapEden<CanvasMutationOkResponse>(
     await api.api.canvas.projects({ projectId }).delete(),
   )
 }
 
 /** 更新项目标题/故事文本 */
-export async function updateCanvasProject(projectId: string, patch: { title?: string, storyText?: string }): Promise<{ success: boolean, data: ProjectDTO }> {
-  return unwrapEden<{ success: boolean, data: ProjectDTO }>(
+export async function updateCanvasProject(projectId: string, patch: { title?: string, storyText?: string }): Promise<CanvasProjectResponse> {
+  return unwrapEden<CanvasProjectResponse>(
     await api.api.canvas.projects({ projectId }).patch(patch),
   )
 }
@@ -306,8 +306,8 @@ export async function generateCanvasVideos(projectId: string): Promise<AcceptedR
   )
 }
 
-export async function saveCanvasLayout(projectId: string, layout: import('@excuse/shared').CanvasLayoutDto): Promise<{ success: boolean }> {
-  return unwrapEden<{ success: boolean }>(
+export async function saveCanvasLayout(projectId: string, layout: import('@excuse/shared').CanvasLayoutDto): Promise<CanvasMutationOkResponse> {
+  return unwrapEden<CanvasMutationOkResponse>(
     await api.api.canvas.projects({ projectId }).layout.post(layout),
   )
 }
@@ -315,8 +315,8 @@ export async function saveCanvasLayout(projectId: string, layout: import('@excus
 export async function updateCanvasModelPreferences(
   projectId: string,
   prefs: { textModel?: string, imageModel?: string, videoModel?: string },
-): Promise<{ success: boolean, data: ProjectDTO }> {
-  return unwrapEden<{ success: boolean, data: ProjectDTO }>(
+): Promise<CanvasProjectResponse> {
+  return unwrapEden<CanvasProjectResponse>(
     await api.api.canvas.projects({ projectId })['model-preferences'].patch(prefs),
   )
 }
@@ -329,8 +329,8 @@ export async function updateCanvasCharacter(characterId: string, patch: {
   negativePrompt?: string
   referenceImageUrl?: string
   locked?: boolean
-}): Promise<{ success: boolean, data: CharacterDTO }> {
-  return unwrapEden<{ success: boolean, data: CharacterDTO }>(
+}): Promise<CanvasCharacterResponse> {
+  return unwrapEden<CanvasCharacterResponse>(
     await api.api.canvas.characters({ characterId }).patch(patch),
   )
 }
@@ -342,8 +342,8 @@ export async function updateCanvasLocation(locationId: string, patch: {
   negativePrompt?: string
   referenceImageUrl?: string
   locked?: boolean
-}): Promise<{ success: boolean, data: LocationDTO }> {
-  return unwrapEden<{ success: boolean, data: LocationDTO }>(
+}): Promise<CanvasLocationResponse> {
+  return unwrapEden<CanvasLocationResponse>(
     await api.api.canvas.locations({ locationId }).patch(patch),
   )
 }
@@ -356,26 +356,26 @@ export async function updateCanvasShot(shotId: string, patch: {
   cameraJson?: { shotSize: string, angle: string, movement: string, lens: string }
   environmentJson?: { backgroundMotion?: string, lighting?: string, mood?: string, style?: string }
   videoPrompt?: string
-}): Promise<{ success: boolean, data: ShotDTO }> {
-  return unwrapEden<{ success: boolean, data: ShotDTO }>(
+}): Promise<CanvasShotResponse> {
+  return unwrapEden<CanvasShotResponse>(
     await api.api.canvas.shots({ shotId }).patch(patch),
   )
 }
 
-export async function deleteCanvasCharacter(characterId: string): Promise<{ success: boolean }> {
-  return unwrapEden<{ success: boolean }>(
+export async function deleteCanvasCharacter(characterId: string): Promise<CanvasMutationOkResponse> {
+  return unwrapEden<CanvasMutationOkResponse>(
     await api.api.canvas.characters({ characterId }).delete(),
   )
 }
 
-export async function deleteCanvasLocation(locationId: string): Promise<{ success: boolean }> {
-  return unwrapEden<{ success: boolean }>(
+export async function deleteCanvasLocation(locationId: string): Promise<CanvasMutationOkResponse> {
+  return unwrapEden<CanvasMutationOkResponse>(
     await api.api.canvas.locations({ locationId }).delete(),
   )
 }
 
-export async function deleteCanvasShot(shotId: string): Promise<{ success: boolean }> {
-  return unwrapEden<{ success: boolean }>(
+export async function deleteCanvasShot(shotId: string): Promise<CanvasMutationOkResponse> {
+  return unwrapEden<CanvasMutationOkResponse>(
     await api.api.canvas.shots({ shotId }).delete(),
   )
 }

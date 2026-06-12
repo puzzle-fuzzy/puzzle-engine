@@ -75,7 +75,10 @@ export async function saveCanvasLayout(projectId: string, layout: unknown) {
 
 export async function updateModelPreferences(projectId: string, prefs: CanvasModelPreferences) {
   await updateCanvasProject(projectId, { modelPreferencesJson: prefs })
-  return getProjectDetail(projectId)
+  const detail = await getProjectDetail(projectId)
+  if (!detail)
+    throw new Error('项目不存在')
+  return detail
 }
 
 export async function updateCharacterData(characterId: string, patch: {

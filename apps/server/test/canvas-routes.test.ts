@@ -235,6 +235,7 @@ describe('canvas routes', () => {
         headers: { Authorization: `Bearer ${token}` },
       })
       expect(data?.success).toBe(true)
+      expect(data?.items).toBeDefined()
     })
   })
 

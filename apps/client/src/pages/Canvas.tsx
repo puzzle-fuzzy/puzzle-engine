@@ -55,7 +55,7 @@ export default function Canvas() {
   async function loadProjects() {
     try {
       const res = await listCanvasProjects()
-      setProjects(res.data)
+      setProjects(res.items)
     }
     catch {
       toast.error('加载项目列表失败')

@@ -35,6 +35,7 @@
  *   - 归属校验：所有操作先通过 getXxxForAccount 确认资源属于当前用户
  */
 import type { CanvasPipelinePhase } from '@excuse/db'
+import type { AcceptedResponse, CanvasCharacterResponse, CanvasLocationResponse, CanvasMutationOkResponse, CanvasPipelineRunDTO, CanvasPipelineRunListResponse, CanvasPipelineRunResponse, CanvasProjectListResponse, CanvasProjectResponse, CanvasShotResponse } from '@excuse/shared'
 import type { ServerConfig } from '../config'
 import {
   createPipelineRun,
@@ -47,7 +48,6 @@ import {
   listPipelineRunsByProject,
   updateCanvasProject,
 } from '@excuse/db'
-import type { AcceptedResponse } from '@excuse/shared'
 import { createLogger } from '@excuse/shared'
 import { Elysia, t } from 'elysia'
 import * as svc from '../modules/canvas/service'
@@ -59,6 +59,27 @@ const logger = createLogger('canvas-routes')
 
 function acceptedResponse(runId?: string): AcceptedResponse {
   return runId ? { accepted: true, runId } : { accepted: true }
+}
+
+function serializePipelineRun(row: {
+  id: string
+  projectId: string
+  phase: CanvasPipelineRunDTO['phase']
+  status: CanvasPipelineRunDTO['status']
+  startedAt: Date | null
+  finishedAt: Date | null
+  errorMessage: string | null
+  createdBy: string | null
+  inputSnapshotJson: Record<string, unknown> | null
+  outputSummaryJson: Record<string, unknown> | null
+  createdAt: Date
+}): CanvasPipelineRunDTO {
+  return {
+    ...row,
+    startedAt: row.startedAt?.toISOString() ?? null,
+    finishedAt: row.finishedAt?.toISOString() ?? null,
+    createdAt: row.createdAt.toISOString(),
+  }
 }
 
 /**
@@ -110,13 +131,13 @@ export function createCanvasRoutes(config: ServerConfig) {
     // ===== 项目 CRUD =====
     .get('/projects', async ({ userId }) => {
       const projects = await svc.listProjects(userId)
-      return { success: true, data: projects }
+      return { success: true, items: projects, total: projects.length } satisfies CanvasProjectListResponse
     })
 
     .post('/projects', async ({ body, userId }) => {
       const { title, storyText } = body
       const project = await svc.createProject(userId, { title, storyText })
-      return { success: true, data: project }
+      return { success: true, data: project } satisfies CanvasProjectResponse
     }, {
       body: t.Object({
         title: t.Optional(t.String({ maxLength: 500 })),
@@ -131,7 +152,7 @@ export function createCanvasRoutes(config: ServerConfig) {
       const project = await svc.getProjectDetail(projectId)
       if (!project)
         return notFound(set, '项目不存在')
-      return { success: true, data: project }
+      return { success: true, data: project } satisfies CanvasProjectResponse
     })
 
     .delete('/projects/:projectId', async ({ params: { projectId }, userId, set }) => {
@@ -139,7 +160,7 @@ export function createCanvasRoutes(config: ServerConfig) {
       if (!owned)
         return notFound(set, '项目不存在或无权访问')
       await svc.softDeleteProject(projectId)
-      return { success: true }
+      return { success: true } satisfies CanvasMutationOkResponse
     })
 
     // 更新项目标题/故事文本
@@ -151,7 +172,7 @@ export function createCanvasRoutes(config: ServerConfig) {
       if (title === undefined && storyText === undefined)
         return validationError(set, '至少提供一个字段')
       const project = await svc.updateProjectProperties(projectId, { title, storyText })
-      return { success: true, data: project }
+      return { success: true, data: project } satisfies CanvasProjectResponse
     }, {
       body: t.Object({
         title: t.Optional(t.String({ maxLength: 500 })),
@@ -165,7 +186,8 @@ export function createCanvasRoutes(config: ServerConfig) {
       if (!owned)
         return notFound(set, '项目不存在或无权访问')
       const runs = await listPipelineRunsByProject(projectId)
-      return { success: true, data: runs }
+      const serialized = runs.map(serializePipelineRun)
+      return { success: true, items: serialized, total: serialized.length } satisfies CanvasPipelineRunListResponse
     })
 
     .get('/runs/:runId', async ({ params: { runId }, userId, set }) => {
@@ -175,7 +197,7 @@ export function createCanvasRoutes(config: ServerConfig) {
       const owned = await getCanvasProjectByIdForAccount(run.projectId, userId)
       if (!owned)
         return notFound(set, '项目不存在或无权访问')
-      return { success: true, data: run }
+      return { success: true, data: serializePipelineRun(run) } satisfies CanvasPipelineRunResponse
     })
 
     // ===== 流水线步骤 =====
@@ -304,7 +326,7 @@ export function createCanvasRoutes(config: ServerConfig) {
       if (!owned)
         return notFound(set, '项目不存在或无权访问')
       await svc.saveCanvasLayout(projectId, body)
-      return { success: true }
+      return { success: true } satisfies CanvasMutationOkResponse
     }, {
       body: t.Object({
         nodes: t.Array(t.Object({
@@ -338,7 +360,7 @@ export function createCanvasRoutes(config: ServerConfig) {
       if (!owned)
         return notFound(set, '项目不存在或无权访问')
       const project = await svc.updateModelPreferences(projectId, body)
-      return { success: true, data: project }
+      return { success: true, data: project } satisfies CanvasProjectResponse
     }, {
       body: t.Object({
         textModel: t.Optional(t.String()),
@@ -353,7 +375,7 @@ export function createCanvasRoutes(config: ServerConfig) {
       if (!character)
         return notFound(set, '角色不存在或无权访问')
       const updated = await svc.updateCharacterData(characterId, body)
-      return { success: true, data: updated }
+      return { success: true, data: updated } satisfies CanvasCharacterResponse
     }, {
       body: t.Object({
         name: t.Optional(t.String({ maxLength: 200 })),
@@ -371,7 +393,7 @@ export function createCanvasRoutes(config: ServerConfig) {
       if (!location)
         return notFound(set, '场景不存在或无权访问')
       const updated = await svc.updateLocationData(locationId, body)
-      return { success: true, data: updated }
+      return { success: true, data: updated } satisfies CanvasLocationResponse
     }, {
       body: t.Object({
         name: t.Optional(t.String({ maxLength: 200 })),
@@ -388,7 +410,7 @@ export function createCanvasRoutes(config: ServerConfig) {
       if (!shot)
         return notFound(set, '镜头不存在或无权访问')
       const updated = await svc.updateShotData(shotId, body)
-      return { success: true, data: updated }
+      return { success: true, data: updated } satisfies CanvasShotResponse
     }, {
       body: t.Object({
         duration: t.Optional(t.Number()),
@@ -417,7 +439,7 @@ export function createCanvasRoutes(config: ServerConfig) {
       if (!character)
         return notFound(set, '角色不存在或无权访问')
       await svc.deleteCharacter(characterId)
-      return { success: true }
+      return { success: true } satisfies CanvasMutationOkResponse
     })
 
     .delete('/locations/:locationId', async ({ params: { locationId }, userId, set }) => {
@@ -425,7 +447,7 @@ export function createCanvasRoutes(config: ServerConfig) {
       if (!location)
         return notFound(set, '场景不存在或无权访问')
       await svc.deleteLocation(locationId)
-      return { success: true }
+      return { success: true } satisfies CanvasMutationOkResponse
     })
 
     .delete('/shots/:shotId', async ({ params: { shotId }, userId, set }) => {
@@ -433,7 +455,7 @@ export function createCanvasRoutes(config: ServerConfig) {
       if (!shot)
         return notFound(set, '镜头不存在或无权访问')
       await svc.deleteShot(shotId)
-      return { success: true }
+      return { success: true } satisfies CanvasMutationOkResponse
     })
 
     // 重试单个失败的镜头视频 — retry 不创建 pipeline run 记录

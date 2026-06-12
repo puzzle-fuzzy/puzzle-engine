@@ -5,23 +5,27 @@ import type {
   CanvasLayoutPosition,
   CanvasLayoutViewport,
   CanvasModelPreferences,
+  CanvasPipelineRunRow,
   CanvasProjectStatus as CanvasProjectStatusFromDB,
   CanvasShotStatus as CanvasShotStatusFromDB,
   CharacterProfile,
   ContinuityIssue,
   LocationProfile,
   NovelAnalysis,
+  Serialize,
   ShotCamera,
   ShotContinuity,
   ShotEnvironment,
   ShotTimelineEntry,
 } from '@excuse/db'
+import type { EntityResponse, ListResponse, MutationOkResponse } from './api-response'
 
 // 域类型从 @excuse/db import type 重导出（编译期擦除，零运行时影响）
 export type { CanvasModelPreferences, CharacterProfile, ContinuityIssue, LocationProfile, NovelAnalysis }
 export type { ShotCamera, ShotContinuity, ShotEnvironment, ShotTimelineEntry }
 export type { CanvasLayoutEdge, CanvasLayoutNode, CanvasLayoutPosition, CanvasLayoutViewport }
 export type CanvasLayoutDto = CanvasLayoutDtoFromDB
+export type CanvasPipelineRunDTO = Serialize<CanvasPipelineRunRow>
 
 // ===== 画布状态类型（从 DB pgEnum 推导，消除重复定义） =====
 
@@ -139,3 +143,19 @@ export interface ProjectDTO {
   createdAt: string
   updatedAt: string
 }
+
+export type CanvasProjectResponse = EntityResponse<ProjectDTO>
+
+export type CanvasProjectListResponse = ListResponse<ProjectDTO>
+
+export type CanvasPipelineRunResponse = EntityResponse<CanvasPipelineRunDTO>
+
+export type CanvasPipelineRunListResponse = ListResponse<CanvasPipelineRunDTO>
+
+export type CanvasCharacterResponse = EntityResponse<CharacterDTO>
+
+export type CanvasLocationResponse = EntityResponse<LocationDTO>
+
+export type CanvasShotResponse = EntityResponse<ShotDTO>
+
+export type CanvasMutationOkResponse = MutationOkResponse
