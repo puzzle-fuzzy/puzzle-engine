@@ -5,6 +5,7 @@ import { workflows, workflowSteps } from '../schema'
 
 // ===== Workflows =====
 
+/** 创建工作流及其步骤 — 一次性插入 workflow + steps，自动填充 totalSteps */
 export async function createWorkflow(values: WorkflowInsert & { steps: WorkflowStepInsert[] }): Promise<WorkflowRow> {
   const { steps, ...workflowValues } = values
   const db = getDb()
@@ -27,6 +28,7 @@ export async function createWorkflow(values: WorkflowInsert & { steps: WorkflowS
   return workflow!
 }
 
+/** 按 ID 查询单条工作流（不含步骤） */
 export async function getWorkflow(id: string): Promise<WorkflowRow | null> {
   const [row] = await getDb()
     .select()
@@ -36,6 +38,7 @@ export async function getWorkflow(id: string): Promise<WorkflowRow | null> {
   return row ?? null
 }
 
+/** 查询工作流及其所有步骤（按 stepIndex 排序） */
 export async function getWorkflowWithSteps(id: string) {
   const workflow = await getWorkflow(id)
   if (!workflow)
@@ -71,6 +74,7 @@ export async function getStaleWorkflows(timeoutMs: number, limit = 20): Promise<
     .limit(limit)
 }
 
+/** 更新工作流状态，可选附带 output/errorMessage/completedSteps */
 export async function updateWorkflowStatus(id: string, status: 'pending' | 'running' | 'completed' | 'failed' | 'cancelled', opts?: {
   output?: Record<string, unknown>
   errorMessage?: string
@@ -98,6 +102,7 @@ export async function heartbeatWorkflow(id: string) {
 
 // ===== Workflow Steps =====
 
+/** 按 ID 查询单条工作流步骤 */
 export async function getWorkflowStep(id: string): Promise<WorkflowStepRow | null> {
   const [row] = await getDb()
     .select()
@@ -107,6 +112,7 @@ export async function getWorkflowStep(id: string): Promise<WorkflowStepRow | nul
   return row ?? null
 }
 
+/** 更新工作流步骤状态，running 时自动设置 startedAt，终态时设置 finishedAt */
 export async function updateWorkflowStep(id: string, opts: {
   status: 'pending' | 'running' | 'completed' | 'failed' | 'skipped'
   output?: Record<string, unknown>
@@ -134,6 +140,7 @@ export async function updateWorkflowStep(id: string, opts: {
     .where(eq(workflowSteps.id, id))
 }
 
+/** 查询用户所有工作流，按创建时间倒序排列 */
 export async function listWorkflowsByAccount(accountId: string, limit = 20): Promise<WorkflowRow[]> {
   return getDb()
     .select()

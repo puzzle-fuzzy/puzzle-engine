@@ -16,6 +16,7 @@ export async function getGenerationRecordsByTaskIds(taskIds: string[]) {
     .where(inArray(generationRecords.taskId, taskIds))
 }
 
+/** 创建生成记录 — 调用 provider 前先写入，status 默认 pending */
 export async function createGenerationRecord(values: GenerationRecordInsert) {
   const [record] = await getDb().insert(generationRecords).values(values).returning()
   return record!
@@ -157,6 +158,7 @@ export async function deleteGenerationRecord(id: string) {
   await getDb().delete(generationRecords).where(eq(generationRecords.id, id))
 }
 
+/** 重置生成记录为 pending 状态（重试时清除 errorMessage，递增 retryCount，清除 dedupeKey） */
 export async function resetGenerationToPending(id: string) {
   await getDb()
     .update(generationRecords)
@@ -164,6 +166,7 @@ export async function resetGenerationToPending(id: string) {
     .where(eq(generationRecords.id, id))
 }
 
+/** 取消生成记录（用户主动取消，状态直接设为 cancelled） */
 export async function cancelGenerationRecord(id: string) {
   await getDb()
     .update(generationRecords)

@@ -3,11 +3,13 @@ import { and, desc, eq, inArray } from 'drizzle-orm'
 import { getDb } from '../db'
 import { canvasPipelineRuns } from '../schema/canvas-pipeline-runs'
 
+/** 创建流水线运行记录 — 每个 phase 每次执行对应一条 run */
 export async function createPipelineRun(values: CanvasPipelineRunInsert) {
   const [run] = await getDb().insert(canvasPipelineRuns).values(values).returning()
   return run!
 }
 
+/** 按 ID 查询单条流水线运行记录 */
 export async function getPipelineRunById(id: string) {
   const [run] = await getDb()
     .select()
@@ -17,6 +19,7 @@ export async function getPipelineRunById(id: string) {
   return run ?? null
 }
 
+/** 查询项目下所有流水线运行记录，按创建时间倒序排列 */
 export async function listPipelineRunsByProject(projectId: string) {
   return getDb()
     .select()
@@ -25,6 +28,7 @@ export async function listPipelineRunsByProject(projectId: string) {
     .orderBy(desc(canvasPipelineRuns.createdAt))
 }
 
+/** 并发守卫：查找同一项目同一阶段中正在执行或排队中的 run，防止重复提交 */
 export async function findActiveRunForPhase(projectId: string, phase: CanvasPipelinePhase) {
   const [run] = await getDb()
     .select()

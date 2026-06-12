@@ -7,11 +7,13 @@ import { canvasLocations } from '../schema/canvas-locations'
 import { canvasProjects } from '../schema/canvas-projects'
 import { canvasShots } from '../schema/canvas-shots'
 
+/** 创建 Canvas 项目 — 初始状态为 draft */
 export async function createCanvasProject(values: CanvasProjectInsert) {
   const [project] = await getDb().insert(canvasProjects).values(values).returning()
   return project!
 }
 
+/** 按 ID 查询项目（自动排除已软删除的记录） */
 export async function getCanvasProjectById(id: string) {
   const [project] = await getDb()
     .select()
@@ -33,6 +35,7 @@ export async function getCanvasProjectByIdForAccount(id: string, accountId: stri
   return project ?? null
 }
 
+/** 查询用户所有未删除的项目，按创建时间倒序排列 */
 export async function listCanvasProjectsByAccount(accountId: string) {
   return getDb()
     .select()
@@ -41,6 +44,7 @@ export async function listCanvasProjectsByAccount(accountId: string) {
     .orderBy(desc(canvasProjects.createdAt))
 }
 
+/** 更新项目字段（自动刷新 updatedAt，排除 id/accountId/时间戳等不可变字段） */
 export async function updateCanvasProject(
   id: string,
   values: Partial<Omit<CanvasProjectInsert, 'id' | 'accountId' | 'createdAt' | 'updatedAt'>>,
@@ -53,6 +57,7 @@ export async function updateCanvasProject(
   return updated ?? null
 }
 
+/** 软删除项目 — 设置 isDeleted=true，记录不会出现在后续查询中 */
 export async function softDeleteCanvasProject(id: string) {
   await getDb()
     .update(canvasProjects)

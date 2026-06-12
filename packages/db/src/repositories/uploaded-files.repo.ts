@@ -47,6 +47,7 @@ export async function getUploadedFilesByIdsForAccount(ids: string[], accountId: 
     .where(and(inArray(uploadedFiles.id, ids), eq(uploadedFiles.accountId, accountId)))
 }
 
+/** 按 ID 删除单个上传文件记录 */
 export async function deleteUploadedFileById(id: string) {
   await getDb().delete(uploadedFiles).where(eq(uploadedFiles.id, id))
 }
