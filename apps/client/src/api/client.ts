@@ -49,6 +49,11 @@ export type { GenerateResponse, GenerationRecord } from '@excuse/shared'
 export type { BillingStatistics } from '@excuse/shared'
 export type CostDetail = GenerationRecord['cost']
 
+interface AcceptedResponse {
+  accepted: true
+  runId?: string
+}
+
 /**
  * Eden 响应中的错误结构
  * Eden 将非 2xx 响应包装为 { status, statusText, headers, ... } 等
@@ -235,56 +240,56 @@ export async function updateCanvasProject(projectId: string, patch: { title?: st
   )
 }
 
-export async function analyzeCanvasProject(projectId: string): Promise<{ success: boolean }> {
-  return unwrapEden<{ success: boolean }>(
+export async function analyzeCanvasProject(projectId: string): Promise<AcceptedResponse> {
+  return unwrapEden<AcceptedResponse>(
     await api.api.canvas.projects({ projectId }).analyze.post(),
   )
 }
 
-export async function generateCanvasCharacters(projectId: string): Promise<{ success: boolean }> {
-  return unwrapEden<{ success: boolean }>(
+export async function generateCanvasCharacters(projectId: string): Promise<AcceptedResponse> {
+  return unwrapEden<AcceptedResponse>(
     await api.api.canvas.projects({ projectId }).characters.post(),
   )
 }
 
-export async function generateCanvasLocations(projectId: string): Promise<{ success: boolean }> {
-  return unwrapEden<{ success: boolean }>(
+export async function generateCanvasLocations(projectId: string): Promise<AcceptedResponse> {
+  return unwrapEden<AcceptedResponse>(
     await api.api.canvas.projects({ projectId }).locations.post(),
   )
 }
 
-export async function generateCanvasCharacterRefs(projectId: string): Promise<{ success: boolean }> {
-  return unwrapEden<{ success: boolean }>(
+export async function generateCanvasCharacterRefs(projectId: string): Promise<AcceptedResponse> {
+  return unwrapEden<AcceptedResponse>(
     await api.api.canvas.projects({ projectId })['character-refs'].post(),
   )
 }
 
-export async function generateCanvasLocationRefs(projectId: string): Promise<{ success: boolean }> {
-  return unwrapEden<{ success: boolean }>(
+export async function generateCanvasLocationRefs(projectId: string): Promise<AcceptedResponse> {
+  return unwrapEden<AcceptedResponse>(
     await api.api.canvas.projects({ projectId })['location-refs'].post(),
   )
 }
 
-export async function generateCanvasStoryboard(projectId: string): Promise<{ success: boolean }> {
-  return unwrapEden<{ success: boolean }>(
+export async function generateCanvasStoryboard(projectId: string): Promise<AcceptedResponse> {
+  return unwrapEden<AcceptedResponse>(
     await api.api.canvas.projects({ projectId }).storyboard.post(),
   )
 }
 
-export async function checkCanvasContinuity(projectId: string): Promise<{ success: boolean }> {
-  return unwrapEden<{ success: boolean }>(
+export async function checkCanvasContinuity(projectId: string): Promise<AcceptedResponse> {
+  return unwrapEden<AcceptedResponse>(
     await api.api.canvas.projects({ projectId }).continuity.post(),
   )
 }
 
-export async function rebuildCanvasPrompts(projectId: string): Promise<{ success: boolean }> {
-  return unwrapEden<{ success: boolean }>(
+export async function rebuildCanvasPrompts(projectId: string): Promise<AcceptedResponse> {
+  return unwrapEden<AcceptedResponse>(
     await api.api.canvas.projects({ projectId })['rebuild-prompts'].post(),
   )
 }
 
-export async function generateCanvasVideos(projectId: string): Promise<{ success: boolean }> {
-  return unwrapEden<{ success: boolean }>(
+export async function generateCanvasVideos(projectId: string): Promise<AcceptedResponse> {
+  return unwrapEden<AcceptedResponse>(
     await api.api.canvas.projects({ projectId })['generate-videos'].post(),
   )
 }
@@ -363,14 +368,14 @@ export async function deleteCanvasShot(shotId: string): Promise<{ success: boole
   )
 }
 
-export async function retryCanvasShot(shotId: string): Promise<{ success: boolean }> {
-  return unwrapEden<{ success: boolean }>(
+export async function retryCanvasShot(shotId: string): Promise<AcceptedResponse> {
+  return unwrapEden<AcceptedResponse>(
     await api.api.canvas.shots({ shotId }).retry.post(),
   )
 }
 
-export async function retryFailedCanvasShots(projectId: string): Promise<{ success: boolean }> {
-  return unwrapEden<{ success: boolean }>(
+export async function retryFailedCanvasShots(projectId: string): Promise<AcceptedResponse> {
+  return unwrapEden<AcceptedResponse>(
     await api.api.canvas.projects({ projectId })['retry-failed-shots'].post(),
   )
 }

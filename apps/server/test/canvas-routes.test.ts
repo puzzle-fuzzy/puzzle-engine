@@ -336,4 +336,24 @@ describe('canvas routes', () => {
       expect(data?.runId).toBeDefined()
     })
   })
+
+  describe('POST /shots/:shotId/retry', () => {
+    it('立即返回 accepted', async () => {
+      mockGetCanvasShotForAccount.mockResolvedValue({ id: 'shot-001' })
+      const { data } = await client.api.canvas.shots({ shotId: 'shot-001' }).retry.post(null, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      expect(data?.accepted).toBe(true)
+    })
+  })
+
+  describe('POST /projects/:projectId/retry-failed-shots', () => {
+    it('立即返回 accepted', async () => {
+      mockGetCanvasProjectByIdForAccount.mockResolvedValue(makeProjectRow())
+      const { data } = await client.api.canvas.projects({ projectId: 'proj-001' })['retry-failed-shots'].post(null, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      expect(data?.accepted).toBe(true)
+    })
+  })
 })

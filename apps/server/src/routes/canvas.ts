@@ -449,7 +449,7 @@ export function createCanvasRoutes(config: ServerConfig) {
           error: err instanceof Error ? err.message : String(err),
         })
       })
-      return { success: true, message: '开始重试镜头' }
+      return { accepted: true }
     })
 
     // 批量重试项目中所有失败的镜头
@@ -467,6 +467,6 @@ export function createCanvasRoutes(config: ServerConfig) {
           error: err instanceof Error ? err.message : String(err),
         })
       })
-      return { success: true, message: '开始重试失败镜头' }
+      return { accepted: true }
     })
 }
