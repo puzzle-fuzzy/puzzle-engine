@@ -21,9 +21,9 @@ export default function Navbar() {
       return
     api.api.notifications.unread.get()
       .then((res) => {
-        const data = res.data as { success?: boolean, count?: number } | undefined
+        const data = res.data
         if (data?.success) {
-          setUnreadCount(data.count ?? 0)
+          setUnreadCount(data.data.count)
         }
       })
       .catch(() => {})

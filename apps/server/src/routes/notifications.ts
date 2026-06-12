@@ -1,9 +1,25 @@
+import type { MutationOkResponse, NotificationDTO, NotificationListResponse, NotificationReadAllResponse, NotificationUnreadCountResponse } from '@excuse/shared'
 import type { ServerConfig } from '../config'
 import { createNotification, getUnreadCount, listNotifications, markAllNotificationsRead, markNotificationRead } from '@excuse/db'
 import { Elysia, t } from 'elysia'
 import { createRequireAuthPlugin } from '../plugins/auth'
 import { dispatchToUser } from '../services/sse-manager'
 import { notFound } from '../utils/errors'
+
+function serializeNotification(row: {
+  id: string
+  accountId: string
+  type: NotificationDTO['type']
+  title: string
+  body: string | null
+  read: boolean
+  createdAt: Date
+}): NotificationDTO {
+  return {
+    ...row,
+    createdAt: row.createdAt.toISOString(),
+  }
+}
 
 /**
  * 通知路由
@@ -22,11 +38,12 @@ export function createNotificationRoutes(config: ServerConfig) {
         limit: query.limit ?? 50,
         offset: query.offset ?? 0,
       })
-      const serialized = notifications.map(n => ({
-        ...n,
-        createdAt: n.createdAt.toISOString(),
-      }))
-      return { success: true, notifications: serialized, total: serialized.length }
+      const serialized = notifications.map(serializeNotification)
+      return {
+        success: true,
+        items: serialized,
+        total: serialized.length,
+      } satisfies NotificationListResponse
     }, {
       query: t.Object({
         limit: t.Optional(t.Numeric()),
@@ -41,7 +58,10 @@ export function createNotificationRoutes(config: ServerConfig) {
     })
     .get('/unread', async ({ userId }) => {
       const count = await getUnreadCount(userId)
-      return { success: true, count }
+      return {
+        success: true,
+        data: { count },
+      } satisfies NotificationUnreadCountResponse
     }, {
       detail: {
         summary: '获取未读数量',
@@ -54,7 +74,7 @@ export function createNotificationRoutes(config: ServerConfig) {
       if (!updated) {
         return notFound(set, '通知不存在')
       }
-      return { success: true }
+      return { success: true } satisfies MutationOkResponse
     }, {
       params: t.Object({ id: t.String() }),
       detail: {
@@ -65,7 +85,10 @@ export function createNotificationRoutes(config: ServerConfig) {
     })
     .post('/read-all', async ({ userId }) => {
       const count = await markAllNotificationsRead(userId)
-      return { success: true, count }
+      return {
+        success: true,
+        data: { count },
+      } satisfies NotificationReadAllResponse
     }, {
       detail: {
         summary: '全部标记已读',
