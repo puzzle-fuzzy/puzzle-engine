@@ -56,7 +56,6 @@ export default function Workspace() {
   const removeRecord = useGenerationStore(s => s.removeRecord)
   const fetchRecords = useGenerationStore(s => s.fetchRecords)
   const fetchProjects = useGenerationStore(s => s.fetchProjects)
-  const subscribeSSE = useGenerationStore(s => s.subscribeSSE)
 
   // 加载模型列表
   useEffect(() => {
@@ -65,13 +64,11 @@ export default function Workspace() {
     })
   }, [])
 
-  // 加载 Canvas 项目列表 + 生成记录 + SSE 订阅
+  // 加载 Canvas 项目列表 + 生成记录（SSE 订阅由 RealtimeSync store 统一管理）
   useEffect(() => {
     fetchProjects()
     fetchRecords()
-    const unsubscribe = subscribeSSE()
-    return unsubscribe
-  }, [fetchProjects, fetchRecords, subscribeSSE])
+  }, [fetchProjects, fetchRecords])
 
   // 按类别筛选模型
   const categoryModels = models.filter(m => m.category === selectedCategory)

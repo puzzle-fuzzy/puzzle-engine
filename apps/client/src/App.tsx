@@ -13,13 +13,18 @@ import Layout from './pages/Layout'
 import Login from './pages/Login'
 import Register from './pages/Register'
 import Workspace from './pages/Workspace'
+import { useRealtimeSync } from './stores/realtime-sync'
 
 function App() {
   useEffect(() => {
     if (getAuthToken()) {
       sseClient.connect()
     }
-    return () => sseClient.disconnect()
+    const unsubRealtime = useRealtimeSync.getState().initialize()
+    return () => {
+      unsubRealtime()
+      sseClient.disconnect()
+    }
   }, [])
 
   return (

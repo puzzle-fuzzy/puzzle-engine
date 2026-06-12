@@ -1,6 +1,6 @@
 import type { SSEGenerationStatusEvent, SSENotificationEvent, SSEPipelineNodeEvent } from '@excuse/shared'
-import { fetchEventSource } from '@microsoft/fetch-event-source'
 import { parseSSEGenerationStatusEvent, parseSSENotificationEvent, parseSSEPipelineNodeEvent } from '@excuse/shared'
+import { fetchEventSource } from '@microsoft/fetch-event-source'
 import { getAuthToken, setAuthToken } from './client'
 
 /**
@@ -42,6 +42,8 @@ class SSEClient {
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null
   /** 用户主动调用 disconnect() 时为 true，此时不触发自动重连 */
   private intentionallyClosed = false
+  private hasConnected = false
+  private openCallbacks = new Set<() => void>()
 
   /**
    * 建立 SSE 连接
@@ -60,6 +62,7 @@ class SSEClient {
     this.abortController = new AbortController()
 
     const baseUrl = import.meta.env.VITE_API_BASE_URL ?? ''
+    const notifyOpen = this.notifyOpen.bind(this)
 
     fetchEventSource(`${baseUrl}/api/sse`, {
       signal: this.abortController.signal,
@@ -68,6 +71,7 @@ class SSEClient {
       },
       async onopen(response) {
         if (response.ok && response.headers.get('content-type')?.includes('text/event-stream')) {
+          notifyOpen()
           return
         }
 
@@ -124,6 +128,29 @@ class SSEClient {
     this.intentionallyClosed = true
     this.cancelReconnect()
     this.cleanupConnection()
+  }
+
+  /**
+   * 注册连接建立回调 — 首次连接和重连都会触发。
+   * RealtimeSync store 用此回调在重连后刷新可能错过的事件。
+   */
+  onOpen(callback: () => void): () => void {
+    this.openCallbacks.add(callback)
+    return () => {
+      this.openCallbacks.delete(callback)
+    }
+  }
+
+  private notifyOpen() {
+    this.hasConnected = true
+    for (const cb of this.openCallbacks) {
+      try {
+        cb()
+      }
+      catch (err) {
+        console.error('[SSE] onOpen callback error:', err)
+      }
+    }
   }
 
   /**

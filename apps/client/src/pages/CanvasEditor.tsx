@@ -2,10 +2,10 @@ import type { ProjectDTO } from '@excuse/shared'
 import { useCallback, useEffect, useState } from 'react'
 import { useParams } from 'react-router'
 import { getCanvasProject } from '../api/client'
-import { sseClient } from '../api/sse'
 import CanvasFlow from '../components/canvas/CanvasFlow'
 import NodeDetailPanel from '../components/canvas/NodeDetailPanel'
 import PipelineController from '../components/canvas/PipelineController'
+import { useRealtimeSync } from '../stores/realtime-sync'
 
 export default function CanvasEditor() {
   const { projectId } = useParams<{ projectId: string }>()
@@ -14,7 +14,11 @@ export default function CanvasEditor() {
   const [error, setError] = useState<string | null>(null)
   const [selectedNode, setSelectedNode] = useState<{ id: string, type: string } | null>(null)
   const [runningPhase, setRunningPhase] = useState<string | null>(null)
-  const [phaseDone, setPhaseDone] = useState<{ key: string, status: 'completed' | 'failed', error?: string } | null>(null)
+
+  // 从 RealtimeSync 获取项目版本号和 pipeline 阶段完成信号
+  const projectVersion = useRealtimeSync(s => projectId ? s.projectVersions[projectId] : 0)
+  const phaseDone = useRealtimeSync(s => s.phaseDone)
+  const consumePhaseDone = useRealtimeSync(s => s.consumePhaseDone)
 
   const loadProject = useCallback(async () => {
     if (!projectId)
@@ -35,25 +39,11 @@ export default function CanvasEditor() {
     loadProject()
   }, [loadProject])
 
-  // SSE real-time updates
+  // 项目版本号变化时重新加载（由 pipeline_node_update SSE 事件驱动）
   useEffect(() => {
-    const unsub = sseClient.on('pipeline_node_update', (event) => {
-      if (event.projectId !== projectId)
-        return
-
-      // Phase completion event from server (fire-and-forget pattern)
-      if (event.nodeType === 'phase') {
-        setPhaseDone({
-          key: event.nodeId,
-          status: event.status === 'completed' ? 'completed' : 'failed',
-          error: event.error,
-        })
-      }
-
+    if (projectVersion && projectVersion > 0)
       loadProject()
-    })
-    return unsub
-  }, [projectId, loadProject])
+  }, [projectVersion, loadProject])
 
   if (loading) {
     return <div className="flex items-center justify-center h-screen text-muted-foreground">加载项目...</div>
@@ -127,7 +117,7 @@ export default function CanvasEditor() {
         onPhaseComplete={loadProject}
         onPhaseChange={setRunningPhase}
         phaseDone={phaseDone}
-        onPhaseDoneConsumed={() => setPhaseDone(null)}
+        onPhaseDoneConsumed={consumePhaseDone}
       />
     </div>
   )

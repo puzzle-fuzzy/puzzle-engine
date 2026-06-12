@@ -3,7 +3,6 @@ import type { GenerationRecord } from '@/api/client'
 import { parseCostDetail, parseOutputResult } from '@excuse/shared'
 import { create } from 'zustand'
 import { fetchRecords, listCanvasProjects } from '@/api/client'
-import { sseClient } from '@/api/sse'
 
 /** 将后端原始 GenerationRecord 的 outputResult/cost 规范化为前端可用的域类型 */
 function normalizeRecord(raw: GenerationRecord): GenerationRecord {
@@ -24,7 +23,6 @@ interface GenerationState {
   addRecord: (record: GenerationRecord) => void
   removeRecord: (id: string) => void
   updateRecordFromSSE: (event: SSEGenerationStatusEvent) => void
-  subscribeSSE: () => () => void
 }
 
 export const useGenerationStore = create<GenerationState>((set, get) => ({
@@ -80,12 +78,5 @@ export const useGenerationStore = create<GenerationState>((set, get) => ({
     else {
       get().fetchRecords()
     }
-  },
-
-  subscribeSSE: () => {
-    const unsubscribe = sseClient.on('generation_status', (event) => {
-      get().updateRecordFromSSE(event)
-    })
-    return unsubscribe
   },
 }))
