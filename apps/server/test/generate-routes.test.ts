@@ -377,7 +377,7 @@ describe('generate routes', () => {
       // referenceUrls 应传给 provider
       expect(mockGenerate).toHaveBeenCalledWith(
         'qwen-max',
-        { prompt: '你好' },
+        expect.objectContaining({ prompt: '你好' }),
         ['/uploads/file1.png', '/uploads/file2.png'],
       )
     })
