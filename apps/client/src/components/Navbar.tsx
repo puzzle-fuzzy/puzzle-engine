@@ -1,6 +1,8 @@
-import { FolderOpen, LayoutDashboard, LogOut, Map, Receipt } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { Bell, FolderOpen, LayoutDashboard, LogOut, Map, Receipt } from 'lucide-react'
 import { NavLink } from 'react-router'
 import { useAuth } from '../auth/AuthContext'
+import { api } from '../api/client'
 import { Button } from './ui/button'
 
 const NAV_ITEMS = [
@@ -12,6 +14,20 @@ const NAV_ITEMS = [
 
 export default function Navbar() {
   const { user, logout } = useAuth()
+  const [unreadCount, setUnreadCount] = useState(0)
+
+  useEffect(() => {
+    if (!user)
+      return
+    api.api.notifications.unread.get()
+      .then((res) => {
+        const data = res.data as { success?: boolean, count?: number } | undefined
+        if (data?.success) {
+          setUnreadCount(data.count ?? 0)
+        }
+      })
+      .catch(() => {})
+  }, [user])
 
   return (
     <header className="sticky top-0 z-50 w-full border-b bg-background/80 backdrop-blur-sm">
@@ -38,6 +54,16 @@ export default function Navbar() {
         {/* 右侧用户区域 */}
         {user && (
           <div className="ml-auto flex items-center gap-3">
+            <div className="relative">
+              <Button variant="ghost" size="icon" title="通知">
+                <Bell className="size-4" />
+              </Button>
+              {unreadCount > 0 && (
+                <span className="absolute -right-1 -top-1 flex size-4 items-center justify-center rounded-full bg-destructive text-[10px] font-bold text-destructive-foreground">
+                  {unreadCount > 9 ? '9+' : unreadCount}
+                </span>
+              )}
+            </div>
             <span className="text-sm text-muted-foreground">{user.username}</span>
             <Button variant="ghost" size="icon" onClick={logout} title="退出登录">
               <LogOut className="size-4" />

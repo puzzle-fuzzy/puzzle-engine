@@ -172,6 +172,7 @@ describe('sSEClient', () => {
         type: 'balance_warning',
         title: '余额预警',
         body: '余额不足',
+        read: false,
         createdAt: '2024-01-01T00:00:00.000Z',
       }
       pushEvent('notification', JSON.stringify(event))
