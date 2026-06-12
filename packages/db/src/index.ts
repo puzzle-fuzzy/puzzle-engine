@@ -10,6 +10,10 @@ export * from './notify'
 // Repository 函数（推荐的数据访问方式）
 export * from './repositories'
 
+// Services（业务级操作，跨多个 repository）
+export { RETENTION_POLICY, runRetentionCleanup } from './services/retention'
+export type { RetentionResult } from './services/retention'
+
 // Schema（drizzle-kit 迁移工具需要）
 export * from './schema'
 
