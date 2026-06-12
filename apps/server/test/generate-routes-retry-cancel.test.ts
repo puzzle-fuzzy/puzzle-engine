@@ -13,11 +13,13 @@ import { beforeAll, beforeEach, describe, expect, it, mock } from 'bun:test'
 import { extractEdenError, makeFailedRecord, makeProcessingRecord, makeTestConfig, signTestToken } from './helpers/test-factory'
 
 interface MockProviderResult {
+  type?: 'text' | 'image' | 'video_task' | 'failed'
   success: boolean
+  model?: string
   error?: string
   output?: Record<string, unknown>
   usage?: Record<string, unknown>
-  providerTaskId?: string
+  taskId?: string
 }
 
 // ─── Mocks ───────────────────────────────────────────────
@@ -33,7 +35,7 @@ const mockMarkProcessing = mock<(id: string, data: Record<string, unknown>) => P
 const mockMarkSucceeded = mock<(id: string, output: unknown, cost: unknown) => Promise<void>>(() => Promise.resolve(undefined))
 const mockCalculateCost = mock<() => Record<string, unknown>>(() => ({ unit: 'token', totalPriceCents: 1, totalPrice: 0.01 }))
 const mockGenerate = mock<(model: string, params: Record<string, unknown>, refs?: string[]) => Promise<MockProviderResult>>(() =>
-  Promise.resolve({ success: false, error: 'mock error' }),
+  Promise.resolve({ type: 'failed', success: false, error: 'mock error' }),
 )
 const mockNotifyStatus = mock<(payload: Record<string, unknown>) => Promise<void>>(() => Promise.resolve(undefined))
 const mockGetUploadedFilesByIdsForAccount = mock<(ids: string[], accountId: string) => Promise<unknown[]>>(() => Promise.resolve([]))

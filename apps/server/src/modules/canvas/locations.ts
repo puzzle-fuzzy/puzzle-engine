@@ -42,7 +42,7 @@ export async function generateLocations(projectId: string, config: { dashscopeAp
         temperature: 0.7,
       })
 
-      if (!result.success || !result.output) {
+      if (result.type === 'failed') {
         notifyNode(accountId, projectId, 'location', name, 'failed', undefined, result.error, runId)
         continue
       }

@@ -111,16 +111,16 @@ export function createOpenAIGatewayRoutes(config: ServerConfig) {
       // 调用 provider
       const result = await client.chatCompletion(modelConfig.id, parameters)
 
-      if (!result.success) {
-        await markGenerationFailed(record.id, result.error ?? 'Provider error')
-        const err = openaiError(result.error ?? 'Generation failed', 'server_error', 'generation_failed', 500)
+      if (result.type === 'failed' || !result.success) {
+        await markGenerationFailed(record.id, result.error)
+        const err = openaiError(result.error, 'server_error', 'generation_failed', 500)
         set.status = err.status
         return err.response
       }
 
       // 计算实际成本
       calculateCost(modelConfig, parameters, result.usage)
-      const text = String(result.output?.text ?? '')
+      const text = result.output.text
 
       // 更新记录为成功
       const textOutput: OutputResult = { type: 'text' as const, text }

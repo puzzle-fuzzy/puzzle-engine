@@ -47,7 +47,7 @@ export async function generateStoryboard(projectId: string, config: { dashscopeA
       temperature: 0.7,
     })
 
-    if (!result.success || !result.output) {
+    if (result.type === 'failed') {
       throw new Error(result.error || '分镜生成失败')
     }
 

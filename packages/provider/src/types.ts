@@ -5,18 +5,69 @@ export interface DashScopeConfig {
   baseUrl?: string
 }
 
-export interface ProviderResult {
-  success: boolean
-  providerTaskId?: string
-  output?: Record<string, unknown>
-  usage?: {
-    inputTokens?: number
-    outputTokens?: number
-    imageCount?: number
-    videoDuration?: number
-  }
-  error?: string
+export interface ProviderUsage {
+  inputTokens?: number
+  outputTokens?: number
+  imageCount?: number
+  videoDuration?: number
 }
+
+export interface TextProviderOutput extends Record<string, unknown> {
+  type: 'text'
+  text: string
+  raw: unknown
+}
+
+export interface ImageProviderOutput extends Record<string, unknown> {
+  type: 'image'
+  urls: string[]
+  raw: unknown
+}
+
+export interface VideoTaskProviderOutput extends Record<string, unknown> {
+  type: 'processing'
+  taskId: string
+  status: 'submitted'
+  raw: unknown
+}
+
+export interface TextProviderResult {
+  type: 'text'
+  success: true
+  model: string
+  output: TextProviderOutput
+  usage?: ProviderUsage
+}
+
+export interface ImageProviderResult {
+  type: 'image'
+  success: true
+  model: string
+  output: ImageProviderOutput
+  usage?: ProviderUsage
+}
+
+export interface VideoTaskProviderResult {
+  type: 'video_task'
+  success: true
+  model: string
+  taskId: string
+  output: VideoTaskProviderOutput
+  usage?: ProviderUsage
+}
+
+export interface FailedProviderResult {
+  type: 'failed'
+  success: false
+  model?: string
+  error: string
+}
+
+export type ProviderResult
+  = | TextProviderResult
+    | ImageProviderResult
+    | VideoTaskProviderResult
+    | FailedProviderResult
 
 export interface TaskStatus {
   taskId: string

@@ -8,7 +8,7 @@
  *   2. 参考文件归属校验（resolveReferenceUrls）— 安全边界
  *   3. 执行生成（executeGeneration）— provider 调用 + 三分支处理
  *      - 分支 1: provider 失败 → 标记失败 + SSE
- *      - 分支 2: 异步任务(视频) → 保存 taskId + SSE
+ *      - 分支 2: 异步任务(视频) → 保存 provider taskId + SSE
  *      - 分支 3: 同步完成(文本/图片) → 下载保存 + 计费 + SSE
  *   4. 取消任务（cancelGeneration）— best-effort provider 取消 + DB 取消
  */
@@ -107,7 +107,7 @@ export async function resolveReferenceUrls(referenceFileIds: string[], accountId
  *
  * 三个分支：
  *   1. provider 失败 → markGenerationFailed + SSE → 返回 { success: false }
- *   2. provider 返回 providerTaskId（异步视频）→ markGenerationProcessing + SSE → 返回 { success: true }
+ *   2. provider 返回 video_task variant（异步视频）→ markGenerationProcessing + SSE → 返回 { success: true }
  *   3. 同步完成（文本/图片）→ 图片下载 + 计算实际费用 + markGenerationSucceeded + SSE → 返回 { success: true }
  *
  * 此函数不处理 HTTP 逻辑（认证、权限、4xx），只处理业务流程。
@@ -124,8 +124,8 @@ export async function executeGeneration(
   const result = await client.generate(model, parameters, referenceUrls)
 
   // === 分支 1: provider 调用失败 ===
-  if (!result.success) {
-    await markGenerationFailed(recordId, result.error!)
+  if (result.type === 'failed' || !result.success) {
+    await markGenerationFailed(recordId, result.error)
     await notifyGenerationStatus({
       accountId,
       recordId,
@@ -140,10 +140,10 @@ export async function executeGeneration(
     return { success: false, record: updated! }
   }
 
-  // === 分支 2: 异步任务（视频生成）— 保存 providerTaskId，Worker 会轮询 ===
-  if (result.providerTaskId) {
+  // === 分支 2: 异步任务（视频生成）— 保存 provider taskId，Worker 会轮询 ===
+  if (result.type === 'video_task') {
     await markGenerationProcessing(recordId, {
-      taskId: result.providerTaskId,
+      taskId: result.taskId,
       outputResult: parseProviderOutput(result.output),
     })
     await notifyGenerationStatus({
@@ -152,7 +152,7 @@ export async function executeGeneration(
       status: 'processing',
       category,
       model,
-      taskId: result.providerTaskId,
+      taskId: result.taskId,
       traceId,
     })
     const updated = await getGenerationRecordById(recordId)

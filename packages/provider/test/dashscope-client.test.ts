@@ -240,7 +240,8 @@ describe('DashScopeClient', () => {
       restoreFetch()
 
       expect(result.success).toBe(true)
-      expect(result.providerTaskId).toBe('task-abc-123')
+      expect(result.type).toBe('video_task')
+      expect(result.taskId).toBe('task-abc-123')
       expect(result.usage!.videoDuration).toBe(5)
     })
 
@@ -253,7 +254,8 @@ describe('DashScopeClient', () => {
       restoreFetch()
 
       expect(result.success).toBe(true)
-      expect(result.providerTaskId).toBe('req-fallback-456')
+      expect(result.type).toBe('video_task')
+      expect(result.taskId).toBe('req-fallback-456')
     })
 
     it('包含 X-DashScope-Async header', async () => {
@@ -395,7 +397,8 @@ describe('DashScopeClient', () => {
       restoreFetch()
 
       expect(result.success).toBe(true)
-      expect(result.providerTaskId).toBe('task-vid-001')
+      expect(result.type).toBe('video_task')
+      expect(result.taskId).toBe('task-vid-001')
     })
 
     it('未知模型返回错误', async () => {

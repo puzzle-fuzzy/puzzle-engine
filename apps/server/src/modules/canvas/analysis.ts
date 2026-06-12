@@ -40,7 +40,7 @@ export async function analyzeProject(projectId: string, config: { dashscopeApiKe
       temperature: 0.7,
     })
 
-    if (!result.success || !result.output) {
+    if (result.type === 'failed') {
       throw new Error(result.error || '分析失败')
     }
 

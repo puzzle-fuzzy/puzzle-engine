@@ -43,7 +43,7 @@ export async function generateCharacters(projectId: string, config: { dashscopeA
         temperature: 0.7,
       })
 
-      if (!result.success || !result.output) {
+      if (result.type === 'failed') {
         notifyNode(accountId, projectId, 'character', name, 'failed', undefined, result.error, runId)
         continue
       }

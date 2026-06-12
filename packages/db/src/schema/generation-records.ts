@@ -15,7 +15,7 @@ export const generationCategoryEnum = pgEnum('generation_category', ['text', 'im
  *
  * 状态流转规则（只允许相邻状态转换）：
  *   pending → submitting:  调用 DashScope API 前一刻，防止半完成状态
- *   submitting → processing: API 返回 providerTaskId（异步视频）
+ *   submitting → processing: API 返回 provider taskId（异步视频）
  *   submitting → succeeded:  API 直接返回结果（同步文本/图片）
  *   submitting → failed:    API 调用失败或超时
  *   processing → saving_output: Worker 收到视频完成通知，开始下载

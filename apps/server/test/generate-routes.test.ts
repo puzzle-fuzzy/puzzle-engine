@@ -20,11 +20,13 @@ import { extractEdenError, makeRecord, makeTestConfig, signTestToken } from './h
 
 /** Provider 返回结构（涵盖同步/异步/成功/失败所有变体） */
 interface MockProviderResult {
+  type?: 'text' | 'image' | 'video_task' | 'failed'
   success: boolean
+  model?: string
   error?: string
   output?: Record<string, unknown>
   usage?: Record<string, unknown>
-  providerTaskId?: string
+  taskId?: string
 }
 
 // ─── Mocks ───────────────────────────────────────────────
@@ -40,7 +42,7 @@ const mockMarkProcessing = mock<(id: string, data: Record<string, unknown>) => P
 const mockMarkSucceeded = mock<(id: string, output: unknown, cost: unknown) => Promise<void>>(() => Promise.resolve(undefined))
 const mockCalculateCost = mock<() => Record<string, unknown>>(() => ({ unit: 'token', totalPriceCents: 1, totalPrice: 0.01 }))
 const mockGenerate = mock<(model: string, params: Record<string, unknown>, refs?: string[]) => Promise<MockProviderResult>>(() =>
-  Promise.resolve({ success: false, error: 'mock error' }),
+  Promise.resolve({ type: 'failed', success: false, error: 'mock error' }),
 )
 
 const mockNotifyStatus = mock<(payload: Record<string, unknown>) => Promise<void>>(() => Promise.resolve(undefined))
@@ -288,13 +290,15 @@ describe('generate routes', () => {
       expect(data?.record?.status).toBe('failed')
     })
 
-    it('异步视频模型返回 providerTaskId，标记为 processing', async () => {
+    it('异步视频模型返回 video_task，标记为 processing', async () => {
       mockCreateRecord.mockResolvedValue(makeRecord({ category: 'video', model: 'wan2.1-i2v-t2v-720p' }))
       mockGetRecordById.mockResolvedValue(makeRecord({ status: 'processing', category: 'video' }))
       mockGenerate.mockResolvedValue({
+        type: 'video_task',
         success: true,
-        providerTaskId: 'dashscope-task-123',
-        output: {},
+        model: 'wan2.1-i2v-t2v-720p',
+        taskId: 'dashscope-task-123',
+        output: { type: 'processing', taskId: 'dashscope-task-123', status: 'submitted' },
       })
       mockCalculateCost.mockReturnValue({ unit: 'video', totalPriceCents: 0, totalPrice: 0 })
 

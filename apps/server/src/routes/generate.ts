@@ -29,7 +29,7 @@ import { forbidden, notFound, validationError } from '../utils/errors'
  *     所有 DB 写操作必须在所有校验通过之后，防止校验失败留下脏记录/脏状态
  *   - dedupe: 同一用户 + 同模型 + 同参数在 pending/processing 时不重复提交
  *   - referenceFileIds: 必须属于当前用户，校验在创建记录之前（不在之后）
- *   - 异步任务（视频）: provider 返回 providerTaskId，Worker 轮询完成后更新
+ *   - 异步任务（视频）: provider 返回 video_task，Worker 轮询完成后更新
  *   - 同步任务（文本/图片）: 直接下载并保存输出，一步到位
  */
 export function createGenerateRoutes(config: ServerConfig) {

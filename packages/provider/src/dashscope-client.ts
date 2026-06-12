@@ -7,7 +7,15 @@ import type {
   DashScopeUsage,
   DashScopeVideoSubmitResponse,
 } from './dashscope-types'
-import type { DashScopeConfig, ProviderResult, TaskStatus } from './types'
+import type {
+  DashScopeConfig,
+  FailedProviderResult,
+  ImageProviderResult,
+  ProviderResult,
+  TaskStatus,
+  TextProviderResult,
+  VideoTaskProviderResult,
+} from './types'
 import { parseDashScopeError } from './dashscope-errors'
 import { getModelById } from './model-configs'
 
@@ -27,6 +35,10 @@ export class DashScopeClient {
       'Authorization': `Bearer ${this.config.apiKey}`,
       'Content-Type': 'application/json',
     }
+  }
+
+  private failed(model: string | undefined, error: string): FailedProviderResult {
+    return { type: 'failed', success: false, model, error }
   }
 
   // ── 声明式请求体构建 ──────────────────────────────────
@@ -175,10 +187,10 @@ export class DashScopeClient {
   /**
    * 文本生成 — 调用千问系列模型
    */
-  async chatCompletion(model: string, params: Record<string, unknown>): Promise<ProviderResult> {
+  async chatCompletion(model: string, params: Record<string, unknown>): Promise<TextProviderResult | FailedProviderResult> {
     const modelConfig = getModelById(model)
     if (!modelConfig) {
-      return { success: false, error: `未知模型: ${model}` }
+      return this.failed(model, `未知模型: ${model}`)
     }
 
     const body = this.buildRequestBody(modelConfig, params)
@@ -193,7 +205,7 @@ export class DashScopeClient {
       const data = await response.json() as DashScopeChatResponse | DashScopeOpenaiChatResponse
 
       if (response.status !== 200) {
-        return { success: false, error: `模型 ${modelConfig.name}（${modelConfig.id}）: ${parseDashScopeError(data)}` }
+        return this.failed(model, `模型 ${modelConfig.name}（${modelConfig.id}）: ${parseDashScopeError(data)}`)
       }
 
       const isOpenaiFormat = modelConfig.requestType === 'openai-chat'
@@ -216,7 +228,9 @@ export class DashScopeClient {
       }
 
       return {
+        type: 'text',
         success: true,
+        model,
         output: {
           type: 'text',
           text,
@@ -230,17 +244,17 @@ export class DashScopeClient {
     }
     catch (error) {
       const msg = error instanceof Error ? error.message : String(error)
-      return { success: false, error: `网络错误：无法连接百炼 API（${msg}）` }
+      return this.failed(model, `网络错误：无法连接百炼 API（${msg}）`)
     }
   }
 
   /**
    * 图片生成 — 调用千问图像系列模型（同步）
    */
-  async generateImage(model: string, params: Record<string, unknown>): Promise<ProviderResult> {
+  async generateImage(model: string, params: Record<string, unknown>): Promise<ImageProviderResult | FailedProviderResult> {
     const modelConfig = getModelById(model)
     if (!modelConfig) {
-      return { success: false, error: `未知模型: ${model}` }
+      return this.failed(model, `未知模型: ${model}`)
     }
 
     const body = this.buildRequestBody(modelConfig, params)
@@ -255,7 +269,7 @@ export class DashScopeClient {
       const data = await response.json() as DashScopeImageResponse
 
       if (response.status !== 200) {
-        return { success: false, error: `模型 ${modelConfig.name}（${modelConfig.id}）: ${parseDashScopeError(data)}` }
+        return this.failed(model, `模型 ${modelConfig.name}（${modelConfig.id}）: ${parseDashScopeError(data)}`)
       }
 
       const output = data.output ?? {}
@@ -264,11 +278,15 @@ export class DashScopeClient {
       // 百炼同步图像 API 返回格式：output.choices[].message.content[].image
       const choices = output.choices ?? []
       const urls = choices.flatMap(c =>
-        (c.message?.content ?? []).map(item => item.image).filter(Boolean),
+        (c.message?.content ?? [])
+          .map(item => item.image)
+          .filter((url): url is string => typeof url === 'string' && url.length > 0),
       )
 
       return {
+        type: 'image',
         success: true,
+        model,
         output: {
           type: 'image',
           urls,
@@ -281,7 +299,7 @@ export class DashScopeClient {
     }
     catch (error) {
       const msg = error instanceof Error ? error.message : String(error)
-      return { success: false, error: `网络错误：无法连接百炼 API（${msg}）` }
+      return this.failed(model, `网络错误：无法连接百炼 API（${msg}）`)
     }
   }
 
@@ -289,10 +307,10 @@ export class DashScopeClient {
    * 视频生成 — 异步提交任务
    * 返回 DashScope task_id，需要后续轮询
    */
-  async submitVideoTask(model: string, params: Record<string, unknown>, referenceUrls?: string[]): Promise<ProviderResult> {
+  async submitVideoTask(model: string, params: Record<string, unknown>, referenceUrls?: string[]): Promise<VideoTaskProviderResult | FailedProviderResult> {
     const modelConfig = getModelById(model)
     if (!modelConfig) {
-      return { success: false, error: `未知模型: ${model}` }
+      return this.failed(model, `未知模型: ${model}`)
     }
 
     const body = this.buildRequestBody(modelConfig, params, referenceUrls)
@@ -311,14 +329,18 @@ export class DashScopeClient {
       const data = await response.json() as DashScopeVideoSubmitResponse
 
       if (response.status !== 200) {
-        return { success: false, error: `模型 ${modelConfig.name}（${modelConfig.id}）: ${parseDashScopeError(data)}` }
+        return this.failed(model, `模型 ${modelConfig.name}（${modelConfig.id}）: ${parseDashScopeError(data)}`)
       }
 
       const taskId = data.output?.task_id ?? data.request_id
+      if (!taskId)
+        return this.failed(model, `模型 ${modelConfig.name}（${modelConfig.id}）: 未返回 task_id`)
 
       return {
+        type: 'video_task',
         success: true,
-        providerTaskId: taskId,
+        model,
+        taskId,
         output: {
           type: 'processing',
           taskId,
@@ -332,7 +354,7 @@ export class DashScopeClient {
     }
     catch (error) {
       const msg = error instanceof Error ? error.message : String(error)
-      return { success: false, error: `网络错误：无法连接百炼 API（${msg}）` }
+      return this.failed(model, `网络错误：无法连接百炼 API（${msg}）`)
     }
   }
 
@@ -348,16 +370,16 @@ export class DashScopeClient {
   ): Promise<{ model: string, taskId: string | undefined, success: boolean, error?: string }> {
     const result = await this.submitVideoTask(model, params, referenceUrls)
 
-    if (result.success && result.providerTaskId) {
-      return { model, taskId: result.providerTaskId, success: true }
+    if (result.type === 'video_task') {
+      return { model, taskId: result.taskId, success: true }
     }
 
     const modelConfig = getModelById(model)
     const fallbackId = modelConfig?.fallbackModel
     if (fallbackId) {
       const fallbackResult = await this.submitVideoTask(fallbackId, params)
-      if (fallbackResult.success && fallbackResult.providerTaskId) {
-        return { model: fallbackId, taskId: fallbackResult.providerTaskId, success: true }
+      if (fallbackResult.type === 'video_task') {
+        return { model: fallbackId, taskId: fallbackResult.taskId, success: true }
       }
     }
 
@@ -433,7 +455,7 @@ export class DashScopeClient {
   async generate(model: string, params: Record<string, unknown>, referenceUrls?: string[]): Promise<ProviderResult> {
     const modelConfig = getModelById(model)
     if (!modelConfig) {
-      return { success: false, error: `未知模型: ${model}` }
+      return this.failed(model, `未知模型: ${model}`)
     }
 
     switch (modelConfig.category) {
@@ -444,7 +466,7 @@ export class DashScopeClient {
       case 'video':
         return this.submitVideoTask(model, params, referenceUrls)
       default:
-        return { success: false, error: `不支持的模型类别: ${modelConfig.category}` }
+        return this.failed(model, `不支持的模型类别: ${modelConfig.category}`)
     }
   }
 }
