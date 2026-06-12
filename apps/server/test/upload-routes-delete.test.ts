@@ -63,6 +63,7 @@ mock.module('@excuse/provider', () => ({
   getModelById: () => undefined,
   mergeWithDefaults: (_modelConfig: unknown, params: Record<string, unknown>) => params,
   validateModelParameters: () => ({ valid: true, errors: [] }),
+  validateAndMerge: (_modelConfig: unknown, params: Record<string, unknown>) => ({ ok: true, params: params as any }),
 }))
 
 // eslint-disable-next-line import/first

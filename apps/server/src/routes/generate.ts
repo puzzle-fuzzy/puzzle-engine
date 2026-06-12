@@ -1,4 +1,4 @@
-import type { GenerationCategory, GenerationRecordRow, GenerationStatus } from '@excuse/db'
+import type { GenerationCategory, GenerationInputParams, GenerationRecordRow, GenerationStatus } from '@excuse/db'
 import type { ServerConfig } from '../config'
 import { calculateCost } from '@excuse/billing'
 import {
@@ -8,7 +8,8 @@ import {
   listGenerationRecords,
   resetGenerationToPending,
 } from '@excuse/db'
-import { AssetStorage, DashScopeClient, getModelById, validateModelParameters } from '@excuse/provider'
+import { AssetStorage, DashScopeClient, getModelById, validateAndMerge } from '@excuse/provider'
+import { extractBillingParams } from '@excuse/shared'
 import { Elysia, t } from 'elysia'
 import * as svc from '../modules/generation/service'
 import { createRequireAuthPlugin } from '../plugins/auth'
@@ -64,11 +65,13 @@ export function createGenerateRoutes(config: ServerConfig) {
         return validationError(set, `Unknown model: ${model}`)
       }
 
-      const validation = validateModelParameters(modelConfig, parameters)
-      if (!validation.valid) {
-        const detail = validation.errors.map(e => `${e.field}: ${e.message}`).join('; ')
+      // 参数校验 + 合并默认值 — validateAndMerge 是 ValidatedModelParameters 的唯一构造路径
+      const validationResult = validateAndMerge(modelConfig, parameters)
+      if (!validationResult.ok) {
+        const detail = validationResult.errors.map(e => `${e.field}: ${e.message}`).join('; ')
         return validationError(set, detail)
       }
+      const validatedParams = validationResult.params
 
       const category = modelConfig.category
 
@@ -105,10 +108,13 @@ export function createGenerateRoutes(config: ServerConfig) {
         return { success: true, record: serializeRecord(updated ?? dedupeResult.record), duplicated: true }
       }
 
-      // 预估费用
-      const estimatedCost = calculateCost(modelConfig, parameters)
+      // 预估费用 — 使用 extractBillingParams 从 ValidatedModelParameters 提取计费字段
+      const estimatedCost = calculateCost(modelConfig, extractBillingParams(validatedParams))
       const taskId = `gen_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
       const traceId = crypto.randomUUID()
+
+      // inputParams 信封 — 模型参数 + referenceFileIds 等元字段
+      const inputParams: GenerationInputParams = { ...validatedParams, referenceFileIds }
 
       // 创建数据库记录 — 此时所有前置校验已完成，不会有脏记录风险
       const record = await createGenerationRecord({
@@ -118,7 +124,7 @@ export function createGenerateRoutes(config: ServerConfig) {
         model,
         category,
         status: 'pending',
-        inputParams: { ...parameters, referenceFileIds },
+        inputParams,
         cost: { ...estimatedCost, estimated: true, billable: false, source: 'estimated' },
         dedupeKey,
       })
@@ -130,9 +136,9 @@ export function createGenerateRoutes(config: ServerConfig) {
         taskId,
         modelConfig,
         category,
-        parameters,
+        parameters: validatedParams,
         referenceUrls,
-        inputParams: { ...parameters, referenceFileIds },
+        inputParams,
         dedupeKey,
         estimatedCost,
       }, deps)
@@ -273,7 +279,7 @@ export function createGenerateRoutes(config: ServerConfig) {
       }
 
       // 参考文件归属校验 — 必须在 resetGenerationToPending 之前（P1.9 约束）
-      const inputParams = record.inputParams
+      const inputParams: GenerationInputParams = record.inputParams
       const referenceFileIds = Array.isArray(inputParams.referenceFileIds)
         ? inputParams.referenceFileIds as string[]
         : undefined
@@ -287,14 +293,28 @@ export function createGenerateRoutes(config: ServerConfig) {
         referenceUrls = refResult.urls
       }
 
-      const parameters = { ...inputParams }
-      delete (parameters as Record<string, unknown>).referenceFileIds
+      // 从 inputParams 信封中提取纯模型参数（删除信封字段）
+      const rawParameters: Record<string, unknown> = { ...inputParams }
+      delete rawParameters.source
+      delete rawParameters.projectId
+      delete rawParameters.shotId
+      delete rawParameters.referenceFileIds
+
+      // 参数校验 + 合并默认值 — validateAndMerge 是 ValidatedModelParameters 的唯一构造路径
+      const validationResult = validateAndMerge(modelConfig, rawParameters)
+      if (!validationResult.ok) {
+        const detail = validationResult.errors.map(e => `${e.field}: ${e.message}`).join('; ')
+        return validationError(set, detail)
+      }
+      const validatedParams = validationResult.params
+
       const newTaskId = `gen_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
 
       // 所有校验通过后才重置状态 — 防止校验失败产生脏状态
       await resetGenerationToPending(record.id)
 
-      const estimatedCost = calculateCost(modelConfig, parameters)
+      // 预估费用 — 使用 extractBillingParams 从 ValidatedModelParameters 提取计费字段
+      const estimatedCost = calculateCost(modelConfig, extractBillingParams(validatedParams))
 
       // 调用 service 执行核心业务流程（与 POST /generate 共享同一逻辑）
       const result = await svc.executeGeneration({
@@ -304,7 +324,7 @@ export function createGenerateRoutes(config: ServerConfig) {
         traceId: record.traceId ?? undefined,
         modelConfig,
         category: modelConfig.category,
-        parameters,
+        parameters: validatedParams,
         referenceUrls,
         inputParams,
         estimatedCost,

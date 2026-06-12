@@ -12,8 +12,8 @@
  *      - 分支 3: 同步完成(文本/图片) → 下载保存 + 计费 + SSE
  *   4. 取消任务（cancelGeneration）— best-effort provider 取消 + DB 取消
  */
-import type { GenerationCategory, GenerationRecordRow, OutputResult } from '@excuse/db'
-import type { AssetStorage, DashScopeClient } from '@excuse/provider'
+import type { GenerationCategory, GenerationInputParams, GenerationRecordRow, OutputResult } from '@excuse/db'
+import type { AssetStorage, DashScopeClient, ValidatedModelParameters } from '@excuse/provider'
 import type { CostDetail, ModelConfig } from '@excuse/shared'
 import { calculateCost } from '@excuse/billing'
 import {
@@ -26,6 +26,7 @@ import {
   markGenerationSucceeded,
   notifyGenerationStatus,
 } from '@excuse/db'
+import { extractBillingParams } from '@excuse/shared'
 import { extractImageUrls, parseProviderOutput } from './output-parser'
 
 // ===== 接口定义 =====
@@ -44,10 +45,11 @@ export interface GenerationContext {
   traceId?: string
   modelConfig: ModelConfig
   category: GenerationCategory
-  parameters: Record<string, unknown>
+  /** 经 validateAndMerge 校验+合并的模型参数（branded type，只允许通过 validateAndMerge 构造） */
+  parameters: ValidatedModelParameters
   referenceUrls?: string[]
-  /** 存入 DB inputParams 的完整参数（包含 referenceFileIds） */
-  inputParams: Record<string, unknown>
+  /** 存入 DB inputParams 的完整参数（包含 referenceFileIds 等信封字段） */
+  inputParams: GenerationInputParams
   dedupeKey?: string
   estimatedCost: CostDetail
 }
@@ -161,14 +163,15 @@ export async function executeGeneration(
 
   // === 分支 3: 同步任务完成（文本/图片）— 下载并保存结果 ===
   let outputResult: OutputResult = parseProviderOutput(result.output)
-  const imageUrls = extractImageUrls(result.output)
+  // extractImageUrls 只在 ImageProviderOutput 上有有效值 — 按 result.type 精确 narrow
+  const imageUrls = result.type === 'image' ? extractImageUrls(result.output) : []
   if (category === 'image' && imageUrls.length > 0) {
     const savedUrls = await storage.downloadAndMap(imageUrls, taskId, 'img')
     outputResult = { type: 'image', savedUrls, urls: imageUrls }
   }
 
   // 计算实际费用（基于 provider 返回的 usage）— 标记为 billable
-  const actualCost = { ...calculateCost(modelConfig, parameters, result.usage), billable: true, source: 'actual' as const }
+  const actualCost = { ...calculateCost(modelConfig, extractBillingParams(parameters), result.usage), billable: true, source: 'actual' as const }
 
   await markGenerationSucceeded(recordId, outputResult, actualCost)
   await notifyGenerationStatus({

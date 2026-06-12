@@ -1,112 +1,145 @@
 /**
  * Provider 输出解析器
  *
- * DashScope API 返回的 output 是非结构化的 Record<string, unknown>。
- * 此模块在边界层完成类型解析，将 unknown 转为类型安全的 OutputResult 联合类型：
- *   - TextOutputResult   — 文本生成结果
- *   - ImageOutputResult  — 图片生成结果（含待下载 URL 或已保存 URL）
- *   - VideoOutputResult  — 视频生成结果
- *   - ProcessingOutputResult — 异步任务中间态
+ * DashScope provider 返回的类型化 output 联合：
+ *   - TextProviderOutput   → text 生成结果
+ *   - ImageProviderOutput  → image 生成结果
+ *   - VideoTaskProviderOutput → 异步视频任务中间态
+ *   - DashScopeTaskOutput  → 异步任务查询结果（外部 API 边界，含 index signature）
  *
+ * 此模块在边界层完成类型解析，将 ProviderOutput 转为类型安全的 OutputResult 联合类型。
  * 不允许 unknown 泄漏到上层业务代码。
  */
 import type { ImageOutputResult, OutputResult, ProcessingOutputResult, TextOutputResult, VideoOutputResult } from '@excuse/db'
+import type { DashScopeTaskOutput, ImageProviderOutput, TextProviderOutput, VideoTaskProviderOutput } from '@excuse/provider'
+
+type ProviderOutput = TextProviderOutput | ImageProviderOutput | VideoTaskProviderOutput | DashScopeTaskOutput
 
 /**
- * 将 DashScope provider 返回的原始 JSON 解析为类型安全的 OutputResult。
+ * 将 DashScope provider 返回的类型化 output 解析为 OutputResult。
  *
- * Provider output 是 `Record<string, unknown>` — DashScope API 返回的非结构化 JSON。
- * 此函数在边界层完成类型解析，不允许 `unknown` 泄漏到业务代码。
- *
- * 解析规则：
- * - 显式 `type: 'text'` + text 字段 → TextOutputResult
- * - 有 `urls` 数组 → ImageOutputResult（待下载）
- * - 有 `savedUrls` 数组 → ImageOutputResult（已保存）
- * - 有 `video_url` 或 `originalUrl` → VideoOutputResult
- * - 有 `taskId` 或 `status` → ProcessingOutputResult（异步任务中间态）
- * - 兜底 → TextOutputResult（空文本）
+ * 使用 type 字段做辨识联合 narrowing：
+ *   - type === 'text'     → TextProviderOutput → TextOutputResult
+ *   - type === 'image'    → ImageProviderOutput → ImageOutputResult
+ *   - type === 'processing' → VideoTaskProviderOutput → ProcessingOutputResult
+ *   - DashScopeTaskOutput（有 index signature）→ 按字段检测映射
  */
-export function parseProviderOutput(raw: Record<string, unknown> | undefined): OutputResult {
+export function parseProviderOutput(raw: ProviderOutput | undefined): OutputResult {
   if (!raw || typeof raw !== 'object') {
     return { type: 'text', text: '' }
   }
 
-  // 显式 type 字段优先
-  if (raw.type === 'text') {
-    return parseTextOutput(raw)
+  // === 识别 ProviderOutput 子类型 ===
+  // TextProviderOutput / ImageProviderOutput / VideoTaskProviderOutput 是封闭类型（固定字段），
+  // DashScopeTaskOutput 是开放类型（有 index signature），所以 switch(raw.type) 无法精确 narrow。
+  // 用 'raw' 字段存在性区分封闭类型 vs 开放类型：
+  //   - 封闭类型都有 `raw: unknown` 字段（DashScope API 原始响应）
+  //   - DashScopeTaskOutput 没有 `raw` 字段
+  if ('raw' in raw) {
+    switch (raw.type) {
+      // TextProviderOutput: { type: 'text', text: string, raw: unknown }
+      case 'text':
+        return parseTextOutput(raw as TextProviderOutput)
+
+      // ImageProviderOutput: { type: 'image', urls: string[], raw: unknown }
+      case 'image':
+        return parseImageOutput(raw as ImageProviderOutput)
+
+      // VideoTaskProviderOutput: { type: 'processing', taskId: string, status: 'submitted', raw: unknown }
+      case 'processing':
+        return parseProcessingOutput(raw as VideoTaskProviderOutput)
+    }
   }
 
-  if (raw.type === 'processing') {
-    return parseProcessingOutput(raw)
-  }
+  // === DashScopeTaskOutput（无 raw 字段，有 index signature）===
+  return parseDashScopeTaskOutput(raw as DashScopeTaskOutput)
+}
 
-  // 图片：DashScope 图像生成返回 `urls` 数组（临时 URL）
-  if (Array.isArray(raw.urls)) {
-    const urls = raw.urls.filter((u): u is string => typeof u === 'string')
-    const savedUrls = Array.isArray(raw.savedUrls)
-      ? raw.savedUrls.filter((u): u is string => typeof u === 'string')
-      : [] as const
-    const result: ImageOutputResult = { type: 'image', savedUrls: [...savedUrls], urls }
-    return result
+function parseTextOutput(raw: TextProviderOutput): TextOutputResult {
+  return {
+    type: 'text',
+    text: raw.text,
   }
+}
 
-  // 图片（仅 savedUrls，无原始 urls）
-  if (Array.isArray(raw.savedUrls)) {
-    const savedUrls = raw.savedUrls.filter((u): u is string => typeof u === 'string')
-    const result: ImageOutputResult = { type: 'image', savedUrls }
-    return result
+function parseImageOutput(raw: ImageProviderOutput): ImageOutputResult {
+  return {
+    type: 'image',
+    savedUrls: [],
+    urls: raw.urls,
   }
+}
 
-  // 视频：DashScope 视频任务完成返回 video_url 或 originalUrl
-  if (typeof raw.video_url === 'string' || typeof raw.originalUrl === 'string') {
+function parseProcessingOutput(raw: VideoTaskProviderOutput): ProcessingOutputResult {
+  return {
+    type: 'processing',
+    taskId: raw.taskId,
+    status: raw.status,
+  }
+}
+
+/**
+ * DashScopeTaskOutput 解析 — 按字段内容辨识
+ *
+ * DashScopeTaskOutput 有 index signature [key: string]: unknown，
+ * 所以可以安全地按字段存在性判断类型。
+ */
+function parseDashScopeTaskOutput(raw: DashScopeTaskOutput): OutputResult {
+  // 视频完成：有 video_url
+  if (typeof raw.video_url === 'string') {
     const result: VideoOutputResult = {
       type: 'video',
       savedUrls: Array.isArray(raw.savedUrls) ? raw.savedUrls.filter((u): u is string => typeof u === 'string') : [],
       originalUrl: typeof raw.originalUrl === 'string' ? raw.originalUrl : undefined,
-      video_url: typeof raw.video_url === 'string' ? raw.video_url : undefined,
+      video_url: raw.video_url,
     }
     return result
   }
 
-  // 文本：有 text 字段但无 type
-  if (typeof raw.text === 'string') {
-    return { type: 'text', text: raw.text }
+  // 图片异步任务完成：有 results 数组
+  if (Array.isArray(raw.results) && raw.results.length > 0) {
+    const urls = raw.results
+      .map(r => r.url || r.b64_image)
+      .filter((u): u is string => typeof u === 'string')
+    if (urls.length > 0) {
+      const result: ImageOutputResult = { type: 'image', savedUrls: [], urls }
+      return result
+    }
   }
 
-  // 异步任务中间态：有 taskId 或 status 但无明确 type
+  // 异步任务中间态：有 taskId 或 status
   if (typeof raw.taskId === 'string' || typeof raw.status === 'string') {
-    return parseProcessingOutput(raw)
+    return {
+      type: 'processing',
+      taskId: typeof raw.taskId === 'string' ? raw.taskId : undefined,
+      status: typeof raw.status === 'string' ? raw.status : undefined,
+    }
   }
 
-  // 兜底：无法识别的输出结构
+  // 兜底：无法辨识的 DashScope 输出
   return { type: 'text', text: '' }
-}
-
-function parseTextOutput(raw: Record<string, unknown>): TextOutputResult {
-  return {
-    type: 'text',
-    text: typeof raw.text === 'string' ? raw.text : '',
-  }
-}
-
-function parseProcessingOutput(raw: Record<string, unknown>): ProcessingOutputResult {
-  return {
-    type: 'processing',
-    taskId: typeof raw.taskId === 'string' ? raw.taskId : undefined,
-    status: typeof raw.status === 'string' ? raw.status : undefined,
-  }
 }
 
 /**
  * 从 provider output 中提取图片临时 URL 列表（用于 downloadAndMap）。
  *
- * 在 provider 返回的原始 output 中，DashScope 图片任务的 URLs 在 `urls` 字段。
- * 只有当 output 是图片类型且包含 urls 时才返回非空数组。
+ * 只当 output 是 ImageProviderOutput 时返回非空数组。
+ * DashScopeTaskOutput 的图片 URL 在 results 字段，此处不提取
+ * （worker 场景由 extractVideoUrl 处理）。
  */
-export function extractImageUrls(raw: Record<string, unknown> | undefined): string[] {
+export function extractImageUrls(raw: ImageProviderOutput | DashScopeTaskOutput | undefined): string[] {
   if (!raw)
     return []
-  if (!Array.isArray(raw.urls))
-    return []
-  return raw.urls.filter((u): u is string => typeof u === 'string')
+
+  // ImageProviderOutput — type 辨识 narrowing
+  if (raw.type === 'image') {
+    return (raw as ImageProviderOutput).urls
+  }
+
+  // DashScopeTaskOutput — 图片异步任务结果
+  if (Array.isArray(raw.urls)) {
+    return raw.urls.filter((u): u is string => typeof u === 'string')
+  }
+
+  return []
 }

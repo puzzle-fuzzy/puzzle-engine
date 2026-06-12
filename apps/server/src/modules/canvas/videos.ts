@@ -1,3 +1,5 @@
+import type { GenerationInputParams } from '@excuse/db'
+import type { ValidatedModelParameters } from '@excuse/provider'
 import { calculateCost } from '@excuse/billing'
 import {
   createGenerationRecord,
@@ -12,9 +14,10 @@ import {
 } from '@excuse/db'
 import {
   getModelById as getProviderModelById,
-  mergeWithDefaults as mergeProviderWithDefaults,
+  validateAndMerge as validateProviderAndMerge,
   validateModelParameters as validateProviderModelParameters,
 } from '@excuse/provider'
+import { extractBillingParams } from '@excuse/shared'
 import { getProjectDetail } from './service-crud'
 import { createClient, getVideoModel, notifyNode } from './service-helpers'
 
@@ -24,32 +27,36 @@ function getErrorMessage(error: unknown): string {
 
 interface PrepareCanvasVideoParamDeps {
   getModelById: typeof getProviderModelById
-  mergeWithDefaults: typeof mergeProviderWithDefaults
+  validateAndMerge: typeof validateProviderAndMerge
   validateModelParameters: typeof validateProviderModelParameters
 }
 
 const providerParamDeps: PrepareCanvasVideoParamDeps = {
   getModelById: getProviderModelById,
-  mergeWithDefaults: mergeProviderWithDefaults,
+  validateAndMerge: validateProviderAndMerge,
   validateModelParameters: validateProviderModelParameters,
 }
 
 type CanvasVideoResolution = '720P' | '1080P'
 
-export interface CanvasVideoParameters extends Record<string, unknown> {
+export interface CanvasVideoParameters {
   prompt: string
   resolution: CanvasVideoResolution
   duration: number
   negative_prompt?: string
 }
 
-export interface CanvasVideoGenerationInput extends CanvasVideoParameters {
+export interface CanvasVideoGenerationInput {
   source: 'canvas'
   projectId: string
   shotId: string
+  prompt: string
+  resolution: CanvasVideoResolution
+  duration: number
+  negative_prompt?: string
 }
 
-function parseCanvasVideoParameters(value: Record<string, unknown>): CanvasVideoParameters {
+function parseCanvasVideoParameters(value: ValidatedModelParameters): CanvasVideoParameters {
   const prompt = value.prompt
   if (typeof prompt !== 'string' || prompt.length === 0)
     throw new Error('视频参数校验失败：prompt 必须是非空字符串')
@@ -78,31 +85,35 @@ export function prepareCanvasVideoParams(
   model: string,
   shot: { videoPrompt: string, negativePrompt?: string | null, duration: number },
   deps: PrepareCanvasVideoParamDeps = providerParamDeps,
-) {
+): { modelConfig: ReturnType<typeof deps.getModelById>, params: ValidatedModelParameters } {
   const modelConfig = deps.getModelById(model)
   if (!modelConfig)
     throw new Error(`未知视频模型：${model}`)
 
   const declaredParams = new Set(modelConfig.parameters.map(p => p.name))
-  const params: CanvasVideoParameters = {
+  const rawParams: Record<string, unknown> = {
     prompt: shot.videoPrompt.slice(0, 2500),
     resolution: '720P',
     duration: shot.duration,
   }
 
   if (declaredParams.has('negative_prompt') && shot.negativePrompt) {
-    params.negative_prompt = shot.negativePrompt
+    rawParams.negative_prompt = shot.negativePrompt
   }
 
-  const validation = deps.validateModelParameters(modelConfig, params)
-  if (!validation.valid) {
-    const message = validation.errors.map(error => `${error.field}: ${error.message}`).join('; ')
+  // validateAndMerge 是 ValidatedModelParameters 的唯一构造路径 — 校验 + 合并默认值
+  const validationResult = deps.validateAndMerge(modelConfig, rawParams)
+  if (!validationResult.ok) {
+    const message = validationResult.errors.map(error => `${error.field}: ${error.message}`).join('; ')
     throw new Error(`视频参数校验失败：${message}`)
   }
 
+  // 防御性运行时检查 — parseCanvasVideoParameters 在 branded type 之上仍做边界校验
+  parseCanvasVideoParameters(validationResult.params)
+
   return {
     modelConfig,
-    params: parseCanvasVideoParameters(deps.mergeWithDefaults(modelConfig, params)),
+    params: validationResult.params,
   }
 }
 
@@ -164,8 +175,8 @@ export async function generateVideos(projectId: string, config: { dashscopeApiKe
       hasAnyVideo = true
 
       const usedModelConfig = getProviderModelById(submitResult.model)!
-      const inputParams: CanvasVideoGenerationInput = { source: 'canvas', projectId, shotId: shot.id, ...videoParams }
-      const cost = calculateCost(usedModelConfig, inputParams)
+      const inputParams: GenerationInputParams = { source: 'canvas', projectId, shotId: shot.id, ...videoParams }
+      const cost = calculateCost(usedModelConfig, extractBillingParams(videoParams))
       await createGenerationRecord({
         accountId,
         taskId: submitResult.taskId!,
@@ -248,8 +259,8 @@ export async function retryShotVideo(shotId: string, config: { dashscopeApiKey: 
   await updateCanvasShot(shot.id, { videoTaskId: submitResult.taskId, status: 'generating' })
 
   const usedModelConfig = getProviderModelById(submitResult.model)!
-  const inputParams: CanvasVideoGenerationInput = { source: 'canvas', projectId: shot.projectId, shotId, ...videoParams }
-  const cost = calculateCost(usedModelConfig, inputParams)
+  const inputParams: GenerationInputParams = { source: 'canvas', projectId: shot.projectId, shotId, ...videoParams }
+  const cost = calculateCost(usedModelConfig, extractBillingParams(videoParams))
   await createGenerationRecord({
     accountId: detail.project.accountId,
     taskId: submitResult.taskId,
@@ -310,8 +321,8 @@ export async function retryFailedShots(projectId: string, accountId: string, con
     await updateCanvasShot(shot.id, { videoTaskId: submitResult.taskId, status: 'generating' })
 
     const usedModelConfig = getProviderModelById(submitResult.model)!
-    const inputParams: CanvasVideoGenerationInput = { source: 'canvas', projectId, shotId: shot.id, ...videoParams }
-    const cost = calculateCost(usedModelConfig, inputParams)
+    const inputParams: GenerationInputParams = { source: 'canvas', projectId, shotId: shot.id, ...videoParams }
+    const cost = calculateCost(usedModelConfig, extractBillingParams(videoParams))
     await createGenerationRecord({
       accountId,
       taskId: submitResult.taskId,

@@ -7,6 +7,7 @@ import type {
   DashScopeUsage,
   DashScopeVideoSubmitResponse,
 } from './dashscope-types'
+import type { ValidatedModelParameters } from './model-validator'
 import type {
   DashScopeConfig,
   DashScopeTaskOutput,
@@ -17,7 +18,6 @@ import type {
   TextProviderResult,
   VideoTaskProviderResult,
 } from './types'
-import type { ValidatedModelParameters } from './model-validator'
 import { parseDashScopeError } from './dashscope-errors'
 import { getModelById } from './model-configs'
 

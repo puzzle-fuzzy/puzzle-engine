@@ -106,6 +106,13 @@ mock.module('@excuse/provider', () => ({
   },
   mergeWithDefaults: (_modelConfig: unknown, params: Record<string, unknown>) => params,
   validateModelParameters: mockValidateModelParameters,
+  validateAndMerge: (modelConfig: unknown, params: Record<string, unknown>) => {
+    const result = mockValidateModelParameters(modelConfig, params)
+    if (!result.valid) {
+      return { ok: false, errors: result.errors }
+    }
+    return { ok: true, params: params as any }
+  },
   AssetStorage: class {
     downloadAndMap = mock(() => Promise.resolve(['https://saved.url/img.png']))
   },

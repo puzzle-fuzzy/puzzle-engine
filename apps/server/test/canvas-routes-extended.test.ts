@@ -118,6 +118,7 @@ mock.module('@excuse/provider', () => ({
   getModelById: () => ({ id: 'mock', category: 'text', pricing: { inputPriceCents: 100, unit: 'token' }, parameters: [] }),
   mergeWithDefaults: (_modelConfig: unknown, params: Record<string, unknown>) => params,
   validateModelParameters: () => ({ valid: true, errors: [] }),
+  validateAndMerge: (_modelConfig: unknown, params: Record<string, unknown>) => ({ ok: true, params: params as any }),
 }))
 
 mock.module('@excuse/billing', () => ({
@@ -355,7 +356,7 @@ describe('canvas routes — extended', () => {
       const { data } = await client.api.canvas.shots({ shotId: 'shot-001' }).retry.post(null, {
         headers: { Authorization: `Bearer ${token}` },
       })
-      expect(data?.success).toBe(true)
+      expect(data?.accepted).toBe(true)
     })
   })
 })

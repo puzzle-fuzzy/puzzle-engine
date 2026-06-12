@@ -7,7 +7,7 @@ import {
   updateCanvasLocation,
   updateCanvasProject,
 } from '@excuse/db'
-import { AssetStorage } from '@excuse/provider'
+import { AssetStorage, getModelById, validateAndMerge } from '@excuse/provider'
 import { getProjectDetail } from './service-crud'
 import { assertNotGenerating, createClient, getImageModel, notifyNode } from './service-helpers'
 
@@ -21,6 +21,9 @@ export async function generateCharacterRefs(projectId: string, config: { dashsco
   const storage = new AssetStorage({ storageRoot: config.storageRoot, oss: config.oss })
   const accountId = detail.project.accountId
   const imageModel = getImageModel(detail.project.modelPreferencesJson)
+  const imageModelConfig = getModelById(imageModel)
+  if (!imageModelConfig)
+    throw new Error(`未知图片模型：${imageModel}`)
 
   if (runId)
     await markPipelineRunRunning(runId)
@@ -32,11 +35,16 @@ export async function generateCharacterRefs(projectId: string, config: { dashsco
     notifyNode(accountId, projectId, 'character', char.id, 'running', undefined, undefined, runId)
 
     try {
-      const portraitResult = await client.generateImage(imageModel, {
+      const portraitValidation = validateAndMerge(imageModelConfig, {
         prompt: `${char.identityPrompt}, portrait photo, neutral expression, solid background, front view, high quality`,
         size: '2048*2048',
         n: 1,
       })
+      if (!portraitValidation.ok) {
+        const detail = portraitValidation.errors.map(e => `${e.field}: ${e.message}`).join('; ')
+        throw new Error(`参数校验失败：${detail}`)
+      }
+      const portraitResult = await client.generateImage(imageModel, portraitValidation.params)
 
       if (portraitResult.success && portraitResult.output) {
         const urls = portraitResult.output.urls
@@ -46,11 +54,16 @@ export async function generateCharacterRefs(projectId: string, config: { dashsco
         }
       }
 
-      const turnaroundResult = await client.generateImage(imageModel, {
+      const turnaroundValidation = validateAndMerge(imageModelConfig, {
         prompt: `${char.identityPrompt}, character turnaround sheet showing front view, side view, and back view, white background, character design sheet`,
         size: '2048*2048',
         n: 1,
       })
+      if (!turnaroundValidation.ok) {
+        const detail = turnaroundValidation.errors.map(e => `${e.field}: ${e.message}`).join('; ')
+        throw new Error(`参数校验失败：${detail}`)
+      }
+      const turnaroundResult = await client.generateImage(imageModel, turnaroundValidation.params)
 
       if (turnaroundResult.success && turnaroundResult.output) {
         const urls = turnaroundResult.output.urls
@@ -83,6 +96,9 @@ export async function generateLocationRefs(projectId: string, config: { dashscop
   const storage = new AssetStorage({ storageRoot: config.storageRoot, oss: config.oss })
   const accountId = detail.project.accountId
   const imageModel = getImageModel(detail.project.modelPreferencesJson)
+  const imageModelConfig = getModelById(imageModel)
+  if (!imageModelConfig)
+    throw new Error(`未知图片模型：${imageModel}`)
 
   if (runId)
     await markPipelineRunRunning(runId)
@@ -94,11 +110,16 @@ export async function generateLocationRefs(projectId: string, config: { dashscop
     notifyNode(accountId, projectId, 'location', loc.id, 'running', undefined, undefined, runId)
 
     try {
-      const result = await client.generateImage(imageModel, {
+      const refValidation = validateAndMerge(imageModelConfig, {
         prompt: `${loc.scenePrompt}, establishing shot, wide angle, cinematic lighting, no people, no characters, empty scene, uninhabited`,
         size: '2048*2048',
         n: 1,
       })
+      if (!refValidation.ok) {
+        const detail = refValidation.errors.map(e => `${e.field}: ${e.message}`).join('; ')
+        throw new Error(`参数校验失败：${detail}`)
+      }
+      const result = await client.generateImage(imageModel, refValidation.params)
 
       if (result.success && result.output) {
         const urls = result.output.urls

@@ -82,6 +82,10 @@ mock.module('@excuse/provider', () => ({
     return cat === 'text' ? all : []
   },
   validateModelParameters: () => ({ valid: true, errors: [] }),
+  validateAndMerge: (_modelConfig: unknown, params: Record<string, unknown>) => ({
+    ok: true,
+    params: params as any,
+  }),
   MODELS: {},
 }))
 

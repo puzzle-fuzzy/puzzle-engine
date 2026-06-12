@@ -1,3 +1,5 @@
+import type { GenerationInputParams } from '@excuse/db'
+import type { DashScopeTaskOutput } from '@excuse/provider'
 import type { CostDetail, GenerationCategory, GenerationNotifyPayload, GenerationStatus, OutputResult, VideoOutputResult } from '@excuse/shared'
 import type { WorkerConfig } from './config'
 import { calculateCost } from '@excuse/billing'
@@ -11,7 +13,7 @@ import {
   updateCanvasShot,
 } from '@excuse/db'
 import { AssetStorage, DashScopeClient, getModelById } from '@excuse/provider'
-import { createLogger } from '@excuse/shared'
+import { createLogger, extractBillingParams } from '@excuse/shared'
 
 const logger = createLogger('worker-processor')
 
@@ -29,7 +31,7 @@ export type TaskResult
 export interface TaskProcessorDeps {
   queryTask: (taskId: string) => Promise<{
     status: 'PENDING' | 'RUNNING' | 'SUCCEEDED' | 'FAILED' | 'UNKNOWN'
-    output?: Record<string, unknown>
+    output?: DashScopeTaskOutput
     errorMessage?: string
   }>
   downloadAndMap: (urls: string[], subDir: string, prefix: string) => Promise<string[]>
@@ -77,7 +79,7 @@ export function createTaskProcessor(config: WorkerConfig, deps?: Partial<TaskPro
     status: string
     category: GenerationCategory
     createdAt: Date
-    inputParams: Record<string, unknown> | null
+    inputParams: GenerationInputParams | null
     cost: CostDetail | null
   }): Promise<TaskResult> {
     const inputParams = record.inputParams ?? {}
@@ -122,7 +124,7 @@ export function createTaskProcessor(config: WorkerConfig, deps?: Partial<TaskPro
         const inputDuration = inputParams.duration
         const actualVideoDuration = extractVideoDuration(taskStatus.output) || (typeof inputDuration === 'number' ? inputDuration : 5)
         const calculatedCost = modelConfig
-          ? calculateCost(modelConfig, inputParams, {
+          ? calculateCost(modelConfig, extractBillingParams(inputParams), {
               videoDuration: actualVideoDuration,
             })
           : record.cost
@@ -214,7 +216,7 @@ export function createTaskProcessor(config: WorkerConfig, deps?: Partial<TaskPro
 
 // ── 工具函数 ────────────────────────────────────────────
 
-export function extractVideoUrl(output: Record<string, unknown> | undefined): string | undefined {
+export function extractVideoUrl(output: DashScopeTaskOutput | undefined): string | undefined {
   if (!output)
     return undefined
   const videoUrl = output.video_url
@@ -222,7 +224,7 @@ export function extractVideoUrl(output: Record<string, unknown> | undefined): st
     return videoUrl
   const results = output.results
   if (Array.isArray(results) && results.length > 0) {
-    const first = results[0] as Record<string, unknown>
+    const first = results[0]!
     const url = first.url || first.b64_image
     if (typeof url === 'string')
       return url
@@ -230,7 +232,7 @@ export function extractVideoUrl(output: Record<string, unknown> | undefined): st
   return undefined
 }
 
-export function extractVideoDuration(output: Record<string, unknown> | undefined): number | undefined {
+export function extractVideoDuration(output: DashScopeTaskOutput | undefined): number | undefined {
   if (!output)
     return undefined
   const duration = output.video_duration ?? output.duration

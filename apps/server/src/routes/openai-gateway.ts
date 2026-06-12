@@ -7,8 +7,8 @@ import {
   markGenerationFailed,
   markGenerationSucceeded,
 } from '@excuse/db'
-import { DashScopeClient, getModelById, getModelsByCategory, validateModelParameters } from '@excuse/provider'
-import { resolveModelId } from '@excuse/shared'
+import { DashScopeClient, getModelById, getModelsByCategory, validateAndMerge } from '@excuse/provider'
+import { extractBillingParams, resolveModelId } from '@excuse/shared'
 import { Elysia, t } from 'elysia'
 import { createRequireAuthPlugin } from '../plugins/auth'
 
@@ -81,21 +81,22 @@ export function createOpenAIGatewayRoutes(config: ServerConfig) {
       if (request.top_p !== undefined)
         parameters.top_p = request.top_p
 
-      // 参数校验
-      const validation = validateModelParameters(modelConfig, parameters)
-      if (!validation.valid) {
-        const details = validation.errors.map(e => `${e.field}: ${e.message}`).join('; ')
+      // 参数校验 + 合并默认值 — validateAndMerge 是 ValidatedModelParameters 的唯一构造路径
+      const validationResult = validateAndMerge(modelConfig, parameters)
+      if (!validationResult.ok) {
+        const details = validationResult.errors.map(e => `${e.field}: ${e.message}`).join('; ')
         const err = openaiError(details, 'invalid_request_error', 'invalid_parameters', 400)
         set.status = err.status
         return err.response
       }
+      const validatedParams = validationResult.params
 
-      // 成本估算
-      const estimatedCost = calculateCost(modelConfig, parameters)
-
-      // 创建生成记录
+      // 成本估算 — 使用 extractBillingParams 从 ValidatedModelParameters 提取计费字段
+      const estimatedCost = calculateCost(modelConfig, extractBillingParams(validatedParams))
       const traceId = crypto.randomUUID()
       const taskId = `gen_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
+
+      // 创建生成记录 — inputParams 存储 ValidatedModelParameters 的所有字段
       const record = await createGenerationRecord({
         accountId: userId,
         taskId,
@@ -103,13 +104,13 @@ export function createOpenAIGatewayRoutes(config: ServerConfig) {
         model: modelConfig.id,
         category: 'text',
         status: 'pending',
-        inputParams: parameters,
+        inputParams: { ...validatedParams },
         cost: { ...estimatedCost, estimated: true, billable: false, source: 'estimated' },
         dedupeKey: `${userId}:${modelConfig.id}:${JSON.stringify(parameters)}`,
       })
 
-      // 调用 provider
-      const result = await client.chatCompletion(modelConfig.id, parameters)
+      // 调用 provider — ValidatedModelParameters 保证参数已通过校验
+      const result = await client.chatCompletion(modelConfig.id, validatedParams)
 
       if (result.type === 'failed' || !result.success) {
         await markGenerationFailed(record.id, result.error)
@@ -119,7 +120,7 @@ export function createOpenAIGatewayRoutes(config: ServerConfig) {
       }
 
       // 计算实际成本
-      calculateCost(modelConfig, parameters, result.usage)
+      calculateCost(modelConfig, extractBillingParams(validatedParams), result.usage)
       const text = result.output.text
 
       // 更新记录为成功

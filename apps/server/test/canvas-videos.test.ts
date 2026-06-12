@@ -1,3 +1,4 @@
+import type { ValidatedModelParameters } from '@excuse/provider'
 import type { ModelConfig } from '@excuse/shared'
 import { describe, expect, it } from 'bun:test'
 import { prepareCanvasVideoParams } from '../src/modules/canvas/videos'
@@ -27,12 +28,34 @@ const modelWithNegativePrompt: ModelConfig = {
   ],
 }
 
+/** Helper: branded type constructor — casts validated Record to ValidatedModelParameters */
+function asValidated(params: Record<string, unknown>): ValidatedModelParameters {
+  return params as ValidatedModelParameters
+}
+
 function makeDeps(modelConfig: ModelConfig, overrides?: {
   mergeWithDefaults?: (modelConfig: ModelConfig, params: Record<string, unknown>) => Record<string, unknown>
 }) {
+  const mergeWithDefaults = overrides?.mergeWithDefaults ?? ((_modelConfig: ModelConfig, params: Record<string, unknown>) => params)
   return {
     getModelById: (model: string) => model === modelConfig.id ? modelConfig : undefined,
-    mergeWithDefaults: overrides?.mergeWithDefaults ?? ((_modelConfig: ModelConfig, params: Record<string, unknown>) => params),
+    validateAndMerge: (config: ModelConfig, params: Record<string, unknown>) => {
+      const errors: Array<{ field: string, message: string }> = []
+
+      if (typeof params.duration === 'number' && params.duration > 10) {
+        errors.push({ field: 'duration', message: 'duration is too large' })
+      }
+
+      for (const key of Object.keys(params)) {
+        if (!config.parameters.some(param => param.name === key))
+          errors.push({ field: key, message: 'unknown parameter' })
+      }
+
+      if (errors.length > 0) {
+        return { ok: false as const, errors }
+      }
+      return { ok: true as const, params: asValidated(mergeWithDefaults(config, params)) }
+    },
     validateModelParameters: (config: ModelConfig, params: Record<string, unknown>) => {
       const errors: Array<{ field: string, message: string }> = []
 

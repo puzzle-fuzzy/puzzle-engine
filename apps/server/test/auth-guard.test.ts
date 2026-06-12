@@ -98,6 +98,7 @@ mock.module('@excuse/provider', () => ({
   })),
   mergeWithDefaults: mock((_modelConfig: unknown, params: Record<string, unknown>) => params),
   validateModelParameters: mock(() => ({ valid: true, errors: [] })),
+  validateAndMerge: mock((_modelConfig: unknown, params: Record<string, unknown>) => ({ ok: true, params: params as any })),
 }))
 
 // @excuse/billing
