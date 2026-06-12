@@ -9,8 +9,8 @@ import { Elysia } from 'elysia'
 import { loadConfig } from './config'
 import { createAuthPlugin } from './plugins/auth'
 import { loggerPlugin } from './plugins/logger'
-import { requestIdPlugin } from './plugins/request-id'
 import { rateLimitPlugin } from './plugins/rate-limit'
+import { requestIdPlugin } from './plugins/request-id'
 import { createApiKeyRoutes } from './routes/api-keys'
 import { createAuthRoutes } from './routes/auth'
 import { createBillingRoutes } from './routes/billing'
@@ -18,6 +18,7 @@ import { createCanvasRoutes } from './routes/canvas'
 import { createGenerateRoutes } from './routes/generate'
 import { createHealthRoutes } from './routes/health'
 import { modelsRoutes } from './routes/models'
+import { createNotificationRoutes } from './routes/notifications'
 import { createSSERoutes } from './routes/sse'
 import { createUploadRoutes } from './routes/upload'
 import { startSSEListener } from './services/sse-manager'
@@ -107,6 +108,7 @@ const app = new Elysia()
   .use(createCanvasRoutes(config))
   .use(createGenerateRoutes(config))
   .use(createUploadRoutes(config))
+  .use(createNotificationRoutes(config))
   .use(createSSERoutes(config))
   .use(createBillingRoutes(config))
 

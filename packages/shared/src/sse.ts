@@ -43,14 +43,14 @@ export interface SSEGenerationStatusEvent {
 }
 
 /**
- * 预留：通知事件
- * 后续通知功能可通过此事件类型推送
+ * SSE 通知事件 — 新通知推送
  */
 export interface SSENotificationEvent {
   id: string
   type: string
   title: string
-  body: string
+  body?: string
+  read: boolean
   createdAt: string
 }
 
@@ -161,5 +161,5 @@ export function parseSSENotificationEvent(raw: unknown): SSENotificationEvent | 
   if (!id || !type || !title || !body || !createdAt)
     return null
 
-  return { id, type, title, body, createdAt }
+  return { id, type, title, body, read: false, createdAt }
 }

@@ -1,5 +1,5 @@
 import type { InferInsertModel, InferSelectModel } from 'drizzle-orm'
-import type { accounts, canvasCharacters, canvasContinuityReports, canvasLocations, canvasPipelinePhaseEnum, canvasPipelineRuns, canvasPipelineRunStatusEnum, canvasProjects, canvasProjectStatusEnum, canvasShots, canvasShotStatusEnum, creditAccounts, creditTransactions, generationCategoryEnum, generationRecords, generationStatusEnum, uploadedFiles, usageEvents } from './schema'
+import type { accounts, canvasCharacters, canvasContinuityReports, canvasLocations, canvasPipelinePhaseEnum, canvasPipelineRuns, canvasPipelineRunStatusEnum, canvasProjects, canvasProjectStatusEnum, canvasShots, canvasShotStatusEnum, creditAccounts, creditTransactions, generationCategoryEnum, generationRecords, generationStatusEnum, notifications, uploadedFiles, usageEvents } from './schema'
 
 // ===== Drizzle 行类型（从 schema 自动推导） =====
 
@@ -74,6 +74,12 @@ export type UsageEventRow = InferSelectModel<typeof usageEvents>
 
 /** usage_events 表 — 插入参数类型 */
 export type UsageEventInsert = InferInsertModel<typeof usageEvents>
+
+/** notifications 表 — 查询结果行类型 */
+export type NotificationRow = InferSelectModel<typeof notifications>
+
+/** notifications 表 — 插入参数类型 */
+export type NotificationInsert = InferInsertModel<typeof notifications>
 
 // ===== 枚举类型（从 pgEnum 定义推断） =====
 
