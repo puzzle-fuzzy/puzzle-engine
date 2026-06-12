@@ -14,11 +14,11 @@ import { canvasProjects } from './canvas-projects'
  *   failed → draft（retry 重置后重新走 ready → generating 流程）
  */
 export const canvasShotStatusEnum = pgEnum('canvas_shot_status', [
-  'draft',      // 初始状态，分镜已生成但 videoPrompt 未组装
-  'ready',      // videoPrompt 已就绪，等待视频生成
+  'draft', // 初始状态，分镜已生成但 videoPrompt 未组装
+  'ready', // videoPrompt 已就绪，等待视频生成
   'generating', // 已提交到 DashScope，等待视频完成
-  'completed',  // 视频已生成并下载
-  'failed',     // 视频生成失败
+  'completed', // 视频已生成并下载
+  'failed', // 视频生成失败
 ])
 
 /**

@@ -22,19 +22,19 @@ import { accounts } from './accounts'
  *   partial_failed — 视频生成部分成功部分失败
  */
 export const canvasProjectStatusEnum = pgEnum('canvas_project_status', [
-  'draft',              // 初始状态，刚创建
-  'analyzed',           // 阶段 1 完成：故事已分析
-  'characters_ready',   // 阶段 2 完成：角色档案已生成
-  'locations_ready',    // 阶段 3 完成：场景档案已生成
-  'refs_ready',         // 阶段 4 完成：角色参考图已生成
-  'refs_all_ready',     // 阶段 5 完成：场景参考图已生成
-  'storyboard_ready',   // 阶段 6 完成：分镜脚本已生成
+  'draft', // 初始状态，刚创建
+  'analyzed', // 阶段 1 完成：故事已分析
+  'characters_ready', // 阶段 2 完成：角色档案已生成
+  'locations_ready', // 阶段 3 完成：场景档案已生成
+  'refs_ready', // 阶段 4 完成：角色参考图已生成
+  'refs_all_ready', // 阶段 5 完成：场景参考图已生成
+  'storyboard_ready', // 阶段 6 完成：分镜脚本已生成
   'continuity_checked', // 阶段 7 完成：连续性已校验
-  'prompts_ready',      // 阶段 8 完成：视频提示词已重建
-  'generating',         // 阶段 9 执行中：视频正在生成
-  'partial_failed',     // 部分镜头生成失败
-  'completed',          // 全部完成
-  'failed',             // 执行失败
+  'prompts_ready', // 阶段 8 完成：视频提示词已重建
+  'generating', // 阶段 9 执行中：视频正在生成
+  'partial_failed', // 部分镜头生成失败
+  'completed', // 全部完成
+  'failed', // 执行失败
 ])
 
 /**

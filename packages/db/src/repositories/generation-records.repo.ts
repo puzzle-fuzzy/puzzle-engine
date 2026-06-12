@@ -194,12 +194,7 @@ export async function findGenerationByDedupeKeyForAccount(dedupeKey: string, acc
     .limit(1)
   return record ?? null
 }
-
-/**
- * 获取含费用信息的记录，用于账单统计
- * @param accountId 按用户过滤
- * @param dateRange 可选日期范围，限定查询区间避免全表扫描
- */
+/** 获取含费用信息的记录，用于账单统计 */
 export async function getCostRecords(accountId: string, dateRange?: { from: Date, to: Date }) {
   const conditions = [isNotNull(generationRecords.cost), eq(generationRecords.accountId, accountId)]
   if (dateRange) {

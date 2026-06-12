@@ -1,7 +1,7 @@
 import { pgClient } from '@excuse/db'
 import { Elysia } from 'elysia'
-import { getOnlineUserCount } from '../services/sse-manager'
 import { getMetrics } from '../services/metrics'
+import { getOnlineUserCount } from '../services/sse-manager'
 
 let startTime = Date.now()
 

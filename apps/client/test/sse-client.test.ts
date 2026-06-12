@@ -33,7 +33,7 @@ interface FetchEventSourceInit {
 /** 当前被捕获的 SSE init 配置 — 测试用此回调来模拟服务器推送 */
 let capturedInit: FetchEventSourceInit | null = null
 let resolveStream: (() => void) | null = null
-let rejectStream: ((err: unknown) => void) | null = null
+let _rejectStream: ((err: unknown) => void) | null = null
 
 vi.mock('@microsoft/fetch-event-source', () => ({
   fetchEventSource: vi.fn(async (_url: string, init: FetchEventSourceInit) => {
@@ -45,7 +45,7 @@ vi.mock('@microsoft/fetch-event-source', () => ({
     // 4. 如果 onerror 返回间隔 → 继续等待（模拟永不结束的流）
     return new Promise<void>((resolve, reject) => {
       resolveStream = resolve
-      rejectStream = reject
+      _rejectStream = reject
 
       // 当 abort signal 触发时，reject（模拟 fetch abort）
       if (init.signal) {
@@ -355,7 +355,9 @@ describe('sSEClient', () => {
 
     it('handler 异常不影响其他 handler 和连接', async () => {
       vi.mocked(getAuthToken).mockReturnValue('token')
-      const badHandler = vi.fn(() => { throw new Error('handler crash') })
+      const badHandler = vi.fn(() => {
+        throw new Error('handler crash')
+      })
       const goodHandler = vi.fn()
       sseClient.on('generation_status', badHandler)
       sseClient.on('generation_status', goodHandler)

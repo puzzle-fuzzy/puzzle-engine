@@ -1,7 +1,7 @@
+import type { WorkflowInsert, WorkflowRow, WorkflowStepInsert, WorkflowStepRow } from '../types'
 import { and, desc, eq, inArray, sql } from 'drizzle-orm'
 import { getDb } from '../db'
-import { workflowSteps, workflows } from '../schema'
-import type { WorkflowInsert, WorkflowRow, WorkflowStepInsert, WorkflowStepRow } from '../types'
+import { workflows, workflowSteps } from '../schema'
 
 // ===== Workflows =====
 

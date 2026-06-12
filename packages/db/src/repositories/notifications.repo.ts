@@ -1,7 +1,7 @@
+import type { NotificationInsert, NotificationRow } from '../types'
 import { and, desc, eq, sql } from 'drizzle-orm'
 import { getDb } from '../db'
 import { notifications } from '../schema'
-import type { NotificationInsert, NotificationRow } from '../types'
 
 /** 创建通知 */
 export async function createNotification(values: NotificationInsert): Promise<NotificationRow> {

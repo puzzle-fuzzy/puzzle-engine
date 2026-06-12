@@ -61,8 +61,13 @@ export default function Workspace() {
   const fetchRecords = useGenerationStore(s => s.fetchRecords)
   const fetchProjects = useGenerationStore(s => s.fetchProjects)
 
-  useEffect(() => { loadModels() }, [loadModels])
-  useEffect(() => { fetchProjects(); fetchRecords() }, [fetchProjects, fetchRecords])
+  useEffect(() => {
+    loadModels()
+  }, [loadModels])
+  useEffect(() => {
+    fetchProjects()
+    fetchRecords()
+  }, [fetchProjects, fetchRecords])
 
   // 渲染媒体上传控件
   function renderMediaUpload(param: ModelParameter) {

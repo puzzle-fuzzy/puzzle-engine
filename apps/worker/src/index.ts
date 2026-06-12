@@ -1,5 +1,5 @@
-import type { TaskResult } from './task-processor'
 import type { WorkerHealthState } from './health'
+import type { TaskResult } from './task-processor'
 import { pollPendingVideoTasks } from '@excuse/db'
 import { createLogger } from '@excuse/shared'
 import { loadConfig } from './config'

@@ -1,4 +1,3 @@
-import type { ModelConfig, ModelParameter } from '@excuse/shared'
 import { describe, expect, it } from 'bun:test'
 import { getModelById, getModelsByCategory, MODELS } from '../src/model-configs'
 
@@ -182,7 +181,6 @@ describe('模型配置一致性 (P1.8)', () => {
     for (const model of allModels) {
       if (!model.inputMapping)
         continue
-      const mappingKeys = new Set(Object.keys(model.inputMapping))
       for (const param of model.parameters) {
         const mapping = model.inputMapping[param.name]
         if (!mapping) {

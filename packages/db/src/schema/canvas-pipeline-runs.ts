@@ -10,15 +10,15 @@ import { canvasProjects } from './canvas-projects'
  * 每个阶段独立可重试，通过 pipeline_runs 表记录执行历史
  */
 export const canvasPipelinePhaseEnum = pgEnum('canvas_pipeline_phase', [
-  'analyze',        // 阶段 1: LLM 分析故事文本
-  'characters',     // 阶段 2: 生成角色档案
-  'locations',      // 阶段 3: 生成场景档案
-  'characterRefs',  // 阶段 4: AI 生成角色参考图（正面肖像 + 三视图）
-  'locationRefs',   // 阶段 5: AI 生成场景参考图（空场景）
-  'storyboard',     // 阶段 6: LLM 生成分镜脚本
-  'continuity',     // 阶段 7: 规则校验连续性（不调用 LLM）
-  'rebuild',        // 阶段 8: 重建视频提示词（组装 videoPrompt）
-  'videos',         // 阶段 9: 提交视频生成任务
+  'analyze', // 阶段 1: LLM 分析故事文本
+  'characters', // 阶段 2: 生成角色档案
+  'locations', // 阶段 3: 生成场景档案
+  'characterRefs', // 阶段 4: AI 生成角色参考图（正面肖像 + 三视图）
+  'locationRefs', // 阶段 5: AI 生成场景参考图（空场景）
+  'storyboard', // 阶段 6: LLM 生成分镜脚本
+  'continuity', // 阶段 7: 规则校验连续性（不调用 LLM）
+  'rebuild', // 阶段 8: 重建视频提示词（组装 videoPrompt）
+  'videos', // 阶段 9: 提交视频生成任务
 ])
 
 /**
@@ -29,11 +29,11 @@ export const canvasPipelinePhaseEnum = pgEnum('canvas_pipeline_phase', [
  * append-only guard：状态转换只允许 pending → running，不允许回退
  */
 export const canvasPipelineRunStatusEnum = pgEnum('canvas_pipeline_run_status', [
-  'pending',    // 已创建，等待执行
-  'running',    // 正在执行中
-  'succeeded',  // 执行成功
-  'failed',     // 执行失败
-  'cancelled',  // 用户取消
+  'pending', // 已创建，等待执行
+  'running', // 正在执行中
+  'succeeded', // 执行成功
+  'failed', // 执行失败
+  'cancelled', // 用户取消
 ])
 
 /**

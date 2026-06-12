@@ -1,5 +1,5 @@
+import { creditBalance, CreditError, debitCredit, getOrCreateCreditAccount, listCreditTransactions, refundCredit, reserveCredit } from '@excuse/db'
 import { describe, expect, it } from 'bun:test'
-import { CreditError, creditBalance, debitCredit, getOrCreateCreditAccount, listCreditTransactions, refundCredit, reserveCredit } from '@excuse/db'
 
 /**
  * Credit repo 单元测试

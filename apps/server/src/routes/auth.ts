@@ -3,7 +3,7 @@ import type { AuthUser } from '@excuse/shared'
 import type { ServerConfig } from '../config'
 import { createAccount, getAccountByEmail, getAccountById, getAccountByUsername } from '@excuse/db'
 import { Elysia, t } from 'elysia'
-import { createAuthPlugin, AUTH_COOKIE_NAME } from '../plugins/auth'
+import { AUTH_COOKIE_NAME, createAuthPlugin } from '../plugins/auth'
 import { audit } from '../services/audit'
 import { conflict, forbidden, notFound, unauthorized } from '../utils/errors'
 

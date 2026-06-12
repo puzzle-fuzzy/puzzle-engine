@@ -1,7 +1,7 @@
+import type { CreditAccountRow, CreditTransactionRow } from '../types'
 import { and, desc, eq, sql } from 'drizzle-orm'
 import { getDb } from '../db'
 import { creditAccounts, creditTransactions, usageEvents } from '../schema'
-import type { CreditAccountRow, CreditTransactionRow } from '../types'
 
 // ===== Credit Account =====
 

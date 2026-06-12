@@ -36,7 +36,7 @@ services:
     build: .
     container_name: excuse-worker
     restart: unless-stopped
-    command: ["bun", "run", "apps/worker/src/index.ts"]
+    command: [bun, run, apps/worker/src/index.ts]
     environment:
       DATABASE_URL: postgres://${DB_USER:-excuse}:${DB_PASSWORD}@postgres:5432/${DB_NAME:-excuse}
       DASHSCOPE_API_KEY: ${DASHSCOPE_API_KEY:?Set DASHSCOPE_API_KEY}
@@ -54,7 +54,7 @@ services:
     container_name: excuse-client-dist
     volumes:
       - /client-dist
-    command: ["true"] # One-shot: exit after providing volume
+    command: ['true'] # One-shot: exit after providing volume
 
   nginx:
     image: nginx:alpine
