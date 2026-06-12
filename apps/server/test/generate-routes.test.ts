@@ -33,7 +33,7 @@ interface MockProviderResult {
 
 type RecordOrNull = GenerationRecordRow | null
 
-const mockCreateRecord = mock<() => Promise<RecordOrNull>>(() => Promise.resolve(null))
+const mockCreateRecord = mock<(values: Record<string, unknown>) => Promise<RecordOrNull>>(() => Promise.resolve(null))
 const mockListRecords = mock<(filter: Record<string, unknown>) => Promise<GenerationRecordRow[]>>(() => Promise.resolve([]))
 const mockGetRecordById = mock<(id: string) => Promise<RecordOrNull>>(() => Promise.resolve(null))
 const mockDeleteRecord = mock<(id: string) => Promise<void>>(() => Promise.resolve(undefined))
@@ -257,6 +257,34 @@ describe('generate routes', () => {
       expect(data?.success).toBe(true)
       expect(data?.record?.status).toBe('succeeded')
       expect(mockMarkSucceeded).toHaveBeenCalled()
+    })
+
+    it('相同语义参数顺序不同也生成相同 dedupeKey', async () => {
+      mockCreateRecord.mockResolvedValue(makeRecord())
+      mockGetRecordById.mockResolvedValue(makeRecord({ status: 'succeeded' }))
+      mockGenerate.mockResolvedValue({
+        success: true,
+        output: { text: '你好' },
+        usage: { inputTokens: 10, outputTokens: 20 },
+      })
+
+      await client.api.generate.post(
+        { model: 'qwen-max', parameters: { prompt: '你好', temperature: 0.7 } },
+        { headers: { Authorization: `Bearer ${token}` } },
+      )
+      await client.api.generate.post(
+        { model: 'qwen-max', parameters: { temperature: 0.7, prompt: '你好' } },
+        { headers: { Authorization: `Bearer ${token}` } },
+      )
+
+      const firstDedupeKey = mockFindGenerationByDedupeKeyForAccount.mock.calls[0]?.[0]
+      const secondDedupeKey = mockFindGenerationByDedupeKeyForAccount.mock.calls[1]?.[0]
+
+      expect(firstDedupeKey).toBeDefined()
+      expect(firstDedupeKey).toBe(secondDedupeKey)
+      expect(firstDedupeKey).toStartWith('sha256:')
+      expect(mockCreateRecord.mock.calls[0]?.[0]).toEqual(expect.objectContaining({ dedupeKey: firstDedupeKey }))
+      expect(mockCreateRecord.mock.calls[1]?.[0]).toEqual(expect.objectContaining({ dedupeKey: secondDedupeKey }))
     })
 
     it('同步模型 API 失败时标记为 failed（HTTP 200 业务失败）', async () => {

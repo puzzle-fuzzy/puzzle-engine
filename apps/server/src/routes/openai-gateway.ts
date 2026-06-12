@@ -11,6 +11,7 @@ import { DashScopeClient, getModelById, getModelsByCategory, validateAndMerge } 
 import { extractBillingParams, resolveModelId } from '@excuse/shared'
 import { Elysia, t } from 'elysia'
 import { createRequireAuthPlugin } from '../plugins/auth'
+import { createDedupeKey } from '../utils/dedupe-key'
 
 /**
  * OpenAI 兼容网关 — /v1/chat/completions
@@ -95,6 +96,11 @@ export function createOpenAIGatewayRoutes(config: ServerConfig) {
       const estimatedCost = calculateCost(modelConfig, extractBillingParams(validatedParams))
       const traceId = crypto.randomUUID()
       const taskId = `gen_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
+      const dedupeKey = await createDedupeKey({
+        accountId: userId,
+        model: modelConfig.id,
+        parameters: validatedParams,
+      })
 
       // 创建生成记录 — inputParams 存储 ValidatedModelParameters 的所有字段
       const record = await createGenerationRecord({
@@ -106,7 +112,7 @@ export function createOpenAIGatewayRoutes(config: ServerConfig) {
         status: 'pending',
         inputParams: { ...validatedParams },
         cost: { ...estimatedCost, estimated: true, billable: false, source: 'estimated' },
-        dedupeKey: `${userId}:${modelConfig.id}:${JSON.stringify(parameters)}`,
+        dedupeKey,
       })
 
       // 调用 provider — ValidatedModelParameters 保证参数已通过校验

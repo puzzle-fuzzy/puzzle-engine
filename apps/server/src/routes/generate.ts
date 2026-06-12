@@ -15,6 +15,7 @@ import * as svc from '../modules/generation/service'
 import { createRequireAuthPlugin } from '../plugins/auth'
 import { audit } from '../services/audit'
 import { checkCategoryRateLimit } from '../utils/category-rate-limit'
+import { createDedupeKey } from '../utils/dedupe-key'
 import { forbidden, notFound, validationError } from '../utils/errors'
 
 /**
@@ -101,7 +102,12 @@ export function createGenerateRoutes(config: ServerConfig) {
       }
 
       // 去重：同一用户 + 同一 model + 相同参数，且任务仍在进行中时不重复提交
-      const dedupeKey = `${userId}:${model}:${JSON.stringify(parameters)}`
+      const dedupeKey = await createDedupeKey({
+        accountId: userId,
+        model,
+        parameters: validatedParams,
+        referenceFileIds,
+      })
       const dedupeResult = await svc.checkDedupe(dedupeKey, userId)
       if (dedupeResult.duplicated) {
         const updated = await getGenerationRecordById(dedupeResult.record.id)
