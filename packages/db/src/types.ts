@@ -1,5 +1,5 @@
 import type { InferInsertModel, InferSelectModel } from 'drizzle-orm'
-import type { accounts, canvasCharacters, canvasContinuityReports, canvasLocations, canvasProjects, canvasProjectStatusEnum, canvasShots, canvasShotStatusEnum, generationCategoryEnum, generationRecords, generationStatusEnum, uploadedFiles } from './schema'
+import type { accounts, canvasCharacters, canvasContinuityReports, canvasLocations, canvasPipelinePhaseEnum, canvasPipelineRuns, canvasPipelineRunStatusEnum, canvasProjects, canvasProjectStatusEnum, canvasShots, canvasShotStatusEnum, generationCategoryEnum, generationRecords, generationStatusEnum, uploadedFiles } from './schema'
 
 // ===== Drizzle 行类型（从 schema 自动推导） =====
 
@@ -51,6 +51,12 @@ export type CanvasContinuityRow = InferSelectModel<typeof canvasContinuityReport
 /** canvas_continuity_reports 表 — 插入参数类型 */
 export type CanvasContinuityInsert = InferInsertModel<typeof canvasContinuityReports>
 
+/** canvas_pipeline_runs 表 — 查询结果行类型 */
+export type CanvasPipelineRunRow = InferSelectModel<typeof canvasPipelineRuns>
+
+/** canvas_pipeline_runs 表 — 插入参数类型 */
+export type CanvasPipelineRunInsert = InferInsertModel<typeof canvasPipelineRuns>
+
 // ===== 枚举类型（从 pgEnum 定义推断） =====
 
 /** 生成内容类别：从 pgEnum 定义推断 */
@@ -64,6 +70,12 @@ export type CanvasProjectStatus = typeof canvasProjectStatusEnum.enumValues exte
 
 /** 画布镜头状态：从 pgEnum 定义推断 */
 export type CanvasShotStatus = typeof canvasShotStatusEnum.enumValues extends (infer T)[] ? T : never
+
+/** 画布流水线阶段：从 pgEnum 定义推断 */
+export type CanvasPipelinePhase = typeof canvasPipelinePhaseEnum.enumValues extends (infer T)[] ? T : never
+
+/** 画布流水线运行状态：从 pgEnum 定义推断 */
+export type CanvasPipelineRunStatus = typeof canvasPipelineRunStatusEnum.enumValues extends (infer T)[] ? T : never
 
 // ===== 序列化工具类型 =====
 
@@ -98,6 +110,9 @@ export type CanvasLocationSerialized = Serialize<CanvasLocationRow>
 
 /** canvas_shots 序列化后类型（Date → string） */
 export type CanvasShotSerialized = Serialize<CanvasShotRow>
+
+/** canvas_pipeline_runs 序列化后类型（Date → string） */
+export type CanvasPipelineRunSerialized = Serialize<CanvasPipelineRunRow>
 
 // ===== 查询过滤条件 =====
 

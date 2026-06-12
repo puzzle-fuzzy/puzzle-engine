@@ -50,6 +50,7 @@ export interface SSEPipelineNodeEvent {
   nodeType: string
   nodeId: string
   status: 'running' | 'completed' | 'failed'
+  runId?: string
   data?: Record<string, unknown>
   error?: string
 }

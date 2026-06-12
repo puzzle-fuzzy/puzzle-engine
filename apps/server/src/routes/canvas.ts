@@ -1,9 +1,14 @@
+import type { CanvasPipelinePhase } from '@excuse/db'
 import type { ServerConfig } from '../config'
 import {
+  createPipelineRun,
+  findActiveRunForPhase,
   getCanvasCharacterForAccount,
   getCanvasLocationForAccount,
   getCanvasProjectByIdForAccount,
   getCanvasShotForAccount,
+  getPipelineRunById,
+  listPipelineRunsByProject,
   updateCanvasProject,
 } from '@excuse/db'
 import { createLogger } from '@excuse/shared'
@@ -11,14 +16,15 @@ import { Elysia, t } from 'elysia'
 import * as svc from '../modules/canvas/service'
 import { createAuthPlugin } from '../plugins/auth'
 import { dispatchToUser } from '../services/sse-manager'
-import { notFound, unauthorized, validationError } from '../utils/errors'
+import { conflict, notFound, unauthorized, validationError } from '../utils/errors'
 
 const logger = createLogger('canvas-routes')
 
-function fireAndForget(
+function fireAndForgetWithRun(
   userId: string,
   projectId: string,
   phaseKey: string,
+  runId: string,
   promise: Promise<unknown>,
 ) {
   promise
@@ -28,11 +34,11 @@ function fireAndForget(
         nodeType: 'phase',
         nodeId: phaseKey,
         status: 'completed',
+        runId,
       })
     })
     .catch((err) => {
       logger.error({ err, projectId, phaseKey }, `${phaseKey} failed`)
-      // Update DB status to 'failed' so the project doesn't stay stuck
       updateCanvasProject(projectId, { status: 'failed' }).catch(dbErr =>
         logger.error({ err: dbErr, projectId }, 'Failed to update project status to failed'),
       )
@@ -42,6 +48,7 @@ function fireAndForget(
         nodeId: phaseKey,
         status: 'failed',
         error: err instanceof Error ? err.message : String(err),
+        runId,
       })
     })
 }
@@ -112,17 +119,46 @@ export function createCanvasRoutes(config: ServerConfig) {
       }),
     })
 
+    // ===== Pipeline Run 查询 =====
+    .get('/projects/:projectId/runs', async ({ params: { projectId }, userId, set }) => {
+      if (!userId)
+        return unauthorized(set)
+      const owned = await getCanvasProjectByIdForAccount(projectId, userId)
+      if (!owned)
+        return notFound(set, '项目不存在或无权访问')
+      const runs = await listPipelineRunsByProject(projectId)
+      return { success: true, data: runs }
+    })
+
+    .get('/runs/:runId', async ({ params: { runId }, userId, set }) => {
+      if (!userId)
+        return unauthorized(set)
+      const run = await getPipelineRunById(runId)
+      if (!run)
+        return notFound(set, '运行记录不存在')
+      const owned = await getCanvasProjectByIdForAccount(run.projectId, userId)
+      if (!owned)
+        return notFound(set, '项目不存在或无权访问')
+      return { success: true, data: run }
+    })
+
     // ===== 流水线步骤 =====
-    // 所有流水线接口采用 fire-and-forget 模式：
-    // 立即返回，后台执行，通过 SSE 推送进度和阶段完成事件
+    // 每个 phase 先检查是否有 active run (并发守卫)，
+    // 无则创建 run 记录 → 返回 { accepted: true, runId } → 后台执行
+    // 有则返回 409 { accepted: false, error, existingRunId }
     .post('/projects/:projectId/analyze', async ({ params: { projectId }, userId, set }) => {
       if (!userId)
         return unauthorized(set)
       const owned = await getCanvasProjectByIdForAccount(projectId, userId)
       if (!owned)
         return notFound(set, '项目不存在或无权访问')
-      fireAndForget(userId, projectId, 'analyze', svc.analyzeProject(projectId, config))
-      return { success: true, message: '开始分析' }
+      const phase: CanvasPipelinePhase = 'analyze'
+      const activeRun = await findActiveRunForPhase(projectId, phase)
+      if (activeRun)
+        return conflict(set, `该阶段已有进行中的任务`)
+      const run = await createPipelineRun({ projectId, phase, createdBy: userId })
+      fireAndForgetWithRun(userId, projectId, phase, run.id, svc.analyzeProject(projectId, config, run.id))
+      return { accepted: true, runId: run.id }
     })
 
     .post('/projects/:projectId/characters', async ({ params: { projectId }, userId, set }) => {
@@ -131,8 +167,13 @@ export function createCanvasRoutes(config: ServerConfig) {
       const owned = await getCanvasProjectByIdForAccount(projectId, userId)
       if (!owned)
         return notFound(set, '项目不存在或无权访问')
-      fireAndForget(userId, projectId, 'characters', svc.generateCharacters(projectId, config))
-      return { success: true, message: '开始生成角色' }
+      const phase: CanvasPipelinePhase = 'characters'
+      const activeRun = await findActiveRunForPhase(projectId, phase)
+      if (activeRun)
+        return conflict(set, `该阶段已有进行中的任务`)
+      const run = await createPipelineRun({ projectId, phase, createdBy: userId })
+      fireAndForgetWithRun(userId, projectId, phase, run.id, svc.generateCharacters(projectId, config, run.id))
+      return { accepted: true, runId: run.id }
     })
 
     .post('/projects/:projectId/locations', async ({ params: { projectId }, userId, set }) => {
@@ -141,8 +182,13 @@ export function createCanvasRoutes(config: ServerConfig) {
       const owned = await getCanvasProjectByIdForAccount(projectId, userId)
       if (!owned)
         return notFound(set, '项目不存在或无权访问')
-      fireAndForget(userId, projectId, 'locations', svc.generateLocations(projectId, config))
-      return { success: true, message: '开始生成场景' }
+      const phase: CanvasPipelinePhase = 'locations'
+      const activeRun = await findActiveRunForPhase(projectId, phase)
+      if (activeRun)
+        return conflict(set, `该阶段已有进行中的任务`)
+      const run = await createPipelineRun({ projectId, phase, createdBy: userId })
+      fireAndForgetWithRun(userId, projectId, phase, run.id, svc.generateLocations(projectId, config, run.id))
+      return { accepted: true, runId: run.id }
     })
 
     .post('/projects/:projectId/character-refs', async ({ params: { projectId }, userId, set }) => {
@@ -151,8 +197,13 @@ export function createCanvasRoutes(config: ServerConfig) {
       const owned = await getCanvasProjectByIdForAccount(projectId, userId)
       if (!owned)
         return notFound(set, '项目不存在或无权访问')
-      fireAndForget(userId, projectId, 'characterRefs', svc.generateCharacterRefs(projectId, config))
-      return { success: true, message: '开始生成角色参考图' }
+      const phase: CanvasPipelinePhase = 'characterRefs'
+      const activeRun = await findActiveRunForPhase(projectId, phase)
+      if (activeRun)
+        return conflict(set, `该阶段已有进行中的任务`)
+      const run = await createPipelineRun({ projectId, phase, createdBy: userId })
+      fireAndForgetWithRun(userId, projectId, phase, run.id, svc.generateCharacterRefs(projectId, config, run.id))
+      return { accepted: true, runId: run.id }
     })
 
     .post('/projects/:projectId/location-refs', async ({ params: { projectId }, userId, set }) => {
@@ -161,8 +212,13 @@ export function createCanvasRoutes(config: ServerConfig) {
       const owned = await getCanvasProjectByIdForAccount(projectId, userId)
       if (!owned)
         return notFound(set, '项目不存在或无权访问')
-      fireAndForget(userId, projectId, 'locationRefs', svc.generateLocationRefs(projectId, config))
-      return { success: true, message: '开始生成场景参考图' }
+      const phase: CanvasPipelinePhase = 'locationRefs'
+      const activeRun = await findActiveRunForPhase(projectId, phase)
+      if (activeRun)
+        return conflict(set, `该阶段已有进行中的任务`)
+      const run = await createPipelineRun({ projectId, phase, createdBy: userId })
+      fireAndForgetWithRun(userId, projectId, phase, run.id, svc.generateLocationRefs(projectId, config, run.id))
+      return { accepted: true, runId: run.id }
     })
 
     .post('/projects/:projectId/storyboard', async ({ params: { projectId }, userId, set }) => {
@@ -171,8 +227,13 @@ export function createCanvasRoutes(config: ServerConfig) {
       const owned = await getCanvasProjectByIdForAccount(projectId, userId)
       if (!owned)
         return notFound(set, '项目不存在或无权访问')
-      fireAndForget(userId, projectId, 'storyboard', svc.generateStoryboard(projectId, config))
-      return { success: true, message: '开始生成分镜' }
+      const phase: CanvasPipelinePhase = 'storyboard'
+      const activeRun = await findActiveRunForPhase(projectId, phase)
+      if (activeRun)
+        return conflict(set, `该阶段已有进行中的任务`)
+      const run = await createPipelineRun({ projectId, phase, createdBy: userId })
+      fireAndForgetWithRun(userId, projectId, phase, run.id, svc.generateStoryboard(projectId, config, run.id))
+      return { accepted: true, runId: run.id }
     })
 
     .post('/projects/:projectId/continuity', async ({ params: { projectId }, userId, set }) => {
@@ -181,8 +242,13 @@ export function createCanvasRoutes(config: ServerConfig) {
       const owned = await getCanvasProjectByIdForAccount(projectId, userId)
       if (!owned)
         return notFound(set, '项目不存在或无权访问')
-      fireAndForget(userId, projectId, 'continuity', svc.checkContinuity(projectId))
-      return { success: true, message: '开始连续性检查' }
+      const phase: CanvasPipelinePhase = 'continuity'
+      const activeRun = await findActiveRunForPhase(projectId, phase)
+      if (activeRun)
+        return conflict(set, `该阶段已有进行中的任务`)
+      const run = await createPipelineRun({ projectId, phase, createdBy: userId })
+      fireAndForgetWithRun(userId, projectId, phase, run.id, svc.checkContinuity(projectId, run.id))
+      return { accepted: true, runId: run.id }
     })
 
     .post('/projects/:projectId/rebuild-prompts', async ({ params: { projectId }, userId, set }) => {
@@ -191,8 +257,13 @@ export function createCanvasRoutes(config: ServerConfig) {
       const owned = await getCanvasProjectByIdForAccount(projectId, userId)
       if (!owned)
         return notFound(set, '项目不存在或无权访问')
-      fireAndForget(userId, projectId, 'rebuild', svc.rebuildShotPrompts(projectId))
-      return { success: true, message: '开始重建 Prompt' }
+      const phase: CanvasPipelinePhase = 'rebuild'
+      const activeRun = await findActiveRunForPhase(projectId, phase)
+      if (activeRun)
+        return conflict(set, `该阶段已有进行中的任务`)
+      const run = await createPipelineRun({ projectId, phase, createdBy: userId })
+      fireAndForgetWithRun(userId, projectId, phase, run.id, svc.rebuildShotPrompts(projectId, run.id))
+      return { accepted: true, runId: run.id }
     })
 
     .post('/projects/:projectId/generate-videos', async ({ params: { projectId }, userId, set }) => {
@@ -201,8 +272,13 @@ export function createCanvasRoutes(config: ServerConfig) {
       const owned = await getCanvasProjectByIdForAccount(projectId, userId)
       if (!owned)
         return notFound(set, '项目不存在或无权访问')
-      fireAndForget(userId, projectId, 'videos', svc.generateVideos(projectId, config))
-      return { success: true, message: '开始生成视频' }
+      const phase: CanvasPipelinePhase = 'videos'
+      const activeRun = await findActiveRunForPhase(projectId, phase)
+      if (activeRun)
+        return conflict(set, `该阶段已有进行中的任务`)
+      const run = await createPipelineRun({ projectId, phase, createdBy: userId })
+      fireAndForgetWithRun(userId, projectId, phase, run.id, svc.generateVideos(projectId, config, run.id))
+      return { accepted: true, runId: run.id }
     })
 
     .post('/projects/:projectId/layout', async ({ params: { projectId }, body, userId, set }) => {
@@ -334,14 +410,26 @@ export function createCanvasRoutes(config: ServerConfig) {
       return { success: true }
     })
 
-    // 重试单个失败的镜头视频
+    // 重试单个失败的镜头视频 — retry 不创建 pipeline run 记录
     .post('/shots/:shotId/retry', async ({ params: { shotId }, userId, set }) => {
       if (!userId)
         return unauthorized(set)
       const shot = await getCanvasShotForAccount(shotId, userId)
       if (!shot)
         return notFound(set, '镜头不存在或无权访问')
-      fireAndForget(userId, shot.projectId, 'retry', svc.retryShotVideo(shotId, config))
+      svc.retryShotVideo(shotId, config).catch((err) => {
+        logger.error({ err, shotId }, 'retry failed')
+        updateCanvasProject(shot.projectId, { status: 'failed' }).catch(dbErr =>
+          logger.error({ err: dbErr, projectId: shot.projectId }, 'Failed to update project status to failed'),
+        )
+        dispatchToUser(userId, 'pipeline_node_update', {
+          projectId: shot.projectId,
+          nodeType: 'shot',
+          nodeId: shotId,
+          status: 'failed',
+          error: err instanceof Error ? err.message : String(err),
+        })
+      })
       return { success: true, message: '开始重试镜头' }
     })
 }

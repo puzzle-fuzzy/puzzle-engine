@@ -91,6 +91,13 @@ mock.module('@excuse/db', () => ({
   notifyGenerationStatus: async () => {},
   getGenerationRecordsByTaskIds: async () => [],
   pgClient: { listen: async () => {} },
+  findActiveRunForPhase: async () => null,
+  createPipelineRun: async () => ({ id: 'run-001', projectId: 'proj-001', phase: 'analyze', status: 'pending', createdBy: 'acc-001', createdAt: new Date() }),
+  getPipelineRunById: async () => null,
+  listPipelineRunsByProject: async () => [],
+  markPipelineRunRunning: async () => null,
+  markPipelineRunSucceeded: async () => null,
+  markPipelineRunFailed: async () => null,
 }))
 
 mock.module('@excuse/provider', () => ({
@@ -231,12 +238,13 @@ describe('canvas routes — extended', () => {
 
   for (const endpoint of fireAndForgetEndpoints) {
     describe(`POST /projects/:projectId/${endpoint.path}`, () => {
-      it(`${endpoint.name} 立即返回成功消息`, async () => {
+      it(`${endpoint.name} 立即返回 accepted + runId`, async () => {
         mockGetCanvasProjectByIdForAccount.mockResolvedValue(makeProjectRow())
         const { data } = await client.api.canvas.projects({ projectId: 'proj-001' })[endpoint.path].post(null, {
           headers: { Authorization: `Bearer ${token}` },
         })
-        expect(data?.success).toBe(true)
+        expect(data?.accepted).toBe(true)
+        expect(data?.runId).toBeDefined()
       })
     })
   }

@@ -57,6 +57,13 @@
       "when": 1781200247774,
       "tag": "0007_perpetual_storm",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1781227071635,
+      "tag": "0008_elite_martin_li",
+      "breakpoints": true
     }
   ]
 }

@@ -24,6 +24,9 @@ import {
   getGenerationRecordsByTaskIds,
   listCanvasProjectsByAccount,
   listCanvasShotsByProject,
+  markPipelineRunFailed,
+  markPipelineRunRunning,
+  markPipelineRunSucceeded,
   resetCanvasShotToDraft,
   softDeleteCanvasProject,
   updateCanvasCharacter,
@@ -43,8 +46,8 @@ function createClient(config: { dashscopeApiKey: string, dashscopeBaseUrl?: stri
   return new DashScopeClient({ apiKey: config.dashscopeApiKey, baseUrl: config.dashscopeBaseUrl })
 }
 
-function notifyNode(accountId: string, projectId: string, nodeType: string, nodeId: string, status: 'running' | 'completed' | 'failed', data?: Record<string, unknown>, error?: string) {
-  dispatchToUser(accountId, 'pipeline_node_update', { projectId, nodeType, nodeId, status, data, error })
+function notifyNode(accountId: string, projectId: string, nodeType: string, nodeId: string, status: 'running' | 'completed' | 'failed', data?: Record<string, unknown>, error?: string, runId?: string) {
+  dispatchToUser(accountId, 'pipeline_node_update', { projectId, nodeType, nodeId, status, data, error, runId })
 }
 
 const DEFAULT_TEXT_MODEL = 'qwen3.7-plus'
@@ -190,12 +193,14 @@ function assertNotGenerating(status: string | null | undefined): void {
   }
 }
 
-export async function analyzeProject(projectId: string, config: { dashscopeApiKey: string, dashscopeBaseUrl?: string }) {
+export async function analyzeProject(projectId: string, config: { dashscopeApiKey: string, dashscopeBaseUrl?: string }, runId?: string) {
   const project = await getCanvasProjectById(projectId)
   if (!project)
     throw new Error('项目不存在')
 
-  notifyNode(project.accountId, projectId, 'analysis', projectId, 'running')
+  if (runId)
+    await markPipelineRunRunning(runId)
+  notifyNode(project.accountId, projectId, 'analysis', projectId, 'running', undefined, undefined, runId)
 
   // Re-analysis resets downstream data to ensure consistency
   if (project.status !== 'draft') {
@@ -227,17 +232,21 @@ export async function analyzeProject(projectId: string, config: { dashscopeApiKe
       analysisJson: analysis,
     })
 
-    notifyNode(project.accountId, projectId, 'analysis', projectId, 'completed', { analysis })
+    notifyNode(project.accountId, projectId, 'analysis', projectId, 'completed', { analysis }, undefined, runId)
+    if (runId)
+      await markPipelineRunSucceeded(runId, { phase: 'analyze' })
     return getProjectDetail(projectId)
   }
   catch (error) {
     await updateCanvasProject(projectId, { status: 'failed' })
-    notifyNode(project.accountId, projectId, 'analysis', projectId, 'failed', undefined, (error as Error).message)
+    notifyNode(project.accountId, projectId, 'analysis', projectId, 'failed', undefined, (error as Error).message, runId)
+    if (runId)
+      await markPipelineRunFailed(runId, (error as Error).message)
     throw error
   }
 }
 
-export async function generateCharacters(projectId: string, config: { dashscopeApiKey: string, dashscopeBaseUrl?: string }) {
+export async function generateCharacters(projectId: string, config: { dashscopeApiKey: string, dashscopeBaseUrl?: string }, runId?: string) {
   const project = await getCanvasProjectById(projectId)
   if (!project || !project.analysisJson)
     throw new Error('项目不存在或未分析')
@@ -245,6 +254,9 @@ export async function generateCharacters(projectId: string, config: { dashscopeA
 
   const analysis = project.analysisJson!
   const accountId = project.accountId
+
+  if (runId)
+    await markPipelineRunRunning(runId)
 
   await deleteCanvasCharactersByProject(projectId, { excludeLocked: true })
   // Characters changed → downstream storyboard references become stale
@@ -255,7 +267,7 @@ export async function generateCharacters(projectId: string, config: { dashscopeA
 
   const created = []
   for (const name of analysis.characterNames) {
-    notifyNode(accountId, projectId, 'character', name, 'running')
+    notifyNode(accountId, projectId, 'character', name, 'running', undefined, undefined, runId)
 
     try {
       const { system, prompt: userPrompt } = buildCharacterPrompt(project.storyText, analysis, name)
@@ -266,7 +278,7 @@ export async function generateCharacters(projectId: string, config: { dashscopeA
       })
 
       if (!result.success || !result.output) {
-        notifyNode(accountId, projectId, 'character', name, 'failed', undefined, result.error)
+        notifyNode(accountId, projectId, 'character', name, 'failed', undefined, result.error, runId)
         continue
       }
 
@@ -281,19 +293,21 @@ export async function generateCharacters(projectId: string, config: { dashscopeA
         profileJson: profile,
       })
 
-      notifyNode(accountId, projectId, 'character', character.id, 'completed', { name: profile.name, profile })
+      notifyNode(accountId, projectId, 'character', character.id, 'completed', { name: profile.name, profile }, undefined, runId)
       created.push(character)
     }
     catch (error) {
-      notifyNode(accountId, projectId, 'character', name, 'failed', undefined, (error as Error).message)
+      notifyNode(accountId, projectId, 'character', name, 'failed', undefined, (error as Error).message, runId)
     }
   }
 
   await updateCanvasProject(projectId, { status: 'characters_ready' })
+  if (runId)
+    await markPipelineRunSucceeded(runId, { phase: 'characters', charactersCreated: created.length })
   return getProjectDetail(projectId)
 }
 
-export async function generateLocations(projectId: string, config: { dashscopeApiKey: string, dashscopeBaseUrl?: string }) {
+export async function generateLocations(projectId: string, config: { dashscopeApiKey: string, dashscopeBaseUrl?: string }, runId?: string) {
   const project = await getCanvasProjectById(projectId)
   if (!project || !project.analysisJson)
     throw new Error('项目不存在或未分析')
@@ -301,6 +315,9 @@ export async function generateLocations(projectId: string, config: { dashscopeAp
 
   const analysis = project.analysisJson!
   const accountId = project.accountId
+
+  if (runId)
+    await markPipelineRunRunning(runId)
 
   await deleteCanvasLocationsByProject(projectId, { excludeLocked: true })
   // Locations changed → downstream storyboard references become stale
@@ -310,7 +327,7 @@ export async function generateLocations(projectId: string, config: { dashscopeAp
   const textModel = getTextModel(project.modelPreferencesJson)
 
   for (const name of analysis.sceneNames) {
-    notifyNode(accountId, projectId, 'location', name, 'running')
+    notifyNode(accountId, projectId, 'location', name, 'running', undefined, undefined, runId)
 
     try {
       const { system, prompt: userPrompt } = buildLocationPrompt(project.storyText, analysis, name)
@@ -321,7 +338,7 @@ export async function generateLocations(projectId: string, config: { dashscopeAp
       })
 
       if (!result.success || !result.output) {
-        notifyNode(accountId, projectId, 'location', name, 'failed', undefined, result.error)
+        notifyNode(accountId, projectId, 'location', name, 'failed', undefined, result.error, runId)
         continue
       }
 
@@ -335,18 +352,20 @@ export async function generateLocations(projectId: string, config: { dashscopeAp
         negativePrompt: profile.negativePrompt,
       })
 
-      notifyNode(accountId, projectId, 'location', name, 'completed', { name: profile.name, profile })
+      notifyNode(accountId, projectId, 'location', name, 'completed', { name: profile.name, profile }, undefined, runId)
     }
     catch (error) {
-      notifyNode(accountId, projectId, 'location', name, 'failed', undefined, (error as Error).message)
+      notifyNode(accountId, projectId, 'location', name, 'failed', undefined, (error as Error).message, runId)
     }
   }
 
   await updateCanvasProject(projectId, { status: 'locations_ready' })
+  if (runId)
+    await markPipelineRunSucceeded(runId, { phase: 'locations' })
   return getProjectDetail(projectId)
 }
 
-export async function generateCharacterRefs(projectId: string, config: { dashscopeApiKey: string, dashscopeBaseUrl?: string, storageRoot: string, oss?: OSSConfig }) {
+export async function generateCharacterRefs(projectId: string, config: { dashscopeApiKey: string, dashscopeBaseUrl?: string, storageRoot: string, oss?: OSSConfig }, runId?: string) {
   const detail = await getCanvasProjectDetail(projectId)
   if (!detail)
     throw new Error('项目不存在')
@@ -357,11 +376,14 @@ export async function generateCharacterRefs(projectId: string, config: { dashsco
   const accountId = detail.project.accountId
   const imageModel = getImageModel(detail.project.modelPreferencesJson)
 
+  if (runId)
+    await markPipelineRunRunning(runId)
+
   for (const char of detail.characters) {
     if (char.locked || !char.identityPrompt || char.referenceImageUrl)
       continue
 
-    notifyNode(accountId, projectId, 'character', char.id, 'running')
+    notifyNode(accountId, projectId, 'character', char.id, 'running', undefined, undefined, runId)
 
     try {
       const portraitResult = await client.generateImage(imageModel, {
@@ -392,18 +414,20 @@ export async function generateCharacterRefs(projectId: string, config: { dashsco
         }
       }
 
-      notifyNode(accountId, projectId, 'character', char.id, 'completed')
+      notifyNode(accountId, projectId, 'character', char.id, 'completed', undefined, undefined, runId)
     }
     catch (error) {
-      notifyNode(accountId, projectId, 'character', char.id, 'failed', undefined, (error as Error).message)
+      notifyNode(accountId, projectId, 'character', char.id, 'failed', undefined, (error as Error).message, runId)
     }
   }
 
   await updateCanvasProject(projectId, { status: 'refs_ready' })
+  if (runId)
+    await markPipelineRunSucceeded(runId, { phase: 'characterRefs' })
   return getProjectDetail(projectId)
 }
 
-export async function generateLocationRefs(projectId: string, config: { dashscopeApiKey: string, dashscopeBaseUrl?: string, storageRoot: string, oss?: OSSConfig }) {
+export async function generateLocationRefs(projectId: string, config: { dashscopeApiKey: string, dashscopeBaseUrl?: string, storageRoot: string, oss?: OSSConfig }, runId?: string) {
   const detail = await getCanvasProjectDetail(projectId)
   if (!detail)
     throw new Error('项目不存在')
@@ -414,11 +438,14 @@ export async function generateLocationRefs(projectId: string, config: { dashscop
   const accountId = detail.project.accountId
   const imageModel = getImageModel(detail.project.modelPreferencesJson)
 
+  if (runId)
+    await markPipelineRunRunning(runId)
+
   for (const loc of detail.locations) {
     if (loc.locked || !loc.scenePrompt || loc.referenceImageUrl)
       continue
 
-    notifyNode(accountId, projectId, 'location', loc.id, 'running')
+    notifyNode(accountId, projectId, 'location', loc.id, 'running', undefined, undefined, runId)
 
     try {
       const result = await client.generateImage(imageModel, {
@@ -435,18 +462,20 @@ export async function generateLocationRefs(projectId: string, config: { dashscop
         }
       }
 
-      notifyNode(accountId, projectId, 'location', loc.id, 'completed')
+      notifyNode(accountId, projectId, 'location', loc.id, 'completed', undefined, undefined, runId)
     }
     catch (error) {
-      notifyNode(accountId, projectId, 'location', loc.id, 'failed', undefined, (error as Error).message)
+      notifyNode(accountId, projectId, 'location', loc.id, 'failed', undefined, (error as Error).message, runId)
     }
   }
 
   await updateCanvasProject(projectId, { status: 'refs_all_ready' })
+  if (runId)
+    await markPipelineRunSucceeded(runId, { phase: 'locationRefs' })
   return getProjectDetail(projectId)
 }
 
-export async function generateStoryboard(projectId: string, config: { dashscopeApiKey: string, dashscopeBaseUrl?: string }) {
+export async function generateStoryboard(projectId: string, config: { dashscopeApiKey: string, dashscopeBaseUrl?: string }, runId?: string) {
   const detail = await getCanvasProjectDetail(projectId)
   if (!detail)
     throw new Error('项目不存在')
@@ -459,7 +488,10 @@ export async function generateStoryboard(projectId: string, config: { dashscopeA
   const analysis = project.analysisJson!
   const accountId = project.accountId
 
-  notifyNode(accountId, projectId, 'storyboard', projectId, 'running')
+  notifyNode(accountId, projectId, 'storyboard', projectId, 'running', undefined, undefined, runId)
+
+  if (runId)
+    await markPipelineRunRunning(runId)
 
   try {
     const client = createClient(config)
@@ -501,20 +533,24 @@ export async function generateStoryboard(projectId: string, config: { dashscopeA
     const created = await batchCreateCanvasShots(shotInserts)
 
     for (const shot of created) {
-      notifyNode(accountId, projectId, 'shot', shot.id, 'completed')
+      notifyNode(accountId, projectId, 'shot', shot.id, 'completed', undefined, undefined, runId)
     }
 
     await updateCanvasProject(projectId, { status: 'storyboard_ready' })
+    if (runId)
+      await markPipelineRunSucceeded(runId, { phase: 'storyboard', shotsCreated: created.length })
     return getProjectDetail(projectId)
   }
   catch (error) {
     await updateCanvasProject(projectId, { status: 'failed' })
-    notifyNode(accountId, projectId, 'storyboard', projectId, 'failed', undefined, (error as Error).message)
+    notifyNode(accountId, projectId, 'storyboard', projectId, 'failed', undefined, (error as Error).message, runId)
+    if (runId)
+      await markPipelineRunFailed(runId, (error as Error).message)
     throw error
   }
 }
 
-export async function checkContinuity(projectId: string) {
+export async function checkContinuity(projectId: string, runId?: string) {
   const detail = await getCanvasProjectDetail(projectId)
   if (!detail)
     throw new Error('项目不存在')
@@ -522,116 +558,145 @@ export async function checkContinuity(projectId: string) {
 
   const accountId = detail.project.accountId
 
-  const normalizedShots: NormalizedShot[] = detail.shots.map((s): NormalizedShot => ({
-    id: s.id,
-    shotIndex: s.shotIndex,
-    locationId: s.locationId,
-    characterIds: (s.characterIdsJson ?? []) as string[],
-    narrative: s.narrative,
-    duration: s.duration,
-    camera: s.cameraJson,
-    continuity: s.continuityJson,
-    timeline: s.timelineJson ?? undefined,
-    environment: s.environmentJson ?? undefined,
-  }))
+  if (runId)
+    await markPipelineRunRunning(runId)
 
-  const normalizedCharacters: NormalizedCharacter[] = detail.characters.map(c => ({
-    id: c.id,
-    name: c.name,
-    identityPrompt: c.identityPrompt ?? '',
-    negativePrompt: c.negativePrompt ?? '',
-  }))
+  try {
+    const normalizedShots: NormalizedShot[] = detail.shots.map((s): NormalizedShot => ({
+      id: s.id,
+      shotIndex: s.shotIndex,
+      locationId: s.locationId,
+      characterIds: (s.characterIdsJson ?? []) as string[],
+      narrative: s.narrative,
+      duration: s.duration,
+      camera: s.cameraJson,
+      continuity: s.continuityJson,
+      timeline: s.timelineJson ?? undefined,
+      environment: s.environmentJson ?? undefined,
+    }))
 
-  const normalizedLocations: NormalizedLocation[] = detail.locations.map((l) => {
-    const cameraRules = l.profileJson?.cameraRules
-    return {
-      id: l.id,
-      name: l.name,
-      scenePrompt: l.scenePrompt ?? '',
-      negativePrompt: l.negativePrompt ?? '',
-      cameraRules: cameraRules ?? { axisDirection: '', allowedAngles: [] as string[], forbiddenAngles: [] as string[] },
-    }
-  })
+    const normalizedCharacters: NormalizedCharacter[] = detail.characters.map(c => ({
+      id: c.id,
+      name: c.name,
+      identityPrompt: c.identityPrompt ?? '',
+      negativePrompt: c.negativePrompt ?? '',
+    }))
 
-  const issues = validateShotContinuity({
-    shots: normalizedShots,
-    characters: normalizedCharacters,
-    locations: normalizedLocations,
-  })
+    const normalizedLocations: NormalizedLocation[] = detail.locations.map((l) => {
+      const cameraRules = l.profileJson?.cameraRules
+      return {
+        id: l.id,
+        name: l.name,
+        scenePrompt: l.scenePrompt ?? '',
+        negativePrompt: l.negativePrompt ?? '',
+        cameraRules: cameraRules ?? { axisDirection: '', allowedAngles: [] as string[], forbiddenAngles: [] as string[] },
+      }
+    })
 
-  await createContinuityReport({
-    projectId,
-    issuesJson: issues,
-  })
+    const issues = validateShotContinuity({
+      shots: normalizedShots,
+      characters: normalizedCharacters,
+      locations: normalizedLocations,
+    })
 
-  notifyNode(accountId, projectId, 'continuity', projectId, 'completed', { issues })
-  await updateCanvasProject(projectId, { status: 'continuity_checked' })
-  return getProjectDetail(projectId)
+    await createContinuityReport({
+      projectId,
+      issuesJson: issues,
+    })
+
+    notifyNode(accountId, projectId, 'continuity', projectId, 'completed', { issues }, undefined, runId)
+    await updateCanvasProject(projectId, { status: 'continuity_checked' })
+    if (runId)
+      await markPipelineRunSucceeded(runId, { phase: 'continuity', issuesFound: issues.length })
+    return getProjectDetail(projectId)
+  }
+  catch (error) {
+    await updateCanvasProject(projectId, { status: 'failed' })
+    notifyNode(accountId, projectId, 'continuity', projectId, 'failed', undefined, (error as Error).message, runId)
+    if (runId)
+      await markPipelineRunFailed(runId, (error as Error).message)
+    throw error
+  }
 }
 
-export async function rebuildShotPrompts(projectId: string) {
+export async function rebuildShotPrompts(projectId: string, runId?: string) {
   const detail = await getCanvasProjectDetail(projectId)
   if (!detail)
     throw new Error('项目不存在')
   assertNotGenerating(detail.project.status)
 
   const accountId = detail.project.accountId
-  const characterMap = new Map(detail.characters.map(c => [c.id, c]))
-  const locationMap = new Map(detail.locations.map(l => [l.id, l]))
 
-  for (const shot of detail.shots) {
-    const shotCharacters = shot.characterIdsJson
-      .map(id => characterMap.get(id))
-      .filter(Boolean) as typeof detail.characters
+  if (runId)
+    await markPipelineRunRunning(runId)
 
-    const shotLocation = shot.locationId ? locationMap.get(shot.locationId) : undefined
+  try {
+    const characterMap = new Map(detail.characters.map(c => [c.id, c]))
+    const locationMap = new Map(detail.locations.map(l => [l.id, l]))
 
-    if (!shotLocation)
-      continue
+    for (const shot of detail.shots) {
+      const shotCharacters = shot.characterIdsJson
+        .map(id => characterMap.get(id))
+        .filter(Boolean) as typeof detail.characters
 
-    const { videoPrompt, negativePrompt } = buildShotVideoPrompt({
-      shot: {
-        id: shot.id,
-        shotIndex: shot.shotIndex,
-        locationId: shot.locationId,
-        characterIds: shot.characterIdsJson,
-        narrative: shot.narrative,
-        camera: shot.cameraJson,
-        continuity: shot.continuityJson,
+      const shotLocation = shot.locationId ? locationMap.get(shot.locationId) : undefined
+
+      if (!shotLocation)
+        continue
+
+      const { videoPrompt, negativePrompt } = buildShotVideoPrompt({
+        shot: {
+          id: shot.id,
+          shotIndex: shot.shotIndex,
+          locationId: shot.locationId,
+          characterIds: shot.characterIdsJson,
+          narrative: shot.narrative,
+          camera: shot.cameraJson,
+          continuity: shot.continuityJson,
+          timeline: shot.timelineJson ?? undefined,
+          environment: shot.environmentJson ?? undefined,
+          duration: shot.duration,
+        },
+        characters: shotCharacters.map(c => ({
+          id: c.id,
+          name: c.name,
+          identityPrompt: c.identityPrompt ?? '',
+          negativePrompt: c.negativePrompt ?? '',
+        })),
+        location: {
+          id: shotLocation.id,
+          name: shotLocation.name,
+          scenePrompt: shotLocation.scenePrompt ?? '',
+          negativePrompt: shotLocation.negativePrompt ?? '',
+          cameraRules: shotLocation.profileJson?.cameraRules ?? { axisDirection: '', allowedAngles: [] as string[], forbiddenAngles: [] as string[] },
+        },
         timeline: shot.timelineJson ?? undefined,
         environment: shot.environmentJson ?? undefined,
-        duration: shot.duration,
-      },
-      characters: shotCharacters.map(c => ({
-        id: c.id,
-        name: c.name,
-        identityPrompt: c.identityPrompt ?? '',
-        negativePrompt: c.negativePrompt ?? '',
-      })),
-      location: {
-        id: shotLocation.id,
-        name: shotLocation.name,
-        scenePrompt: shotLocation.scenePrompt ?? '',
-        negativePrompt: shotLocation.negativePrompt ?? '',
-        cameraRules: shotLocation.profileJson?.cameraRules ?? { axisDirection: '', allowedAngles: [] as string[], forbiddenAngles: [] as string[] },
-      },
-      timeline: shot.timelineJson ?? undefined,
-      environment: shot.environmentJson ?? undefined,
-    })
+      })
 
-    await updateCanvasShot(shot.id, {
-      videoPrompt,
-      negativePrompt,
-      status: 'ready',
-    })
+      await updateCanvasShot(shot.id, {
+        videoPrompt,
+        negativePrompt,
+        status: 'ready',
+      })
+    }
+
+    await updateCanvasProject(projectId, { status: 'prompts_ready' })
+    notifyNode(accountId, projectId, 'prompts', projectId, 'completed', undefined, undefined, runId)
+    if (runId)
+      await markPipelineRunSucceeded(runId, { phase: 'rebuild' })
+    return getProjectDetail(projectId)
   }
-
-  await updateCanvasProject(projectId, { status: 'prompts_ready' })
-  notifyNode(accountId, projectId, 'prompts', projectId, 'completed')
-  return getProjectDetail(projectId)
+  catch (error) {
+    await updateCanvasProject(projectId, { status: 'failed' })
+    notifyNode(accountId, projectId, 'rebuild', projectId, 'failed', undefined, (error as Error).message, runId)
+    if (runId)
+      await markPipelineRunFailed(runId, (error as Error).message)
+    throw error
+  }
 }
 
-export async function generateVideos(projectId: string, config: { dashscopeApiKey: string, dashscopeBaseUrl?: string }) {
+export async function generateVideos(projectId: string, config: { dashscopeApiKey: string, dashscopeBaseUrl?: string }, runId?: string) {
   const detail = await getCanvasProjectDetail(projectId)
   if (!detail)
     throw new Error('项目不存在')
@@ -641,6 +706,9 @@ export async function generateVideos(projectId: string, config: { dashscopeApiKe
   const characterMap = new Map(detail.characters.map(c => [c.id, c]))
   const locationMap = new Map(detail.locations.map(l => [l.id, l]))
 
+  if (runId)
+    await markPipelineRunRunning(runId)
+
   await updateCanvasProject(projectId, { status: 'generating' })
 
   let hasAnyVideo = false
@@ -649,7 +717,7 @@ export async function generateVideos(projectId: string, config: { dashscopeApiKe
     if (!shot.videoPrompt)
       continue
 
-    notifyNode(accountId, projectId, 'shot', shot.id, 'running')
+    notifyNode(accountId, projectId, 'shot', shot.id, 'running', undefined, undefined, runId)
 
     try {
       // Collect reference images from characters AND location for visual consistency
@@ -677,7 +745,7 @@ export async function generateVideos(projectId: string, config: { dashscopeApiKe
 
       if (!submitResult.success || !submitResult.taskId) {
         await updateCanvasShot(shot.id, { status: 'failed', errorMessage: submitResult.error })
-        notifyNode(accountId, projectId, 'shot', shot.id, 'failed', undefined, submitResult.error)
+        notifyNode(accountId, projectId, 'shot', shot.id, 'failed', undefined, submitResult.error, runId)
         continue
       }
 
@@ -702,7 +770,7 @@ export async function generateVideos(projectId: string, config: { dashscopeApiKe
     }
     catch (error) {
       await updateCanvasShot(shot.id, { status: 'failed', errorMessage: (error as Error).message })
-      notifyNode(accountId, projectId, 'shot', shot.id, 'failed', undefined, (error as Error).message)
+      notifyNode(accountId, projectId, 'shot', shot.id, 'failed', undefined, (error as Error).message, runId)
     }
   }
 
@@ -710,10 +778,14 @@ export async function generateVideos(projectId: string, config: { dashscopeApiKe
     // 保持 generating 状态，等待 worker 轮询完所有 shot 后再标记完成
     // reconcileProjectShots() 会在所有 shot 完成后自动将项目标记为 completed
     await updateCanvasProject(projectId, { status: 'generating' })
+    if (runId)
+      await markPipelineRunSucceeded(runId, { phase: 'videos', shotsSubmitted: detail.shots.filter(s => s.videoPrompt).length })
   }
   else {
     // All submissions failed — revert to prompts_ready so user can retry
     await updateCanvasProject(projectId, { status: 'prompts_ready' })
+    if (runId)
+      await markPipelineRunFailed(runId, '所有视频提交失败')
   }
 
   return getProjectDetail(projectId)

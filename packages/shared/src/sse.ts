@@ -137,6 +137,7 @@ export function parseSSEPipelineNodeEvent(raw: unknown): SSEPipelineNodeEvent | 
     nodeType,
     nodeId,
     status: status as SSEPipelineNodeEvent['status'],
+    ...(typeof raw.runId === 'string' && { runId: raw.runId }),
     ...(raw.data != null && typeof raw.data === 'object' && { data: raw.data as Record<string, unknown> }),
     ...(typeof raw.error === 'string' && { error: raw.error }),
   }
