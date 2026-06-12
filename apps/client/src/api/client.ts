@@ -1,4 +1,4 @@
-import type { AcceptedResponse, AuthResponse, BillingStatistics, GenerateResponse, GenerationRecord, ModelConfig, ProjectDTO } from '@excuse/shared'
+import type { AcceptedResponse, AuthResponse, BillingStatistics, CharacterDTO, GenerateResponse, GenerationRecord, LocationDTO, ModelConfig, ProjectDTO, ShotDTO } from '@excuse/shared'
 import type { App } from '../../../server/src/index'
 import { treaty } from '@elysia/eden'
 import { sseClient } from './sse'
@@ -338,8 +338,8 @@ export async function updateCanvasCharacter(characterId: string, patch: {
   negativePrompt?: string
   referenceImageUrl?: string
   locked?: boolean
-}): Promise<{ success: boolean, data: unknown }> {
-  return unwrapEden<{ success: boolean, data: unknown }>(
+}): Promise<{ success: boolean, data: CharacterDTO }> {
+  return unwrapEden<{ success: boolean, data: CharacterDTO }>(
     await api.api.canvas.characters({ characterId }).patch(patch),
   )
 }
@@ -351,8 +351,8 @@ export async function updateCanvasLocation(locationId: string, patch: {
   negativePrompt?: string
   referenceImageUrl?: string
   locked?: boolean
-}): Promise<{ success: boolean, data: unknown }> {
-  return unwrapEden<{ success: boolean, data: unknown }>(
+}): Promise<{ success: boolean, data: LocationDTO }> {
+  return unwrapEden<{ success: boolean, data: LocationDTO }>(
     await api.api.canvas.locations({ locationId }).patch(patch),
   )
 }
@@ -365,8 +365,8 @@ export async function updateCanvasShot(shotId: string, patch: {
   cameraJson?: { shotSize: string, angle: string, movement: string, lens: string }
   environmentJson?: { backgroundMotion?: string, lighting?: string, mood?: string, style?: string }
   videoPrompt?: string
-}): Promise<{ success: boolean, data: unknown }> {
-  return unwrapEden<{ success: boolean, data: unknown }>(
+}): Promise<{ success: boolean, data: ShotDTO }> {
+  return unwrapEden<{ success: boolean, data: ShotDTO }>(
     await api.api.canvas.shots({ shotId }).patch(patch),
   )
 }

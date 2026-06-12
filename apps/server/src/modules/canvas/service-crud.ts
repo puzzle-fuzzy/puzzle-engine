@@ -1,5 +1,5 @@
 import type { ShotCamera, ShotEnvironment } from '@excuse/db'
-import type { CanvasModelPreferences } from '@excuse/shared'
+import type { CanvasModelPreferences, CharacterDTO, LocationDTO, ShotDTO } from '@excuse/shared'
 import {
   batchGetProjectDetails,
   deleteCanvasCharacterById,
@@ -17,7 +17,7 @@ import {
   updateCanvasShot,
 } from '@excuse/db'
 import { parseCanvasLayout } from './layout'
-import { mapProjectDetail } from './mapper'
+import { mapCharacter, mapLocation, mapProjectDetail, mapShot } from './mapper'
 import { reconcileProjectShots } from './service-helpers'
 
 export async function createProject(accountId: string, input: { title?: string, storyText: string }) {
@@ -86,8 +86,11 @@ export async function updateCharacterData(characterId: string, patch: {
   negativePrompt?: string
   referenceImageUrl?: string
   locked?: boolean
-}) {
-  return updateCanvasCharacter(characterId, patch)
+}): Promise<CharacterDTO> {
+  const updated = await updateCanvasCharacter(characterId, patch)
+  if (!updated)
+    throw new Error('更新失败')
+  return mapCharacter(updated)
 }
 
 export async function updateLocationData(locationId: string, patch: {
@@ -97,8 +100,11 @@ export async function updateLocationData(locationId: string, patch: {
   negativePrompt?: string
   referenceImageUrl?: string
   locked?: boolean
-}) {
-  return updateCanvasLocation(locationId, patch)
+}): Promise<LocationDTO> {
+  const updated = await updateCanvasLocation(locationId, patch)
+  if (!updated)
+    throw new Error('更新失败')
+  return mapLocation(updated)
 }
 
 export async function updateShotData(shotId: string, patch: {
@@ -109,8 +115,11 @@ export async function updateShotData(shotId: string, patch: {
   cameraJson?: ShotCamera
   environmentJson?: ShotEnvironment
   videoPrompt?: string
-}) {
-  return updateCanvasShot(shotId, patch)
+}): Promise<ShotDTO> {
+  const updated = await updateCanvasShot(shotId, patch)
+  if (!updated)
+    throw new Error('更新失败')
+  return mapShot(updated)
 }
 
 export async function deleteCharacter(characterId: string) {
