@@ -5,7 +5,21 @@
  * 所有工厂都接受 Partial<Overrides> 参数，未覆盖的字段使用合理默认值。
  */
 import type { AccountRow, GenerationRecordRow, UploadedFileRow } from '@excuse/db'
+import type { ValidatedModelParameters } from '@excuse/provider'
 import type { ServerConfig } from '../../src/config'
+
+// ===== ValidatedModelParameters 测试构造器 =====
+
+/**
+ * 测试专用 branded type 构造器 — 集中替代散落的 `as any`
+ *
+ * ValidatedModelParameters 是 branded type（declare unique symbol __validatedBrand），
+ * 正常代码只能通过 validateAndMerge() 构造。测试 mock 需要绕过 brand，
+ * 此 helper 是唯一允许的绕过点（单点管控，不用在各测试文件写 `as any`）。
+ */
+export function makeValidatedParams(params: Record<string, unknown>): ValidatedModelParameters {
+  return params as ValidatedModelParameters
+}
 
 // ===== Account 工厂 =====
 

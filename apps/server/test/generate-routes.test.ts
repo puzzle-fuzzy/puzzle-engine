@@ -16,7 +16,7 @@ import { beforeAll, beforeEach, describe, expect, it, mock } from 'bun:test'
 import { createGenerateRoutes } from '../src/routes/generate'
 
 import { resetCategoryRateLimit } from '../src/utils/category-rate-limit'
-import { extractEdenError, makeRecord, makeTestConfig, signTestToken } from './helpers/test-factory'
+import { extractEdenError, makeRecord, makeTestConfig, makeValidatedParams, signTestToken } from './helpers/test-factory'
 
 /** Provider 返回结构（涵盖同步/异步/成功/失败所有变体） */
 interface MockProviderResult {
@@ -111,7 +111,7 @@ mock.module('@excuse/provider', () => ({
     if (!result.valid) {
       return { ok: false, errors: result.errors }
     }
-    return { ok: true, params: params as any }
+    return { ok: true, params: makeValidatedParams(params) }
   },
   AssetStorage: class {
     downloadAndMap = mock(() => Promise.resolve(['https://saved.url/img.png']))

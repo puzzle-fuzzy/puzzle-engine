@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, mock } from 'bun:test'
-import { makeTestConfig, makeUploadedFile, signTestToken } from './helpers/test-factory'
+import { makeTestConfig, makeUploadedFile, makeValidatedParams, signTestToken } from './helpers/test-factory'
 
 /**
  * 上传路由 DELETE 端点测试
@@ -63,7 +63,7 @@ mock.module('@excuse/provider', () => ({
   getModelById: () => undefined,
   mergeWithDefaults: (_modelConfig: unknown, params: Record<string, unknown>) => params,
   validateModelParameters: () => ({ valid: true, errors: [] }),
-  validateAndMerge: (_modelConfig: unknown, params: Record<string, unknown>) => ({ ok: true, params: params as any }),
+  validateAndMerge: (_modelConfig: unknown, params: Record<string, unknown>) => ({ ok: true, params: makeValidatedParams(params) }),
 }))
 
 // eslint-disable-next-line import/first

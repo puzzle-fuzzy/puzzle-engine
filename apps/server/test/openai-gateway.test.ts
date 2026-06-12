@@ -2,7 +2,7 @@ import type { GenerationRecordRow } from '@excuse/db'
 import { treaty } from '@elysia/eden'
 import { beforeEach, describe, expect, it, mock } from 'bun:test'
 import { Elysia } from 'elysia'
-import { makeAccount, makeRecord, makeTestConfig, signTestToken } from './helpers/test-factory'
+import { makeAccount, makeRecord, makeTestConfig, makeValidatedParams, signTestToken } from './helpers/test-factory'
 
 /**
  * OpenAI 兼容网关测试 — /v1/chat/completions + /v1/models
@@ -84,7 +84,7 @@ mock.module('@excuse/provider', () => ({
   validateModelParameters: () => ({ valid: true, errors: [] }),
   validateAndMerge: (_modelConfig: unknown, params: Record<string, unknown>) => ({
     ok: true,
-    params: params as any,
+    params: makeValidatedParams(params),
   }),
   MODELS: {},
 }))

@@ -2,7 +2,7 @@ import type { CanvasProjectRow } from '@excuse/db'
 import type { ServerConfig } from '../src/config'
 import { treaty } from '@elysia/eden'
 import { beforeAll, beforeEach, describe, expect, it, mock } from 'bun:test'
-import { extractEdenError } from './helpers/test-factory'
+import { extractEdenError, makeValidatedParams } from './helpers/test-factory'
 
 /**
  * Canvas 路由测试 — 认证守卫 + CRUD 路径
@@ -122,7 +122,7 @@ mock.module('@excuse/provider', () => ({
   getModelById: () => ({ id: 'mock', category: 'text', pricing: { inputPriceCents: 100, unit: 'token' }, parameters: [] }),
   mergeWithDefaults: (_modelConfig: unknown, params: Record<string, unknown>) => params,
   validateModelParameters: () => ({ valid: true, errors: [] }),
-  validateAndMerge: (_modelConfig: unknown, params: Record<string, unknown>) => ({ ok: true, params: params as any }),
+  validateAndMerge: (_modelConfig: unknown, params: Record<string, unknown>) => ({ ok: true, params: makeValidatedParams(params) }),
 }))
 
 mock.module('@excuse/billing', () => ({

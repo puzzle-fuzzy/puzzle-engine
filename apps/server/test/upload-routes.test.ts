@@ -1,6 +1,6 @@
 import { treaty } from '@elysia/eden'
 import { beforeEach, describe, expect, it, mock } from 'bun:test'
-import { makeAccount, makeTestConfig } from './helpers/test-factory'
+import { makeAccount, makeTestConfig, makeValidatedParams } from './helpers/test-factory'
 
 /**
  * 上传路由单元测试
@@ -76,7 +76,7 @@ mock.module('@excuse/provider', () => ({
   getModelById: () => undefined,
   mergeWithDefaults: (_modelConfig: unknown, params: Record<string, unknown>) => params,
   validateModelParameters: () => ({ valid: true, errors: [] }),
-  validateAndMerge: (_modelConfig: unknown, params: Record<string, unknown>) => ({ ok: true, params: params as any }),
+  validateAndMerge: (_modelConfig: unknown, params: Record<string, unknown>) => ({ ok: true, params: makeValidatedParams(params) }),
 }))
 
 // mock.module 提升到 import 之前

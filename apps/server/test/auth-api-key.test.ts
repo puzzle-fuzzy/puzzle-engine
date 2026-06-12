@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, mock } from 'bun:test'
 import { Elysia } from 'elysia'
 
 import { createRequireAuthPlugin } from '../src/plugins/auth'
-import { makeAccount, makeTestConfig, signTestToken } from './helpers/test-factory'
+import { makeAccount, makeTestConfig, makeValidatedParams, signTestToken } from './helpers/test-factory'
 
 /**
  * API Key 认证测试 — auth plugin 双通道
@@ -35,7 +35,7 @@ mock.module('@excuse/provider', () => ({
   getModelById: () => null,
   mergeWithDefaults: (_modelConfig: unknown, params: Record<string, unknown>) => params,
   validateModelParameters: () => ({ valid: true, errors: [] }),
-  validateAndMerge: (_modelConfig: unknown, params: Record<string, unknown>) => ({ ok: true, params: params as any }),
+  validateAndMerge: (_modelConfig: unknown, params: Record<string, unknown>) => ({ ok: true, params: makeValidatedParams(params) }),
   getModelsByCategory: () => [],
   MODELS: {},
 }))

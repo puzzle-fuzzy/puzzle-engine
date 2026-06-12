@@ -1,7 +1,7 @@
 import type { AccountRow } from '@excuse/db'
 import { treaty } from '@elysia/eden'
 import { beforeEach, describe, expect, it, mock } from 'bun:test'
-import { extractEdenError, makeAccount, makeTestConfig } from './helpers/test-factory'
+import { extractEdenError, makeAccount, makeTestConfig, makeValidatedParams } from './helpers/test-factory'
 
 /**
  * 路由认证守卫测试
@@ -98,7 +98,7 @@ mock.module('@excuse/provider', () => ({
   })),
   mergeWithDefaults: mock((_modelConfig: unknown, params: Record<string, unknown>) => params),
   validateModelParameters: mock(() => ({ valid: true, errors: [] })),
-  validateAndMerge: mock((_modelConfig: unknown, params: Record<string, unknown>) => ({ ok: true, params: params as any })),
+  validateAndMerge: mock((_modelConfig: unknown, params: Record<string, unknown>) => ({ ok: true, params: makeValidatedParams(params) })),
 }))
 
 // @excuse/billing

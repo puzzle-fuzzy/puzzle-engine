@@ -10,7 +10,7 @@ import { beforeAll, beforeEach, describe, expect, it, mock } from 'bun:test'
 
 // ─── Mock 类型 ───────────────────────────────────────────────
 
-import { extractEdenError, makeFailedRecord, makeProcessingRecord, makeTestConfig, signTestToken } from './helpers/test-factory'
+import { extractEdenError, makeFailedRecord, makeProcessingRecord, makeTestConfig, makeValidatedParams, signTestToken } from './helpers/test-factory'
 
 interface MockProviderResult {
   type?: 'text' | 'image' | 'video_task' | 'failed'
@@ -79,7 +79,7 @@ mock.module('@excuse/provider', () => ({
   },
   mergeWithDefaults: (_modelConfig: unknown, params: Record<string, unknown>) => params,
   validateModelParameters: () => ({ valid: true, errors: [] }),
-  validateAndMerge: (_modelConfig: unknown, params: Record<string, unknown>) => ({ ok: true, params: params as any }),
+  validateAndMerge: (_modelConfig: unknown, params: Record<string, unknown>) => ({ ok: true, params: makeValidatedParams(params) }),
   AssetStorage: class {
     downloadAndMap = mock(() => Promise.resolve(['https://saved.url/img.png']))
   },
