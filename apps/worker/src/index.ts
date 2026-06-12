@@ -1,7 +1,9 @@
 import type { TaskResult } from './task-processor'
+import type { WorkerHealthState } from './health'
 import { pollPendingVideoTasks } from '@excuse/db'
 import { createLogger } from '@excuse/shared'
 import { loadConfig } from './config'
+import { createHealthServer } from './health'
 import { createTaskProcessor } from './task-processor'
 
 const config = loadConfig()
@@ -19,6 +21,19 @@ let currentTaskPromise: Promise<TaskResult> | null = null
 
 /** 优雅退出最大等待时间 — 超过此时间强制退出，避免长时间挂起 */
 const GRACEFUL_TIMEOUT_MS = 30_000
+
+// ── Worker 健康状态 ──────────────────────────────────────
+
+const healthState: WorkerHealthState = {
+  isPolling: false,
+  lastPollAt: null,
+  lastPollError: null,
+  totalTasksProcessed: 0,
+  startedAt: new Date(),
+}
+
+const healthPort = Number(process.env.WORKER_HEALTH_PORT) || 5100
+createHealthServer(healthState, healthPort)
 
 // ── 优雅退出 ──────────────────────────────────────────
 for (const signal of ['SIGINT', 'SIGTERM'] as const) {
@@ -60,11 +75,14 @@ for (const signal of ['SIGINT', 'SIGTERM'] as const) {
  *   - 半完成状态: pollPendingVideoTasks 会重新捞取 processing 但 provider 已返回结果的任务
  */
 async function main() {
-  logger.info({ pollIntervalMs: config.pollIntervalMs }, '🤖 Worker started')
+  logger.info({ pollIntervalMs: config.pollIntervalMs, healthPort }, '🤖 Worker started')
 
   while (running) {
+    healthState.isPolling = true
     try {
       const records = await pollPendingVideoTasks()
+      healthState.lastPollAt = new Date()
+      healthState.lastPollError = null
 
       for (const record of records) {
         if (!running)
@@ -75,6 +93,10 @@ async function main() {
 
         const result = await currentTaskPromise
         currentTaskPromise = null
+
+        if (result.action === 'completed') {
+          healthState.totalTasksProcessed++
+        }
 
         // result.action 含义:
         //   completed — 任务成功完成，结果已写入 DB
@@ -101,11 +123,14 @@ async function main() {
         ?? (err as NodeJS.ErrnoException)?.code
       if (code === 'ECONNREFUSED') {
         logger.error('❌ PostgreSQL 未启动（连接被拒绝），请检查数据库服务')
+        healthState.lastPollError = 'ECONNREFUSED'
         running = false
         break
       }
+      healthState.lastPollError = err?.message ?? String(error)
       logger.error({ err: error }, 'Worker poll error')
     }
+    healthState.isPolling = false
 
     // 分段 sleep，以便更快响应退出信号
     const sleepMs = config.pollIntervalMs
