@@ -1,3 +1,4 @@
+import type { WorkflowOutput, WorkflowStepOutput } from '../domain-types'
 import type { WorkflowInsert, WorkflowRow, WorkflowStepInsert, WorkflowStepRow } from '../types'
 import { and, desc, eq, inArray, sql } from 'drizzle-orm'
 import { getDb } from '../db'
@@ -76,7 +77,7 @@ export async function getStaleWorkflows(timeoutMs: number, limit = 20): Promise<
 
 /** 更新工作流状态，可选附带 output/errorMessage/completedSteps */
 export async function updateWorkflowStatus(id: string, status: 'pending' | 'running' | 'completed' | 'failed' | 'cancelled', opts?: {
-  output?: Record<string, unknown>
+  output?: WorkflowOutput
   errorMessage?: string
   completedSteps?: number
 }) {
@@ -115,11 +116,11 @@ export async function getWorkflowStep(id: string): Promise<WorkflowStepRow | nul
 /** 更新工作流步骤状态，running 时自动设置 startedAt，终态时设置 finishedAt */
 export async function updateWorkflowStep(id: string, opts: {
   status: 'pending' | 'running' | 'completed' | 'failed' | 'skipped'
-  output?: Record<string, unknown>
+  output?: WorkflowStepOutput
   errorMessage?: string
   generationRecordId?: string
 }) {
-  const updateData: Record<string, unknown> = {
+  const updateData: Partial<WorkflowStepInsert> = {
     status: opts.status,
     updatedAt: new Date(),
   }

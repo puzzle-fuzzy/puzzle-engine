@@ -1,3 +1,4 @@
+import type { WorkflowInput, WorkflowOutput, WorkflowStepInput, WorkflowStepOutput } from '../domain-types'
 import { index, integer, jsonb, pgEnum, pgTable, text, timestamp, uuid, varchar } from 'drizzle-orm/pg-core'
 import { accounts } from './accounts'
 
@@ -38,9 +39,9 @@ export const workflows = pgTable('workflows', {
   /** 优先级（0=最高，默认 5） */
   priority: integer('priority').notNull().default(5),
   /** 输入参数 JSON — 预研占位：workflow 当前仅为 DB/repository 基础设施，input/output 结构随 workflow type 定义 */
-  input: jsonb('input').$type<Record<string, unknown>>().notNull(),
+  input: jsonb('input').$type<WorkflowInput>().notNull(),
   /** 输出结果 JSON — 预研占位：同上 */
-  output: jsonb('output').$type<Record<string, unknown>>(),
+  output: jsonb('output').$type<WorkflowOutput>(),
   errorMessage: text('error_message'),
   /** 步骤总数（冗余，避免 COUNT 查询） */
   totalSteps: integer('total_steps').notNull().default(0),
@@ -73,9 +74,9 @@ export const workflowSteps = pgTable('workflow_steps', {
   /** 关联的生成记录（可选） */
   generationRecordId: uuid('generation_record_id'),
   /** 步骤输入参数 — 预研占位 */
-  input: jsonb('input').$type<Record<string, unknown>>(),
+  input: jsonb('input').$type<WorkflowStepInput>(),
   /** 步骤输出结果 — 预研占位 */
-  output: jsonb('output').$type<Record<string, unknown>>(),
+  output: jsonb('output').$type<WorkflowStepOutput>(),
   errorMessage: text('error_message'),
   /** 重试次数 */
   retryCount: integer('retry_count').notNull().default(0),
