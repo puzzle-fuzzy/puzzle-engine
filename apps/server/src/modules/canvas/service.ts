@@ -1,3 +1,24 @@
+/**
+ * Canvas 核心业务服务
+ *
+ * 提供 AI 视频制作流水线的全部业务逻辑，包括：
+ *
+ * 1. 项目 CRUD（创建、查询、更新、软删除）
+ * 2. 流水线阶段执行（9 个阶段，按序依赖）：
+ *      analyze → characters → locations → characterRefs → locationRefs
+ *      → storyboard → continuity → rebuild → generateVideos
+ * 3. 资源编辑（角色/场景/镜头的 PATCH/DELETE）
+ * 4. 重试机制（单镜头重试、批量失败重试）
+ *
+ * 设计原则：
+ *   - 每个阶段函数都是幂等的（会先清理旧数据再重建）
+ *   - 通过 assertNotGenerating 防止生成期间的数据竞争
+ *   - 通过 reconcileProjectShots 回填中断后遗留的 generating 状态
+ *   - 所有 SSE 通知通过 notifyNode 统一发送
+ *
+ * 调用方（canvas route）通过 fireAndForget 在后台执行，
+ * 函数内部自行管理 DB 状态和 SSE 通知。
+ */
 import type { ShotCamera, ShotEnvironment } from '@excuse/db'
 import type { OSSConfig } from '@excuse/provider'
 import type { CanvasModelPreferences, CharacterProfile, LocationProfile, NovelAnalysis, ShotDraft } from '@excuse/shared'
@@ -42,21 +63,32 @@ import { mapProjectDetail } from './mapper'
 import { buildShotVideoPrompt } from './prompt-builder'
 import { buildAnalysisPrompt, buildCharacterPrompt, buildLocationPrompt, buildStoryboardPrompt } from './prompts'
 
+/** 创建 DashScope API 客户端，每个 pipeline 阶段调用时独立创建 */
 function createClient(config: { dashscopeApiKey: string, dashscopeBaseUrl?: string }) {
   return new DashScopeClient({ apiKey: config.dashscopeApiKey, baseUrl: config.dashscopeBaseUrl })
 }
 
+/**
+ * SSE 通知快捷方法 — 向指定用户推送 pipeline 节点状态更新
+ *
+ * @param nodeType - 节点类型：'analysis'|'character'|'location'|'shot'|'storyboard'|'continuity'|'prompts'
+ * @param nodeId   - 节点 ID：通常是资源 ID（character.id）或项目 ID（分析阶段）
+ * @param status   - 节点状态：'running'|'completed'|'failed'
+ */
 function notifyNode(accountId: string, projectId: string, nodeType: string, nodeId: string, status: 'running' | 'completed' | 'failed', data?: Record<string, unknown>, error?: string, runId?: string) {
   dispatchToUser(accountId, 'pipeline_node_update', { projectId, nodeType, nodeId, status, data, error, runId })
 }
 
+/** 默认模型 ID — 当 modelPreferences 未设置时使用 */
 const DEFAULT_TEXT_MODEL = 'qwen3.7-plus'
 const DEFAULT_IMAGE_MODEL = 'qwen-image-2.0-pro'
 
+/** 从用户偏好中解析文本模型 ID，未设置则用默认值 */
 function getTextModel(prefs: CanvasModelPreferences | null | undefined): string {
   return prefs?.textModel || DEFAULT_TEXT_MODEL
 }
 
+/** 从用户偏好中解析图像模型 ID，未设置则用默认值 */
 function getImageModel(prefs: CanvasModelPreferences | null | undefined): string {
   return prefs?.imageModel || DEFAULT_IMAGE_MODEL
 }
@@ -74,6 +106,7 @@ function getVideoModel(prefs: CanvasModelPreferences | null | undefined, referen
 
 // ===== 项目 CRUD =====
 
+/** 创建新 Canvas 项目，初始状态为 'draft' */
 export async function createProject(accountId: string, input: { title?: string, storyText: string }) {
   const project = await createCanvasProject({
     accountId,
@@ -84,6 +117,7 @@ export async function createProject(accountId: string, input: { title?: string, 
   return mapProjectDetail(project, [], [], [], null)
 }
 
+/** 更新项目标题和/或故事文本，返回更新后的完整项目详情 */
 export async function updateProjectProperties(projectId: string, input: { title?: string, storyText?: string }) {
   const project = await getCanvasProjectById(projectId)
   if (!project)
@@ -148,19 +182,26 @@ async function reconcileProjectShots(projectId: string) {
     const updatedShots = await listCanvasShotsByProject(projectId)
     const stillGenerating = updatedShots.some(s => s.status === 'generating')
     if (!stillGenerating && updatedShots.length > 0) {
-      const hasFailed = updatedShots.some(s => s.status === 'failed')
-      // 全部成功 → completed；存在失败 → 仍标记 completed 但前端可区分
-      await updateCanvasProject(projectId, { status: 'completed' })
-      if (hasFailed) {
-        // 通知前端存在失败镜头，但项目整体视为完成（允许重试单个镜头）
-      }
+      const allSucceeded = updatedShots.every(s => s.status === 'completed')
+      // 全部成功 → completed；存在失败 → partial_failed
+      await updateCanvasProject(projectId, {
+        status: allSucceeded ? 'completed' : 'partial_failed',
+      })
     }
   }
 }
 
+/**
+ * 获取项目详情 — 含自动回填机制
+ *
+ * 当项目处于 generating/partial_failed/refs_all_ready 状态时，
+ * 自动触发 reconcileProjectShots() 将遗留的 'generating' 镜头
+ * 与 generation_records 表同步，修复中断后的不一致状态。
+ */
 export async function getProjectDetail(projectId: string) {
   const project = await getCanvasProjectById(projectId)
-  if (project && (project.status === 'generating' || project.status === 'refs_all_ready'))
+  // 触发 reconcile：generating / partial_failed（重试后）/ refs_all_ready
+  if (project && (project.status === 'generating' || project.status === 'partial_failed' || project.status === 'refs_all_ready'))
     await reconcileProjectShots(projectId)
   const detail = await getCanvasProjectDetail(projectId)
   if (!detail)
@@ -185,14 +226,23 @@ export async function saveCanvasLayout(projectId: string, layout: import('@excus
 }
 
 // ===== 流水线步骤 =====
+// 执行顺序：analyze → characters → locations → characterRefs → locationRefs
+//           → storyboard → continuity → rebuild → generateVideos
 
-/** 流水线状态守卫：防止对正在 generating 的项目重复触发 */
+/** 流水线状态守卫：防止对正在 generating 的项目重复触发其他阶段 */
 function assertNotGenerating(status: string | null | undefined): void {
   if (status === 'generating') {
     throw new Error('项目正在生成中，请等待完成后再操作')
   }
 }
 
+/**
+ * 阶段 1：LLM 分析故事文本
+ *
+ * 提取 summary, mainConflict, timeline, characterNames, sceneNames。
+ * 重复分析时会清除下游数据（shots/locations/characters，保留 locked 资源）。
+ * 成功后项目状态变为 'analyzed'。
+ */
 export async function analyzeProject(projectId: string, config: { dashscopeApiKey: string, dashscopeBaseUrl?: string }, runId?: string) {
   const project = await getCanvasProjectById(projectId)
   if (!project)
@@ -246,6 +296,14 @@ export async function analyzeProject(projectId: string, config: { dashscopeApiKe
   }
 }
 
+/**
+ * 阶段 2：逐角色生成档案
+ *
+ * 为 analysis.characterNames 中每个角色调用 LLM，生成 CharacterProfile。
+ * 包含外观、identityPrompt、negativePrompt 等视觉描述。
+ * 角色变更会级联清除下游 storyboard。
+ * 成功后项目状态变为 'characters_ready'。
+ */
 export async function generateCharacters(projectId: string, config: { dashscopeApiKey: string, dashscopeBaseUrl?: string }, runId?: string) {
   const project = await getCanvasProjectById(projectId)
   if (!project || !project.analysisJson)
@@ -307,6 +365,14 @@ export async function generateCharacters(projectId: string, config: { dashscopeA
   return getProjectDetail(projectId)
 }
 
+/**
+ * 阶段 3：逐场景生成档案
+ *
+ * 为 analysis.sceneNames 中每个场景调用 LLM，生成 LocationProfile。
+ * 包含 scenePrompt、negativePrompt、cameraRules 等视觉约束。
+ * 场景变更会级联清除下游 storyboard。
+ * 成功后项目状态变为 'locations_ready'。
+ */
 export async function generateLocations(projectId: string, config: { dashscopeApiKey: string, dashscopeBaseUrl?: string }, runId?: string) {
   const project = await getCanvasProjectById(projectId)
   if (!project || !project.analysisJson)
@@ -365,6 +431,15 @@ export async function generateLocations(projectId: string, config: { dashscopeAp
   return getProjectDetail(projectId)
 }
 
+/**
+ * 阶段 4：生成角色参考图（正面肖像 + 三视图 turnaround sheet）
+ *
+ * 为每个非 locked 且无 referenceImageUrl 的角色生成两张 AI 图：
+ *   - portrait: 正面肖像，纯色背景
+ *   - turnaround: 前后左右三视图
+ * 图片下载保存到存储后更新 character.referenceImageUrl / turnaroundSheetUrl。
+ * 成功后项目状态变为 'refs_ready'。
+ */
 export async function generateCharacterRefs(projectId: string, config: { dashscopeApiKey: string, dashscopeBaseUrl?: string, storageRoot: string, oss?: OSSConfig }, runId?: string) {
   const detail = await getCanvasProjectDetail(projectId)
   if (!detail)
@@ -427,6 +502,13 @@ export async function generateCharacterRefs(projectId: string, config: { dashsco
   return getProjectDetail(projectId)
 }
 
+/**
+ * 阶段 5：生成场景参考图
+ *
+ * 为每个非 locked 且无 referenceImageUrl 的场景生成一张 AI 空场景图。
+ * 提示词强制要求无人、无角色。
+ * 成功后项目状态变为 'refs_all_ready'。
+ */
 export async function generateLocationRefs(projectId: string, config: { dashscopeApiKey: string, dashscopeBaseUrl?: string, storageRoot: string, oss?: OSSConfig }, runId?: string) {
   const detail = await getCanvasProjectDetail(projectId)
   if (!detail)
@@ -475,6 +557,14 @@ export async function generateLocationRefs(projectId: string, config: { dashscop
   return getProjectDetail(projectId)
 }
 
+/**
+ * 阶段 6：LLM 生成分镜脚本
+ *
+ * 将故事文本 + 角色 + 场景传给 LLM，生成 ShotDraft[]。
+ * 每个 shot 包含 duration, locationId, characterIds, narrative, camera,
+ * continuity, timeline, environment。
+ * 成功后项目状态变为 'storyboard_ready'。
+ */
 export async function generateStoryboard(projectId: string, config: { dashscopeApiKey: string, dashscopeBaseUrl?: string }, runId?: string) {
   const detail = await getCanvasProjectDetail(projectId)
   if (!detail)
@@ -550,6 +640,17 @@ export async function generateStoryboard(projectId: string, config: { dashscopeA
   }
 }
 
+/**
+ * 阶段 7：规则校验连续性
+ *
+ * 纯规则检查（不调用 LLM），检测相邻镜头间的连续性问题：
+ *   - 缺失场景/角色引用
+ *   - 禁止的摄影角度
+ *   - 180 度规则违反
+ *   - 动作/情绪不连续
+ * 结果存入 continuity_report 表。
+ * 成功后项目状态变为 'continuity_checked'。
+ */
 export async function checkContinuity(projectId: string, runId?: string) {
   const detail = await getCanvasProjectDetail(projectId)
   if (!detail)
@@ -619,6 +720,13 @@ export async function checkContinuity(projectId: string, runId?: string) {
   }
 }
 
+/**
+ * 阶段 8：重建视频提示词
+ *
+ * 遍历每个镜头，根据角色 identityPrompt + 场景 scenePrompt + camera +
+ * continuity + timeline + environment 组装 videoPrompt 和 negativePrompt。
+ * 成功后项目状态变为 'prompts_ready'，镜头状态变为 'ready'。
+ */
 export async function rebuildShotPrompts(projectId: string, runId?: string) {
   const detail = await getCanvasProjectDetail(projectId)
   if (!detail)
@@ -696,6 +804,19 @@ export async function rebuildShotPrompts(projectId: string, runId?: string) {
   }
 }
 
+/**
+ * 阶段 9：提交视频生成任务
+ *
+ * 为每个有 videoPrompt 的镜头提交异步视频生成任务：
+ *   1. 收集角色+场景参考图作为 referenceUrls
+ *   2. 根据 referenceUrls 选择 r2v/t2v 模型变体
+ *   3. 调用 provider 提交任务，获取 providerTaskId
+ *   4. 创建 generation_record 跟踪费用
+ *   5. 镜头状态变为 'generating'
+ *
+ * 项目保持 'generating' 状态，Worker 轮询完成后通过
+ * reconcileProjectShots() 自动将项目和镜头标记完成。
+ */
 export async function generateVideos(projectId: string, config: { dashscopeApiKey: string, dashscopeBaseUrl?: string }, runId?: string) {
   const detail = await getCanvasProjectDetail(projectId)
   if (!detail)
@@ -793,6 +914,7 @@ export async function generateVideos(projectId: string, config: { dashscopeApiKe
 
 // ===== 资源 PATCH =====
 
+/** 更新项目模型偏好（textModel/imageModel/videoModel） */
 export async function updateModelPreferences(projectId: string, prefs: CanvasModelPreferences) {
   await updateCanvasProject(projectId, {
     modelPreferencesJson: prefs,
@@ -835,6 +957,7 @@ export async function updateShotData(shotId: string, patch: {
   return updateCanvasShot(shotId, patch)
 }
 
+/** 删除角色 — 先清理引用该角色的镜头（移除 characterIds 中的引用），再删除角色本身 */
 export async function deleteCharacter(characterId: string) {
   // Clean up shots referencing this character before deleting
   const shots = await listCanvasShotsByProject(
@@ -850,6 +973,7 @@ export async function deleteCharacter(characterId: string) {
   await deleteCanvasCharacterById(characterId)
 }
 
+/** 删除场景 — 先清理引用该场景的镜头（清空 locationId），再删除场景本身 */
 export async function deleteLocation(locationId: string) {
   // Clean up shots referencing this location before deleting
   const shots = await listCanvasShotsByProject(
@@ -867,6 +991,7 @@ export async function deleteShot(shotId: string) {
   await deleteCanvasShotById(shotId)
 }
 
+/** 重试单个失败镜头 — 重置为 draft 后重新提交视频生成任务 */
 export async function retryShotVideo(shotId: string, config: { dashscopeApiKey: string, dashscopeBaseUrl?: string }) {
   const shot = await getCanvasShotById(shotId)
   if (!shot)
@@ -932,4 +1057,72 @@ export async function retryShotVideo(shotId: string, config: { dashscopeApiKey: 
     inputParams,
     cost: { ...cost, estimated: true },
   })
+}
+
+/**
+ * 批量重试项目中所有失败的镜头。
+ * 将项目设回 generating，对每个失败镜头执行 resetCanvasShotToDraft + 重新提交视频任务。
+ */
+export async function retryFailedShots(projectId: string, accountId: string, config: { dashscopeApiKey: string, dashscopeBaseUrl?: string }) {
+  const detail = await getCanvasProjectDetail(projectId)
+  if (!detail)
+    throw new Error('项目不存在')
+
+  const failedShots = detail.shots.filter(s => s.status === 'failed')
+  if (failedShots.length === 0)
+    throw new Error('没有失败的镜头可以重试')
+
+  await updateCanvasProject(projectId, { status: 'generating' })
+
+  const client = createClient(config)
+  const characterMap = new Map(detail.characters.map(c => [c.id, c]))
+  const locationMap = new Map(detail.locations.map(l => [l.id, l]))
+
+  for (const shot of failedShots) {
+    await resetCanvasShotToDraft(shot.id)
+    notifyNode(accountId, projectId, 'shot', shot.id, 'running')
+
+    const charRefUrls = shot.characterIdsJson
+      .map((id: string) => characterMap.get(id)?.referenceImageUrl)
+      .filter(Boolean) as string[]
+    const locRefUrl = shot.locationId
+      ? locationMap.get(shot.locationId)?.referenceImageUrl ?? null
+      : null
+    const referenceUrls = [...charRefUrls, ...(locRefUrl ? [locRefUrl] : [])]
+
+    const model = getVideoModel(detail.project.modelPreferencesJson, referenceUrls)
+    const videoParams = {
+      prompt: shot.videoPrompt!.slice(0, 2500),
+      negative_prompt: shot.negativePrompt || '',
+      resolution: '720P',
+      duration: shot.duration,
+    }
+
+    const submitResult = await client.submitVideoTaskWithFallback(
+      model,
+      videoParams,
+      referenceUrls.length > 0 ? referenceUrls : undefined,
+    )
+
+    if (!submitResult.success || !submitResult.taskId) {
+      await updateCanvasShot(shot.id, { status: 'failed', errorMessage: submitResult.error })
+      notifyNode(accountId, projectId, 'shot', shot.id, 'failed', undefined, submitResult.error)
+      continue
+    }
+
+    await updateCanvasShot(shot.id, { videoTaskId: submitResult.taskId, status: 'generating' })
+
+    const usedModelConfig = getModelById(submitResult.model)!
+    const inputParams = { source: 'canvas', projectId, shotId: shot.id, prompt: shot.videoPrompt, resolution: '720P', duration: shot.duration }
+    const cost = calculateCost(usedModelConfig, inputParams)
+    await createGenerationRecord({
+      accountId,
+      taskId: submitResult.taskId,
+      model: submitResult.model,
+      category: 'video',
+      status: 'processing',
+      inputParams,
+      cost: { ...cost, estimated: true },
+    })
+  }
 }

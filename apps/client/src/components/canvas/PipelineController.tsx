@@ -12,6 +12,7 @@ import {
   generateCanvasStoryboard,
   generateCanvasVideos,
   rebuildCanvasPrompts,
+  retryFailedCanvasShots,
   updateCanvasModelPreferences,
 } from '../../api/client'
 
@@ -47,6 +48,7 @@ function getPhaseIndex(status: CanvasProjectStatus): number {
     continuity_checked: 7,
     prompts_ready: 8,
     generating: 9,
+    partial_failed: 9,
     completed: 9,
     failed: 0,
   }
@@ -61,7 +63,7 @@ interface PhaseDoneEvent {
 
 interface Props {
   projectId: string
-  projectStatus: CanvasProjectStatus
+  project: ProjectDTO
   modelPreferences: CanvasModelPreferences | null
   onPhaseComplete: (project?: ProjectDTO) => void
   onPhaseChange?: (phaseKey: string | null) => void
@@ -71,13 +73,14 @@ interface Props {
 
 export default function PipelineController({
   projectId,
-  projectStatus,
+  project,
   modelPreferences,
   onPhaseComplete,
   onPhaseChange,
   phaseDone,
   onPhaseDoneConsumed,
 }: Props) {
+  const projectStatus = project.status
   const [autoMode, setAutoMode] = useState(false)
   const [running, setRunning] = useState(false)
   const [currentPhase, setCurrentPhase] = useState(-1)
@@ -247,8 +250,67 @@ export default function PipelineController({
 
   const currentPhaseLabel = currentPhase >= 0 ? PHASES[currentPhase].label : null
 
+  const shots = project.shots
+  const shotStats = useMemo(() => {
+    if (shots.length === 0)
+      return null
+    return {
+      total: shots.length,
+      completed: shots.filter(s => s.status === 'completed').length,
+      failed: shots.filter(s => s.status === 'failed').length,
+      generating: shots.filter(s => s.status === 'generating').length,
+    }
+  }, [shots])
+  const showShotStats = projectStatus === 'partial_failed' || projectStatus === 'generating'
+  const hasFailedShots = shotStats && shotStats.failed > 0
+
+  async function handleRetryAllFailed() {
+    try {
+      await retryFailedCanvasShots(projectId)
+      onPhaseComplete()
+    }
+    catch {
+      toast.error('重试失败镜头出错')
+    }
+  }
+
   return (
     <div className="border-t bg-background/95 backdrop-blur-sm px-4 py-3">
+      {/* Shot statistics */}
+      {showShotStats && shotStats && (
+        <div className="flex items-center gap-3 mb-2 text-xs">
+          <span className="text-muted-foreground">
+            总镜头:
+            {' '}
+            {shotStats.total}
+          </span>
+          <span className="text-green-600">
+            已完成:
+            {' '}
+            {shotStats.completed}
+          </span>
+          <span className="text-red-600">
+            失败:
+            {' '}
+            {shotStats.failed}
+          </span>
+          <span className="text-yellow-600">
+            生成中:
+            {' '}
+            {shotStats.generating}
+          </span>
+          {projectStatus === 'partial_failed' && hasFailedShots && (
+            <button
+              onClick={handleRetryAllFailed}
+              disabled={running}
+              className="px-2 py-0.5 rounded border border-orange-300 text-orange-700 hover:bg-orange-50"
+            >
+              重试全部失败镜头
+            </button>
+          )}
+        </div>
+      )}
+
       {/* Model selectors */}
       <div className="flex items-center gap-3 mb-2 text-xs">
         <ModelSelect

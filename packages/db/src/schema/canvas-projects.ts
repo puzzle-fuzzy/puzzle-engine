@@ -13,6 +13,7 @@ export const canvasProjectStatusEnum = pgEnum('canvas_project_status', [
   'continuity_checked',
   'prompts_ready',
   'generating',
+  'partial_failed',
   'completed',
   'failed',
 ])

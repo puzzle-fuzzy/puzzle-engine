@@ -18,6 +18,7 @@ const STATUS_LABELS: Record<string, string> = {
   continuity_checked: '连续性已检查',
   prompts_ready: 'Prompt 就绪',
   generating: '生成中',
+  partial_failed: '部分失败',
   completed: '已完成',
   failed: '失败',
 }
@@ -33,6 +34,7 @@ const STATUS_COLORS: Record<string, string> = {
   continuity_checked: 'bg-purple-100 text-purple-700',
   prompts_ready: 'bg-teal-100 text-teal-700',
   generating: 'bg-yellow-100 text-yellow-700',
+  partial_failed: 'bg-orange-100 text-orange-700',
   completed: 'bg-green-100 text-green-700',
   failed: 'bg-red-100 text-red-700',
 }

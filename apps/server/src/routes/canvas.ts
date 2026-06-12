@@ -1,3 +1,39 @@
+/**
+ * Canvas 路由 — AI 视频制作流水线
+ *
+ * 这是系统中最大最复杂的路由文件，提供：
+ *
+ * 1. 项目 CRUD
+ *    GET/POST/DELETE/PATCH /api/canvas/projects
+ *
+ * 2. Pipeline Run 查询
+ *    GET /projects/:id/runs    — 列出某项目的所有运行记录
+ *    GET /runs/:runId          — 查询单条运行记录
+ *
+ * 3. 流水线阶段执行（每个阶段走相同的并发守卫模式）：
+ *    POST .../analyze          — LLM 分析故事文本
+ *    POST .../characters       — 生成角色档案
+ *    POST .../locations        — 生成场景档案
+ *    POST .../character-refs   — AI 角色参考图
+ *    POST .../location-refs    — AI 场景参考图
+ *    POST .../storyboard       — LLM 分镜脚本
+ *    POST .../continuity       — 规则校验连续性
+ *    POST .../rebuild-prompts  — 重建视频提示词
+ *    POST .../generate-videos  — 提交视频生成
+ *
+ * 4. 资源 PATCH/DELETE — 角色、场景、镜头的编辑和删除
+ *
+ * 5. 辅助操作
+ *    POST .../layout           — 保存画布布局
+ *    PATCH .../model-preferences — 更新模型偏好
+ *    POST /shots/:id/retry     — 重试单个镜头
+ *    POST .../retry-failed-shots — 批量重试失败镜头
+ *
+ * 关键模式：
+ *   - 并发守卫：每个 phase 执行前通过 findActiveRunForPhase 检查是否有进行中的 run
+ *   - fireAndForget：阶段执行立即返回 { accepted: true, runId }，结果通过 SSE 推送
+ *   - 归属校验：所有操作先通过 getXxxForAccount 确认资源属于当前用户
+ */
 import type { CanvasPipelinePhase } from '@excuse/db'
 import type { ServerConfig } from '../config'
 import {
@@ -20,6 +56,15 @@ import { conflict, notFound, unauthorized, validationError } from '../utils/erro
 
 const logger = createLogger('canvas-routes')
 
+/**
+ * fire-and-forget 包装器 — 管道阶段的后台执行与结果推送
+ *
+ * 流程：
+ *   1. 等待 promise 完成 → SSE 推送 completed 事件
+ *   2. promise 失败 → 更新项目状态为 failed + SSE 推送 failed 事件
+ *
+ * 不阻塞路由 handler 返回，实现"接受请求 → 后台执行 → SSE 通知"模式。
+ */
 function fireAndForgetWithRun(
   userId: string,
   projectId: string,
@@ -431,5 +476,25 @@ export function createCanvasRoutes(config: ServerConfig) {
         })
       })
       return { success: true, message: '开始重试镜头' }
+    })
+
+    // 批量重试项目中所有失败的镜头
+    .post('/projects/:projectId/retry-failed-shots', async ({ params: { projectId }, userId, set }) => {
+      if (!userId)
+        return unauthorized(set)
+      const project = await getCanvasProjectByIdForAccount(projectId, userId)
+      if (!project)
+        return notFound(set, '项目不存在或无权访问')
+      svc.retryFailedShots(projectId, userId, config).catch((err) => {
+        logger.error({ err, projectId }, 'batch retry failed shots error')
+        dispatchToUser(userId, 'pipeline_node_update', {
+          projectId,
+          nodeType: 'phase',
+          nodeId: 'retry-failed-shots',
+          status: 'failed',
+          error: err instanceof Error ? err.message : String(err),
+        })
+      })
+      return { success: true, message: '开始重试失败镜头' }
     })
 }

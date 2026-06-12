@@ -1,0 +1,1 @@
+ALTER TYPE "public"."canvas_project_status" ADD VALUE 'partial_failed' BEFORE 'completed';

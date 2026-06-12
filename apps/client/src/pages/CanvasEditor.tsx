@@ -122,7 +122,7 @@ export default function CanvasEditor() {
       {/* Pipeline controller bar */}
       <PipelineController
         projectId={project.id}
-        projectStatus={project.status}
+        project={project}
         modelPreferences={project.modelPreferences}
         onPhaseComplete={loadProject}
         onPhaseChange={setRunningPhase}

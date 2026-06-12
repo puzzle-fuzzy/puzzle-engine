@@ -366,3 +366,9 @@ export async function retryCanvasShot(shotId: string): Promise<{ success: boolea
     await api.api.canvas.shots({ shotId }).retry.post(),
   )
 }
+
+export async function retryFailedCanvasShots(projectId: string): Promise<{ success: boolean }> {
+  return unwrapEden<{ success: boolean }>(
+    await api.api.canvas.projects({ projectId })['retry-failed-shots'].post(),
+  )
+}
