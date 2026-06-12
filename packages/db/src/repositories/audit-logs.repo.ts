@@ -2,6 +2,7 @@ import { and, desc, eq, gte, lte } from 'drizzle-orm'
 import { getDb } from '../db'
 import { auditLogs } from '../schema/audit-logs'
 
+/** 写入审计日志（登录/注册/生成/文件删除/计费/API Key 操作等） */
 export async function createAuditLog(values: {
   accountId?: string
   action: 'login' | 'register' | 'generate' | 'file_delete' | 'billing_transaction' | 'api_key_create' | 'api_key_revoke' | 'admin_action'
@@ -12,6 +13,10 @@ export async function createAuditLog(values: {
   await getDb().insert(auditLogs).values(values)
 }
 
+/**
+ * 分页查询审计日志 — 支持按用户/操作类型/时间范围过滤
+ * 默认按创建时间倒序，limit=100
+ */
 export async function queryAuditLogs(filters: {
   accountId?: string
   action?: string

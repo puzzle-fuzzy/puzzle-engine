@@ -1,6 +1,6 @@
 import type { ServerConfig } from '../config'
 import { Elysia, sse } from 'elysia'
-import { createAuthPlugin } from '../plugins/auth'
+import { createRequireAuthPlugin } from '../plugins/auth'
 import { addConnection, removeConnection } from '../services/sse-manager'
 
 // ===== Push → Pull 适配器 =====
@@ -54,12 +54,8 @@ function createAsyncChannel() {
  */
 export function createSSERoutes(config: ServerConfig) {
   return new Elysia({ prefix: '/api' })
-    .use(createAuthPlugin(config))
+    .use(createRequireAuthPlugin(config))
     .get('/sse', async function* ({ userId }) {
-      // 未认证时直接返回（generator 无 yield 时 Elysia 自动转普通响应）
-      if (!userId)
-        return
-
       const channel = createAsyncChannel()
       const sender = (event: string, data: unknown) => {
         channel.push({ event, data })

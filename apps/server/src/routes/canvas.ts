@@ -50,9 +50,9 @@ import {
 import { createLogger } from '@excuse/shared'
 import { Elysia, t } from 'elysia'
 import * as svc from '../modules/canvas/service'
-import { createAuthPlugin } from '../plugins/auth'
+import { createRequireAuthPlugin } from '../plugins/auth'
 import { dispatchToUser } from '../services/sse-manager'
-import { conflict, notFound, unauthorized, validationError } from '../utils/errors'
+import { conflict, notFound, validationError } from '../utils/errors'
 
 const logger = createLogger('canvas-routes')
 
@@ -100,19 +100,15 @@ function fireAndForgetWithRun(
 
 export function createCanvasRoutes(config: ServerConfig) {
   return new Elysia({ prefix: '/api/canvas' })
-    .use(createAuthPlugin(config))
+    .use(createRequireAuthPlugin(config))
 
     // ===== 项目 CRUD =====
-    .get('/projects', async ({ userId, set }) => {
-      if (!userId)
-        return unauthorized(set)
+    .get('/projects', async ({ userId }) => {
       const projects = await svc.listProjects(userId)
       return { success: true, data: projects }
     })
 
-    .post('/projects', async ({ body, userId, set }) => {
-      if (!userId)
-        return unauthorized(set)
+    .post('/projects', async ({ body, userId }) => {
       const { title, storyText } = body
       const project = await svc.createProject(userId, { title, storyText })
       return { success: true, data: project }
@@ -124,8 +120,6 @@ export function createCanvasRoutes(config: ServerConfig) {
     })
 
     .get('/projects/:projectId', async ({ params: { projectId }, userId, set }) => {
-      if (!userId)
-        return unauthorized(set)
       const owned = await getCanvasProjectByIdForAccount(projectId, userId)
       if (!owned)
         return notFound(set, '项目不存在或无权访问')
@@ -136,8 +130,6 @@ export function createCanvasRoutes(config: ServerConfig) {
     })
 
     .delete('/projects/:projectId', async ({ params: { projectId }, userId, set }) => {
-      if (!userId)
-        return unauthorized(set)
       const owned = await getCanvasProjectByIdForAccount(projectId, userId)
       if (!owned)
         return notFound(set, '项目不存在或无权访问')
@@ -147,8 +139,6 @@ export function createCanvasRoutes(config: ServerConfig) {
 
     // 更新项目标题/故事文本
     .patch('/projects/:projectId', async ({ params: { projectId }, body, userId, set }) => {
-      if (!userId)
-        return unauthorized(set)
       const owned = await getCanvasProjectByIdForAccount(projectId, userId)
       if (!owned)
         return notFound(set, '项目不存在或无权访问')
@@ -166,8 +156,6 @@ export function createCanvasRoutes(config: ServerConfig) {
 
     // ===== Pipeline Run 查询 =====
     .get('/projects/:projectId/runs', async ({ params: { projectId }, userId, set }) => {
-      if (!userId)
-        return unauthorized(set)
       const owned = await getCanvasProjectByIdForAccount(projectId, userId)
       if (!owned)
         return notFound(set, '项目不存在或无权访问')
@@ -176,8 +164,6 @@ export function createCanvasRoutes(config: ServerConfig) {
     })
 
     .get('/runs/:runId', async ({ params: { runId }, userId, set }) => {
-      if (!userId)
-        return unauthorized(set)
       const run = await getPipelineRunById(runId)
       if (!run)
         return notFound(set, '运行记录不存在')
@@ -192,8 +178,6 @@ export function createCanvasRoutes(config: ServerConfig) {
     // 无则创建 run 记录 → 返回 { accepted: true, runId } → 后台执行
     // 有则返回 409 { accepted: false, error, existingRunId }
     .post('/projects/:projectId/analyze', async ({ params: { projectId }, userId, set }) => {
-      if (!userId)
-        return unauthorized(set)
       const owned = await getCanvasProjectByIdForAccount(projectId, userId)
       if (!owned)
         return notFound(set, '项目不存在或无权访问')
@@ -207,8 +191,6 @@ export function createCanvasRoutes(config: ServerConfig) {
     })
 
     .post('/projects/:projectId/characters', async ({ params: { projectId }, userId, set }) => {
-      if (!userId)
-        return unauthorized(set)
       const owned = await getCanvasProjectByIdForAccount(projectId, userId)
       if (!owned)
         return notFound(set, '项目不存在或无权访问')
@@ -222,8 +204,6 @@ export function createCanvasRoutes(config: ServerConfig) {
     })
 
     .post('/projects/:projectId/locations', async ({ params: { projectId }, userId, set }) => {
-      if (!userId)
-        return unauthorized(set)
       const owned = await getCanvasProjectByIdForAccount(projectId, userId)
       if (!owned)
         return notFound(set, '项目不存在或无权访问')
@@ -237,8 +217,6 @@ export function createCanvasRoutes(config: ServerConfig) {
     })
 
     .post('/projects/:projectId/character-refs', async ({ params: { projectId }, userId, set }) => {
-      if (!userId)
-        return unauthorized(set)
       const owned = await getCanvasProjectByIdForAccount(projectId, userId)
       if (!owned)
         return notFound(set, '项目不存在或无权访问')
@@ -252,8 +230,6 @@ export function createCanvasRoutes(config: ServerConfig) {
     })
 
     .post('/projects/:projectId/location-refs', async ({ params: { projectId }, userId, set }) => {
-      if (!userId)
-        return unauthorized(set)
       const owned = await getCanvasProjectByIdForAccount(projectId, userId)
       if (!owned)
         return notFound(set, '项目不存在或无权访问')
@@ -267,8 +243,6 @@ export function createCanvasRoutes(config: ServerConfig) {
     })
 
     .post('/projects/:projectId/storyboard', async ({ params: { projectId }, userId, set }) => {
-      if (!userId)
-        return unauthorized(set)
       const owned = await getCanvasProjectByIdForAccount(projectId, userId)
       if (!owned)
         return notFound(set, '项目不存在或无权访问')
@@ -282,8 +256,6 @@ export function createCanvasRoutes(config: ServerConfig) {
     })
 
     .post('/projects/:projectId/continuity', async ({ params: { projectId }, userId, set }) => {
-      if (!userId)
-        return unauthorized(set)
       const owned = await getCanvasProjectByIdForAccount(projectId, userId)
       if (!owned)
         return notFound(set, '项目不存在或无权访问')
@@ -297,8 +269,6 @@ export function createCanvasRoutes(config: ServerConfig) {
     })
 
     .post('/projects/:projectId/rebuild-prompts', async ({ params: { projectId }, userId, set }) => {
-      if (!userId)
-        return unauthorized(set)
       const owned = await getCanvasProjectByIdForAccount(projectId, userId)
       if (!owned)
         return notFound(set, '项目不存在或无权访问')
@@ -312,8 +282,6 @@ export function createCanvasRoutes(config: ServerConfig) {
     })
 
     .post('/projects/:projectId/generate-videos', async ({ params: { projectId }, userId, set }) => {
-      if (!userId)
-        return unauthorized(set)
       const owned = await getCanvasProjectByIdForAccount(projectId, userId)
       if (!owned)
         return notFound(set, '项目不存在或无权访问')
@@ -327,8 +295,6 @@ export function createCanvasRoutes(config: ServerConfig) {
     })
 
     .post('/projects/:projectId/layout', async ({ params: { projectId }, body, userId, set }) => {
-      if (!userId)
-        return unauthorized(set)
       const owned = await getCanvasProjectByIdForAccount(projectId, userId)
       if (!owned)
         return notFound(set, '项目不存在或无权访问')
@@ -339,8 +305,6 @@ export function createCanvasRoutes(config: ServerConfig) {
     })
 
     .patch('/projects/:projectId/model-preferences', async ({ params: { projectId }, body, userId, set }) => {
-      if (!userId)
-        return unauthorized(set)
       const owned = await getCanvasProjectByIdForAccount(projectId, userId)
       if (!owned)
         return notFound(set, '项目不存在或无权访问')
@@ -356,8 +320,6 @@ export function createCanvasRoutes(config: ServerConfig) {
 
     // ===== 资源 PATCH =====
     .patch('/characters/:characterId', async ({ params: { characterId }, body, userId, set }) => {
-      if (!userId)
-        return unauthorized(set)
       const character = await getCanvasCharacterForAccount(characterId, userId)
       if (!character)
         return notFound(set, '角色不存在或无权访问')
@@ -376,8 +338,6 @@ export function createCanvasRoutes(config: ServerConfig) {
     })
 
     .patch('/locations/:locationId', async ({ params: { locationId }, body, userId, set }) => {
-      if (!userId)
-        return unauthorized(set)
       const location = await getCanvasLocationForAccount(locationId, userId)
       if (!location)
         return notFound(set, '场景不存在或无权访问')
@@ -395,8 +355,6 @@ export function createCanvasRoutes(config: ServerConfig) {
     })
 
     .patch('/shots/:shotId', async ({ params: { shotId }, body, userId, set }) => {
-      if (!userId)
-        return unauthorized(set)
       const shot = await getCanvasShotForAccount(shotId, userId)
       if (!shot)
         return notFound(set, '镜头不存在或无权访问')
@@ -426,8 +384,6 @@ export function createCanvasRoutes(config: ServerConfig) {
 
     // ===== 资源 DELETE =====
     .delete('/characters/:characterId', async ({ params: { characterId }, userId, set }) => {
-      if (!userId)
-        return unauthorized(set)
       const character = await getCanvasCharacterForAccount(characterId, userId)
       if (!character)
         return notFound(set, '角色不存在或无权访问')
@@ -436,8 +392,6 @@ export function createCanvasRoutes(config: ServerConfig) {
     })
 
     .delete('/locations/:locationId', async ({ params: { locationId }, userId, set }) => {
-      if (!userId)
-        return unauthorized(set)
       const location = await getCanvasLocationForAccount(locationId, userId)
       if (!location)
         return notFound(set, '场景不存在或无权访问')
@@ -446,8 +400,6 @@ export function createCanvasRoutes(config: ServerConfig) {
     })
 
     .delete('/shots/:shotId', async ({ params: { shotId }, userId, set }) => {
-      if (!userId)
-        return unauthorized(set)
       const shot = await getCanvasShotForAccount(shotId, userId)
       if (!shot)
         return notFound(set, '镜头不存在或无权访问')
@@ -457,8 +409,6 @@ export function createCanvasRoutes(config: ServerConfig) {
 
     // 重试单个失败的镜头视频 — retry 不创建 pipeline run 记录
     .post('/shots/:shotId/retry', async ({ params: { shotId }, userId, set }) => {
-      if (!userId)
-        return unauthorized(set)
       const shot = await getCanvasShotForAccount(shotId, userId)
       if (!shot)
         return notFound(set, '镜头不存在或无权访问')
@@ -480,8 +430,6 @@ export function createCanvasRoutes(config: ServerConfig) {
 
     // 批量重试项目中所有失败的镜头
     .post('/projects/:projectId/retry-failed-shots', async ({ params: { projectId }, userId, set }) => {
-      if (!userId)
-        return unauthorized(set)
       const project = await getCanvasProjectByIdForAccount(projectId, userId)
       if (!project)
         return notFound(set, '项目不存在或无权访问')

@@ -4,11 +4,13 @@ import { getDb } from '../db'
 import { canvasCharacters } from '../schema/canvas-characters'
 import { canvasProjects } from '../schema/canvas-projects'
 
+/** 创建角色记录 */
 export async function createCanvasCharacter(values: CanvasCharacterInsert) {
   const [character] = await getDb().insert(canvasCharacters).values(values).returning()
   return character!
 }
 
+/** 按 ID 查询角色 */
 export async function getCanvasCharacterById(id: string) {
   const [character] = await getDb()
     .select()
@@ -31,6 +33,7 @@ export async function getCanvasCharacterForAccount(characterId: string, accountI
   return row?.character ?? null
 }
 
+/** 列出项目所有角色 */
 export async function listCanvasCharactersByProject(projectId: string) {
   return getDb()
     .select()
@@ -38,6 +41,7 @@ export async function listCanvasCharactersByProject(projectId: string) {
     .where(eq(canvasCharacters.projectId, projectId))
 }
 
+/** 批量删除项目角色，excludeLocked=true 时保留已锁定的角色 */
 export async function deleteCanvasCharactersByProject(projectId: string, { excludeLocked = false } = {}) {
   const conditions = [eq(canvasCharacters.projectId, projectId)]
   if (excludeLocked)
@@ -45,6 +49,7 @@ export async function deleteCanvasCharactersByProject(projectId: string, { exclu
   await getDb().delete(canvasCharacters).where(and(...conditions))
 }
 
+/** 更新角色属性（部分更新，自动刷新 updatedAt） */
 export async function updateCanvasCharacter(
   id: string,
   values: Partial<Pick<CanvasCharacterInsert, 'name' | 'role' | 'description' | 'identityPrompt' | 'negativePrompt' | 'profileJson' | 'referenceImageUrl' | 'turnaroundSheetUrl' | 'locked'>>,
@@ -57,6 +62,7 @@ export async function updateCanvasCharacter(
   return updated ?? null
 }
 
+/** 按 ID 删除单个角色 */
 export async function deleteCanvasCharacterById(id: string) {
   await getDb().delete(canvasCharacters).where(eq(canvasCharacters.id, id))
 }
