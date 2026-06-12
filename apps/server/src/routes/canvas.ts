@@ -301,7 +301,31 @@ export function createCanvasRoutes(config: ServerConfig) {
       await svc.saveCanvasLayout(projectId, body)
       return { success: true }
     }, {
-      body: t.Record(t.String(), t.Any()),
+      body: t.Object({
+        nodes: t.Array(t.Object({
+          id: t.String(),
+          type: t.Optional(t.String()),
+          position: t.Object({
+            x: t.Number(),
+            y: t.Number(),
+          }),
+          width: t.Optional(t.Number()),
+          height: t.Optional(t.Number()),
+          data: t.Optional(t.Record(t.String(), t.Unknown())),
+        })),
+        edges: t.Array(t.Object({
+          id: t.String(),
+          source: t.String(),
+          target: t.String(),
+          type: t.Optional(t.String()),
+          data: t.Optional(t.Record(t.String(), t.Unknown())),
+        })),
+        viewport: t.Optional(t.Object({
+          x: t.Number(),
+          y: t.Number(),
+          zoom: t.Number(),
+        })),
+      }),
     })
 
     .patch('/projects/:projectId/model-preferences', async ({ params: { projectId }, body, userId, set }) => {

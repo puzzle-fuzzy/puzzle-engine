@@ -1,0 +1,48 @@
+import { describe, expect, it } from 'bun:test'
+import { parseCanvasLayout } from '../src/modules/canvas/layout'
+
+describe('canvas layout parser', () => {
+  it('parses a React Flow style layout DTO', () => {
+    const layout = parseCanvasLayout({
+      nodes: [{
+        id: 'shot-1',
+        type: 'shot',
+        position: { x: 100, y: 200 },
+        width: 240,
+        data: { label: 'Shot 1' },
+      }],
+      edges: [{
+        id: 'edge-1',
+        source: 'shot-1',
+        target: 'shot-2',
+      }],
+      viewport: { x: 0, y: 0, zoom: 1 },
+    })
+
+    expect(layout.nodes[0]?.position).toEqual({ x: 100, y: 200 })
+    expect(layout.edges[0]?.source).toBe('shot-1')
+    expect(layout.viewport?.zoom).toBe(1)
+  })
+
+  it('rejects layouts without nodes array', () => {
+    expect(() => parseCanvasLayout({ edges: [] })).toThrow('nodes')
+  })
+
+  it('rejects invalid node coordinates', () => {
+    expect(() =>
+      parseCanvasLayout({
+        nodes: [{ id: 'shot-1', position: { x: '100', y: 200 } }],
+        edges: [],
+      }),
+    ).toThrow('nodes[0].position.x')
+  })
+
+  it('rejects invalid edge endpoints', () => {
+    expect(() =>
+      parseCanvasLayout({
+        nodes: [],
+        edges: [{ id: 'edge-1', source: 'shot-1' }],
+      }),
+    ).toThrow('edges[0].target')
+  })
+})

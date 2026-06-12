@@ -3,9 +3,38 @@
 
 /**
  * 画布布局 — 前端 React Flow 节点位置/视口状态
- * 后端只存储和透传，不解释内部结构
  */
-export type CanvasLayoutDto = Record<string, unknown>
+export interface CanvasLayoutPosition {
+  x: number
+  y: number
+}
+
+export interface CanvasLayoutViewport extends CanvasLayoutPosition {
+  zoom: number
+}
+
+export interface CanvasLayoutNode {
+  id: string
+  type?: string
+  position: CanvasLayoutPosition
+  width?: number
+  height?: number
+  data?: Record<string, unknown>
+}
+
+export interface CanvasLayoutEdge {
+  id: string
+  source: string
+  target: string
+  type?: string
+  data?: Record<string, unknown>
+}
+
+export interface CanvasLayoutDto {
+  nodes: CanvasLayoutNode[]
+  edges: CanvasLayoutEdge[]
+  viewport?: CanvasLayoutViewport
+}
 
 /** 用户可选择的模型类别偏好 */
 export interface CanvasModelPreferences {

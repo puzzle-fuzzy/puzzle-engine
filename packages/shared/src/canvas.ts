@@ -1,5 +1,9 @@
 import type {
   CanvasLayoutDto as CanvasLayoutDtoFromDB,
+  CanvasLayoutEdge,
+  CanvasLayoutNode,
+  CanvasLayoutPosition,
+  CanvasLayoutViewport,
   CanvasModelPreferences,
   CanvasProjectStatus as CanvasProjectStatusFromDB,
   CanvasShotStatus as CanvasShotStatusFromDB,
@@ -16,6 +20,7 @@ import type {
 // 域类型从 @excuse/db import type 重导出（编译期擦除，零运行时影响）
 export type { CanvasModelPreferences, CharacterProfile, ContinuityIssue, LocationProfile, NovelAnalysis }
 export type { ShotCamera, ShotContinuity, ShotEnvironment, ShotTimelineEntry }
+export type { CanvasLayoutEdge, CanvasLayoutNode, CanvasLayoutPosition, CanvasLayoutViewport }
 export type CanvasLayoutDto = CanvasLayoutDtoFromDB
 
 // ===== 画布状态类型（从 DB pgEnum 推导，消除重复定义） =====

@@ -270,7 +270,11 @@ describe('canvas routes — extended', () => {
       mockGetCanvasProjectById.mockResolvedValue(makeProjectRow())
       mockUpdateCanvasProject.mockResolvedValue(makeProjectRow())
       const { data } = await client.api.canvas.projects({ projectId: 'proj-001' }).layout.post(
-        { nodes: [{ id: 'n1', x: 100, y: 200 }] },
+        {
+          nodes: [{ id: 'n1', type: 'shot', position: { x: 100, y: 200 } }],
+          edges: [],
+          viewport: { x: 0, y: 0, zoom: 1 },
+        },
         { headers: { Authorization: `Bearer ${token}` } },
       )
       expect(data?.success).toBe(true)

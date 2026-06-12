@@ -16,6 +16,7 @@ import {
   updateCanvasProject,
   updateCanvasShot,
 } from '@excuse/db'
+import { parseCanvasLayout } from './layout'
 import { mapProjectDetail } from './mapper'
 import { reconcileProjectShots } from './service-helpers'
 
@@ -68,8 +69,8 @@ export async function softDeleteProject(projectId: string) {
   return softDeleteCanvasProject(projectId)
 }
 
-export async function saveCanvasLayout(projectId: string, layout: import('@excuse/shared').CanvasLayoutDto) {
-  return updateCanvasProject(projectId, { canvasLayout: layout })
+export async function saveCanvasLayout(projectId: string, layout: unknown) {
+  return updateCanvasProject(projectId, { canvasLayout: parseCanvasLayout(layout) })
 }
 
 export async function updateModelPreferences(projectId: string, prefs: CanvasModelPreferences) {
