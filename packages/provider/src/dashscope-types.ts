@@ -73,12 +73,22 @@ export interface DashScopeVideoSubmitResponse {
   message?: string
 }
 
+/** DashScope 异步任务查询结果中的单个结果条目 */
+export interface DashScopeTaskResultItem {
+  url?: string
+  b64_image?: string
+}
+
 /** 异步任务查询响应 */
 export interface DashScopeTaskQueryResponse {
   output: {
     task_status?: string
     video_url?: string
-    results?: Array<Record<string, unknown>>
+    results?: Array<DashScopeTaskResultItem>
+    /** 实际视频时长（部分 DashScope 模型返回） */
+    video_duration?: number
+    /** 视频时长别名（部分模型使用 duration 而非 video_duration） */
+    duration?: number
     code?: string
     message?: string
   }

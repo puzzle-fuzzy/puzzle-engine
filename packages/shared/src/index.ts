@@ -1,4 +1,5 @@
 export * from './auth'
+export * from './billing-params'
 export * from './billing'
 export * from './canvas'
 export * from './error'

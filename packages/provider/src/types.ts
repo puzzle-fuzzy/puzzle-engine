@@ -12,23 +12,44 @@ export interface ProviderUsage {
   videoDuration?: number
 }
 
-export interface TextProviderOutput extends Record<string, unknown> {
+export interface TextProviderOutput {
   type: 'text'
   text: string
+  /** DashScope 原始响应（非结构化，供调试/审计） */
   raw: unknown
 }
 
-export interface ImageProviderOutput extends Record<string, unknown> {
+export interface ImageProviderOutput {
   type: 'image'
   urls: string[]
+  /** DashScope 原始响应（非结构化，供调试/审计） */
   raw: unknown
 }
 
-export interface VideoTaskProviderOutput extends Record<string, unknown> {
+export interface VideoTaskProviderOutput {
   type: 'processing'
   taskId: string
   status: 'submitted'
+  /** DashScope 原始响应（非结构化，供调试/审计） */
   raw: unknown
+}
+
+/**
+ * DashScope 异步任务查询输出 — 外部 API 边界类型
+ *
+ * video_url: 已完成的视频任务（万相/HappyHorse）
+ * results: 已完成的图片异步任务
+ * video_duration/duration: 部分视频模型返回实际时长
+ *
+ * DashScope API 可能返回额外字段，index signature 兼容未知结构。
+ */
+export interface DashScopeTaskOutput {
+  video_url?: string
+  results?: Array<{ url?: string, b64_image?: string }>
+  video_duration?: number
+  duration?: number
+  /** DashScope 额外字段 — 外部 API 边界 */
+  [key: string]: unknown
 }
 
 export interface TextProviderResult {
@@ -72,7 +93,7 @@ export type ProviderResult
 export interface TaskStatus {
   taskId: string
   status: 'PENDING' | 'RUNNING' | 'SUCCEEDED' | 'FAILED' | 'UNKNOWN'
-  output?: Record<string, unknown>
+  output?: DashScopeTaskOutput
   usage?: DashScopeUsage
   errorCode?: string
   errorMessage?: string

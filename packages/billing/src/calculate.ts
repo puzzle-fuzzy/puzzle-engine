@@ -1,4 +1,4 @@
-import type { CostDetail, ModelConfig } from '@excuse/shared'
+import type { BillingParams, CostDetail, ModelConfig } from '@excuse/shared'
 import currency from 'currency.js'
 
 /**
@@ -19,7 +19,7 @@ const PRECISION = { precision: 4 }
  */
 export function calculateCost(
   model: ModelConfig,
-  params: Record<string, unknown>,
+  params: BillingParams,
   usage?: {
     inputTokens?: number
     outputTokens?: number
@@ -64,7 +64,7 @@ export function calculateCost(
 
     // 图片计费: 按张数 × 单价，张数优先取 usage.imageCount，其次取 params.n，默认 1
     case 'image': {
-      const count = usage?.imageCount || (typeof params.n === 'number' ? params.n : 1)
+      const count = usage?.imageCount || params.n || 1
       const totalCents = currency(pricing.inputPriceCents, PRECISION).multiply(count).value
 
       return {
@@ -79,8 +79,8 @@ export function calculateCost(
 
     // 视频计费: 按时长（秒）× 单价，1080P 优先使用独立定价，缺省回退到基础定价
     case 'video': {
-      const duration = usage?.videoDuration || (typeof params.duration === 'number' ? params.duration : 5)
-      const resolution = typeof params.resolution === 'string' ? params.resolution : '720P'
+      const duration = usage?.videoDuration || params.duration || 5
+      const resolution = params.resolution || '720P'
       const unitPriceCents = resolution === '1080P'
         ? (pricing.inputPrice1080Cents || pricing.inputPriceCents)
         : pricing.inputPriceCents
@@ -108,7 +108,7 @@ export function calculateCost(
  * 与 calculateCost 相同计算逻辑，但标记 estimated=true，
  * usage 参数传 undefined 表示未获得实际用量，使用默认值估算。
  */
-export function estimateCost(model: ModelConfig, params: Record<string, unknown>): CostDetail {
+export function estimateCost(model: ModelConfig, params: BillingParams): CostDetail {
   const result = calculateCost(model, params, undefined)
   result.estimated = true
   return result

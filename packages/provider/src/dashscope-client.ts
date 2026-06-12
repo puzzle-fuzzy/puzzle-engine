@@ -9,6 +9,7 @@ import type {
 } from './dashscope-types'
 import type {
   DashScopeConfig,
+  DashScopeTaskOutput,
   FailedProviderResult,
   ImageProviderResult,
   ProviderResult,
@@ -16,6 +17,7 @@ import type {
   TextProviderResult,
   VideoTaskProviderResult,
 } from './types'
+import type { ValidatedModelParameters } from './model-validator'
 import { parseDashScopeError } from './dashscope-errors'
 import { getModelById } from './model-configs'
 
@@ -51,7 +53,7 @@ export class DashScopeClient {
    * 返回 { input, parameters, media } 三个中间收集器。
    */
   private applyMappings(
-    params: Record<string, unknown>,
+    params: ValidatedModelParameters,
     inputMapping: Record<string, InputMapping>,
   ): {
     input: Record<string, unknown>
@@ -98,7 +100,7 @@ export class DashScopeClient {
    */
   private buildRequestBody(
     modelConfig: ModelConfig,
-    params: Record<string, unknown>,
+    params: ValidatedModelParameters,
     referenceUrls?: string[],
   ): Record<string, unknown> {
     const { requestType, inputMapping } = modelConfig
@@ -187,7 +189,7 @@ export class DashScopeClient {
   /**
    * 文本生成 — 调用千问系列模型
    */
-  async chatCompletion(model: string, params: Record<string, unknown>): Promise<TextProviderResult | FailedProviderResult> {
+  async chatCompletion(model: string, params: ValidatedModelParameters): Promise<TextProviderResult | FailedProviderResult> {
     const modelConfig = getModelById(model)
     if (!modelConfig) {
       return this.failed(model, `未知模型: ${model}`)
@@ -251,7 +253,7 @@ export class DashScopeClient {
   /**
    * 图片生成 — 调用千问图像系列模型（同步）
    */
-  async generateImage(model: string, params: Record<string, unknown>): Promise<ImageProviderResult | FailedProviderResult> {
+  async generateImage(model: string, params: ValidatedModelParameters): Promise<ImageProviderResult | FailedProviderResult> {
     const modelConfig = getModelById(model)
     if (!modelConfig) {
       return this.failed(model, `未知模型: ${model}`)
@@ -307,7 +309,7 @@ export class DashScopeClient {
    * 视频生成 — 异步提交任务
    * 返回 DashScope task_id，需要后续轮询
    */
-  async submitVideoTask(model: string, params: Record<string, unknown>, referenceUrls?: string[]): Promise<VideoTaskProviderResult | FailedProviderResult> {
+  async submitVideoTask(model: string, params: ValidatedModelParameters, referenceUrls?: string[]): Promise<VideoTaskProviderResult | FailedProviderResult> {
     const modelConfig = getModelById(model)
     if (!modelConfig) {
       return this.failed(model, `未知模型: ${model}`)
@@ -365,7 +367,7 @@ export class DashScopeClient {
    */
   async submitVideoTaskWithFallback(
     model: string,
-    params: Record<string, unknown>,
+    params: ValidatedModelParameters,
     referenceUrls?: string[],
   ): Promise<{ model: string, taskId: string | undefined, success: boolean, error?: string }> {
     const result = await this.submitVideoTask(model, params, referenceUrls)
@@ -418,7 +420,12 @@ export class DashScopeClient {
         // 万相 / HappyHorse 视频任务成功时返回 video_url（无 results）
         // 图片异步任务成功时返回 results 数组
         output: output.video_url || output.results
-          ? { results: output.results, video_url: output.video_url }
+          ? {
+              ...(output.video_url && { video_url: output.video_url }),
+              ...(output.results && { results: output.results }),
+              ...(typeof output.video_duration === 'number' && { video_duration: output.video_duration }),
+              ...(typeof output.duration === 'number' && { duration: output.duration }),
+            } as DashScopeTaskOutput
           : undefined,
         usage: data.usage,
         errorCode,
@@ -452,7 +459,7 @@ export class DashScopeClient {
   /**
    * 生成内容 — 根据模型类别自动路由到正确的 API
    */
-  async generate(model: string, params: Record<string, unknown>, referenceUrls?: string[]): Promise<ProviderResult> {
+  async generate(model: string, params: ValidatedModelParameters, referenceUrls?: string[]): Promise<ProviderResult> {
     const modelConfig = getModelById(model)
     if (!modelConfig) {
       return this.failed(model, `未知模型: ${model}`)

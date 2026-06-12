@@ -1,4 +1,4 @@
-import type { ModelConfig } from '@excuse/shared'
+import type { BillingParams, ModelConfig } from '@excuse/shared'
 import { describe, expect, it } from 'bun:test'
 import { calculateCost, estimateCost } from '../src/calculate'
 

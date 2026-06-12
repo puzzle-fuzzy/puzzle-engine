@@ -17,6 +17,38 @@ export interface ValidationResult {
 }
 
 /**
+ * 经校验+合并的模型参数 — branded type
+ *
+ * 只能通过 validateAndMerge() 构造，确保参数已通过模型配置校验
+ * 且缺失的可选参数已用 defaultValue 补齐。底层仍为 Record<string, unknown>
+ * 因为模型参数随 ModelConfig.parameters 动态变化，无法静态枚举所有字段。
+ *
+ * brand 符号 __validated 保证编译期流纪律：未经校验的 Record 无法
+ * 直接传入 DashScopeClient 公开方法（类型不兼容）。
+ */
+declare const __validatedBrand: unique symbol
+export type ValidatedModelParameters = Record<string, unknown> & { readonly [__validatedBrand]: true }
+
+/**
+ * 校验 + 合并 + brand — ValidatedModelParameters 的唯一构造路径
+ *
+ * 返回可辨识结果：
+ *   - ok: true  → params 为 ValidatedModelParameters，可直接传入 DashScopeClient
+ *   - ok: false → errors 为字段级校验错误，可被前端逐项展示
+ */
+export function validateAndMerge(
+  modelConfig: ModelConfig,
+  parameters: Record<string, unknown>,
+): { ok: true, params: ValidatedModelParameters } | { ok: false, errors: ParameterValidationError[] } {
+  const result = validateModelParameters(modelConfig, parameters)
+  if (!result.valid) {
+    return { ok: false, errors: result.errors }
+  }
+  const merged = mergeWithDefaults(modelConfig, parameters)
+  return { ok: true, params: merged as ValidatedModelParameters }
+}
+
+/**
  * 校验用户提交的参数是否符合模型配置声明
  *
  * 校验规则：
