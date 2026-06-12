@@ -29,6 +29,7 @@ const MIGRATIONS_FOLDER = resolve(import.meta.dir, '../../drizzle')
 
 /** 单连接 drizzle 实例（max: 1 保证 BEGIN/ROLLBACK 作用域正确） */
 let db: PostgresJsDatabase<typeof schema>
+let savepointCounter = 0
 
 /**
  * beforeAll 调用：连接测试库并运行迁移
@@ -83,4 +84,27 @@ export async function beginTestTransaction(): Promise<{ accountId: string }> {
  */
 export async function rollbackTestTransaction() {
   await db.execute('ROLLBACK')
+}
+
+/**
+ * 在测试中验证预期的数据库约束错误。
+ *
+ * PostgreSQL 在事务内遇到 unique/FK 等错误后会把整个事务标记为 aborted；
+ * 如果不先回滚到 savepoint，后续 afterEach 的清理查询可能卡住或失败。
+ */
+export async function expectDbConstraintError(fn: () => Promise<unknown>): Promise<unknown> {
+  const savepoint = `constraint_check_${savepointCounter++}`
+  await db.execute(`SAVEPOINT ${savepoint}`)
+
+  try {
+    await fn()
+  }
+  catch (error) {
+    await db.execute(`ROLLBACK TO SAVEPOINT ${savepoint}`)
+    await db.execute(`RELEASE SAVEPOINT ${savepoint}`)
+    return error
+  }
+
+  await db.execute(`RELEASE SAVEPOINT ${savepoint}`)
+  throw new Error('Expected database constraint error, but operation succeeded')
 }

@@ -12,9 +12,31 @@
  * 成功后自动运行 DB 相关测试。
  */
 
+import { dirname, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import postgres from 'postgres'
 
 const TEST_DATABASE_URL = 'postgres://excuse:excuse_dev@localhost:5433/excuse_test'
+const ADMIN_DATABASE_URL = 'postgres://excuse:excuse_dev@localhost:5433/excuse'
+const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..')
+
+async function terminateStaleTestConnections(): Promise<void> {
+  const sql = postgres(ADMIN_DATABASE_URL, {
+    max: 1,
+    connectTimeout: 5,
+  })
+  try {
+    await sql`
+      SELECT pg_terminate_backend(pid)
+      FROM pg_stat_activity
+      WHERE datname = 'excuse_test'
+        AND pid <> pg_backend_pid()
+    `
+  }
+  finally {
+    await sql.end()
+  }
+}
 
 async function checkConnection(): Promise<boolean> {
   let sql: ReturnType<typeof postgres> | null = null
@@ -53,6 +75,8 @@ async function checkConnection(): Promise<boolean> {
 }
 
 async function main() {
+  await terminateStaleTestConnections()
+
   const connected = await checkConnection()
   if (!connected) {
     process.exit(1)
@@ -60,7 +84,8 @@ async function main() {
 
   // 连接成功，运行 DB 测试
   console.log('🧪 运行 DB 测试...')
-  const proc = Bun.spawn(['bun', 'test', '--cwd', 'packages/db'], {
+  const proc = Bun.spawn(['bun', 'test'], {
+    cwd: packageRoot,
     stdout: 'inherit',
     stderr: 'inherit',
   })

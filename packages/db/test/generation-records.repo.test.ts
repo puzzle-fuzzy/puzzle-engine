@@ -11,6 +11,7 @@ import {
 } from '../src/repositories/generation-records.repo'
 import {
   beginTestTransaction,
+  expectDbConstraintError,
   initTestDb,
   rollbackTestTransaction,
   teardownTestDb,
@@ -258,15 +259,17 @@ describe('generation-records repository', () => {
     it('should reject duplicate taskId (unique constraint)', async () => {
       await createGenerationRecord(validInsert({ taskId: 'unique-task-001' }))
 
-      await expect(
+      const error = await expectDbConstraintError(() =>
         createGenerationRecord(validInsert({ taskId: 'unique-task-001' })),
-      ).rejects.toThrow()
+      )
+      expect(error).toBeInstanceOf(Error)
     })
 
     it('should reject invalid accountId (FK constraint)', async () => {
-      await expect(
+      const error = await expectDbConstraintError(() =>
         createGenerationRecord(validInsert({ accountId: '00000000-0000-0000-0000-000000000000' })),
-      ).rejects.toThrow()
+      )
+      expect(error).toBeInstanceOf(Error)
     })
   })
 })

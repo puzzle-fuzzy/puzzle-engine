@@ -7,6 +7,7 @@ import {
 } from '../src/repositories/accounts.repo'
 import {
   beginTestTransaction,
+  expectDbConstraintError,
   initTestDb,
   rollbackTestTransaction,
   teardownTestDb,
@@ -163,13 +164,14 @@ describe('accounts repository', () => {
         password: 'hashed',
       })
 
-      await expect(
+      const error = await expectDbConstraintError(() =>
         createAccount({
           username: 'user2',
           email: 'dup@example.com',
           password: 'hashed',
         }),
-      ).rejects.toThrow()
+      )
+      expect(error).toBeInstanceOf(Error)
     })
 
     it('should reject duplicate username (unique constraint)', async () => {
@@ -179,13 +181,14 @@ describe('accounts repository', () => {
         password: 'hashed',
       })
 
-      await expect(
+      const error = await expectDbConstraintError(() =>
         createAccount({
           username: 'dupuser',
           email: 'b@example.com',
           password: 'hashed',
         }),
-      ).rejects.toThrow()
+      )
+      expect(error).toBeInstanceOf(Error)
     })
   })
 })
