@@ -1,5 +1,5 @@
 import type { GenerationRecord, ModelConfig } from '@/api/client'
-import type { Category } from '@/pages/workspace-utils'
+import type { Category } from '@/lib/generation-utils'
 import { isImageOutput, isTextOutput, isVideoOutput } from '@excuse/shared'
 import currency from 'currency.js'
 import {
@@ -12,7 +12,7 @@ import {
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
-import { CATEGORY_CONFIG, formatDuration, formatTime, HIDDEN_PARAMS, isImageUrl, isUrl, isVideoUrl, STATUS_CONFIG } from '@/pages/workspace-utils'
+import { CATEGORY_CONFIG, formatDuration, formatTime, getAssetUrls, HIDDEN_PARAMS, isImageUrl, isUrl, isVideoUrl, STATUS_CONFIG } from '@/lib/generation-utils'
 
 interface RecordCardProps {
   record: GenerationRecord
@@ -53,10 +53,10 @@ export default function RecordCard({
   const isPending = record.status === 'pending' || record.status === 'submitting' || record.status === 'processing' || record.status === 'saving_output'
   const duration = formatDuration(record.createdAt, isPending ? null : record.updatedAt)
 
-  // 获取下载用的 savedUrls（image 或 video 输出）
+  // 获取下载用的 URLs（image 或 video 输出）
   const downloadUrls = record.outputResult
     && (isImageOutput(record.outputResult) || isVideoOutput(record.outputResult))
-    ? (isImageOutput(record.outputResult) ? record.outputResult.savedUrls : record.outputResult.savedUrls)
+    ? getAssetUrls(record.outputResult)
     : null
 
   return (
@@ -230,7 +230,7 @@ export default function RecordCard({
           <div className="mt-2">
             {isImageOutput(record.outputResult) && (
               <div className="flex gap-2 flex-wrap">
-                {(record.outputResult.savedUrls.length > 0 ? record.outputResult.savedUrls : record.outputResult.urls || []).map(url => (
+                {getAssetUrls(record.outputResult).map(url => (
                   <img
                     key={url}
                     src={url}
@@ -248,7 +248,7 @@ export default function RecordCard({
             )}
             {isVideoOutput(record.outputResult) && (
               <div className="flex gap-2">
-                {(record.outputResult.savedUrls.length > 0 ? record.outputResult.savedUrls : record.outputResult.video_url ? [record.outputResult.video_url] : record.outputResult.originalUrl ? [record.outputResult.originalUrl] : []).map(url => (
+                {getAssetUrls(record.outputResult).map(url => (
                   <video
                     key={url}
                     src={url}

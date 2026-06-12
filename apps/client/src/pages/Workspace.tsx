@@ -1,22 +1,13 @@
 import type { GenerateResponse, GenerationRecord, ModelConfig, ModelParameter } from '@/api/client'
-import { isImageOutput, isTextOutput, isVideoOutput } from '@excuse/shared'
-import currency from 'currency.js'
+import type { Category } from '@/lib/generation-utils'
 import {
-  CheckCircle2,
-  Clock,
-  Copy,
-  Download,
   FileText,
   FolderOpen,
-  ImageIcon,
   Loader2,
-  RotateCcw,
   Sparkles,
-  Trash2,
   Upload,
   Video,
   X,
-  XCircle,
 } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
@@ -26,7 +17,8 @@ import {
   generate,
   uploadFile,
 } from '@/api/client'
-import { Badge } from '@/components/ui/badge'
+import MediaPreviewDialog from '@/components/MediaPreviewDialog'
+import RecordCard from '@/components/RecordCard'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
@@ -34,77 +26,8 @@ import { Input } from '@/components/ui/input'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Select } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
+import { CATEGORY_CONFIG } from '@/lib/generation-utils'
 import { useGenerationStore } from '@/stores/generation'
-
-const CATEGORY_CONFIG = {
-  text: { label: '文本生成', color: 'bg-blue-500', icon: FileText, activeColor: 'bg-blue-500 text-white' },
-  image: { label: '图像生成', color: 'bg-purple-500', icon: ImageIcon, activeColor: 'bg-purple-500 text-white' },
-  video: { label: '视频生成', color: 'bg-pink-500', icon: Video, activeColor: 'bg-pink-500 text-white' },
-} as const
-
-type Category = keyof typeof CATEGORY_CONFIG
-
-const STATUS_CONFIG: Record<string, { label: string, color: string, icon: typeof Clock }> = {
-  pending: { label: '等待中', color: 'bg-yellow-100 text-yellow-700', icon: Clock },
-  processing: { label: '处理中', color: 'bg-blue-100 text-blue-700', icon: Loader2 },
-  succeeded: { label: '已完成', color: 'bg-green-100 text-green-700', icon: CheckCircle2 },
-  failed: { label: '失败', color: 'bg-red-100 text-red-700', icon: XCircle },
-}
-
-/** 格式化时间为相对时间 + 完整日期 */
-function formatTime(iso: string) {
-  const date = new Date(iso)
-  const now = new Date()
-  const diffMs = now.getTime() - date.getTime()
-  const diffMin = Math.floor(diffMs / 60000)
-  const diffHour = Math.floor(diffMs / 3600000)
-  const diffDay = Math.floor(diffMs / 86400000)
-  const dateStr = date.toLocaleDateString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
-  if (diffMin < 1)
-    return `刚刚 ${dateStr}`
-  if (diffMin < 60)
-    return `${diffMin} 分钟前 ${dateStr}`
-  if (diffHour < 24)
-    return `${diffHour} 小时前 ${dateStr}`
-  if (diffDay < 7)
-    return `${diffDay} 天前 ${dateStr}`
-  return dateStr
-}
-
-/** 计算 pending/processing 的持续时间 */
-function formatDuration(startIso: string, endIso?: string | null) {
-  const start = new Date(startIso).getTime()
-  const end = endIso ? new Date(endIso).getTime() : Date.now()
-  const diffSec = Math.round((end - start) / 1000)
-  if (diffSec < 60)
-    return `${diffSec}秒`
-  if (diffSec < 3600)
-    return `${Math.floor(diffSec / 60)}分${diffSec % 60}秒`
-  return `${Math.floor(diffSec / 3600)}时${Math.floor((diffSec % 3600) / 60)}分`
-}
-
-/** 需要在参数展示中隐藏的字段 */
-const HIDDEN_PARAMS = new Set(['prompt', 'negative_prompt', 'referenceFileIds'])
-
-/** 判断字符串是否为 URL（媒体文件） */
-function isUrl(v: unknown): v is string {
-  return typeof v === 'string' && (v.startsWith('http://') || v.startsWith('https://'))
-}
-
-/** 判断 URL 是否为图片 */
-function isImageUrl(url: string) {
-  return /\.(?:jpg|jpeg|png|gif|webp|bmp|svg)(?:\?.*)?$/i.test(url) || url.includes('/image')
-}
-
-/** 判断 URL 是否为视频 */
-function isVideoUrl(url: string) {
-  return /\.(?:mp4|webm|mov|avi)(?:\?.*)?$/i.test(url) || url.includes('/video')
-}
-
-/** 将整数分格式化为人民币字符串 */
-function formatCents(cents: number, precision = 2): string {
-  return currency(cents, { fromCents: true, precision }).format()
-}
 
 export default function Workspace() {
   const [models, setModels] = useState<ModelConfig[]>([])
@@ -480,270 +403,6 @@ export default function Workspace() {
     setTimeout(setCopiedId, 1500, null)
   }
 
-  function renderRecordCard(record: GenerationRecord) {
-    const statusCfg = STATUS_CONFIG[record.status] || STATUS_CONFIG.pending
-    const StatusIcon = statusCfg.icon
-    const catCfg = CATEGORY_CONFIG[record.category as Category]
-    const CatIcon = catCfg?.icon || FileText
-    const modelConfig = models.find(m => m.id === record.model)
-    const modelDisplayName = modelConfig?.name || record.model
-    const prompt = String(record.inputParams?.prompt || '')
-    const promptExpanded = expandedPrompts.has(record.id)
-    const visibleParams = Object.entries(record.inputParams || {}).filter(
-      ([k, v]) => !HIDDEN_PARAMS.has(k) && v != null && v !== '' && v !== undefined,
-    )
-    const mediaUrlParams = Object.entries(record.inputParams || {}).filter(
-      ([, v]) => isUrl(v),
-    )
-    const isPending = record.status === 'pending' || record.status === 'processing'
-    const duration = formatDuration(record.createdAt, isPending ? null : record.updatedAt)
-
-    return (
-      <Card key={record.id} className="overflow-hidden">
-        <CardContent className="p-3">
-          {/* 头部：模型名 + 状态 + 时间 */}
-          <div className="flex items-start justify-between gap-2">
-            <div className="flex items-center gap-2 min-w-0">
-              <CatIcon className={`size-4 shrink-0 ${catCfg?.color?.replace('bg-', 'text-')}`} />
-              <span className="text-sm font-medium truncate">{modelDisplayName}</span>
-              <Badge variant="secondary" className={`text-[10px] shrink-0 ${statusCfg.color}`}>
-                <StatusIcon className={`mr-1 size-3 ${record.status === 'processing' ? 'animate-spin' : ''}`} />
-                {statusCfg.label}
-              </Badge>
-            </div>
-            <div className="flex items-center gap-2 shrink-0">
-              {(isPending || record.status === 'succeeded') && (
-                <span className={`text-[10px] text-muted-foreground ${isPending ? 'animate-pulse' : ''}`}>
-                  {duration}
-                </span>
-              )}
-              <span className="text-xs text-muted-foreground">
-                {formatTime(record.createdAt)}
-              </span>
-            </div>
-          </div>
-
-          {/* Prompt（长文本可展开/收起 + 复制） */}
-          {prompt && (
-            <div className="mt-2">
-              <div className="flex items-center gap-1">
-                <p className={`flex-1 text-xs text-muted-foreground ${promptExpanded ? '' : 'line-clamp-2'}`}>
-                  {prompt}
-                </p>
-                <div className="flex shrink-0 gap-0.5">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="size-6 p-0 text-muted-foreground hover:text-foreground"
-                    onClick={() => copyPrompt(record.id, prompt)}
-                    title="复制提示词"
-                  >
-                    <Copy className="size-3" />
-                  </Button>
-                  {prompt.length > 80 && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="size-6 p-0 text-muted-foreground hover:text-foreground"
-                      onClick={() => togglePrompt(record.id)}
-                    >
-                      {promptExpanded ? '收起' : '展开'}
-                    </Button>
-                  )}
-                </div>
-              </div>
-              {copiedId === record.id && (
-                <p className="text-[10px] text-green-600">已复制</p>
-              )}
-            </div>
-          )}
-
-          {/* 参数标签（全部展示） */}
-          {visibleParams.length > 0 && (
-            <div className="mt-2 flex flex-wrap gap-1">
-              {visibleParams.map(([key, val]) => (
-                <Badge key={key} variant="outline" className="text-[10px]">
-                  {key}
-                  :
-                  {String(val).slice(0, 30)}
-                </Badge>
-              ))}
-            </div>
-          )}
-
-          {/* 费用 */}
-          {record.cost && (
-            <div className="mt-1.5 text-xs text-muted-foreground space-y-0.5">
-              <div className="flex flex-wrap gap-x-3 gap-y-0.5">
-                {record.cost.unit && (
-                  <span>
-                    {'计费: '}
-                    {record.cost.unit}
-                  </span>
-                )}
-                {record.cost.quantity != null && (
-                  <span>
-                    {'数量: '}
-                    {record.cost.quantity}
-                  </span>
-                )}
-                {record.cost.unitPriceCents != null && (
-                  <span>
-                    单价: ¥
-                    {formatCents(record.cost.unitPriceCents, 4)}
-                  </span>
-                )}
-                {record.cost.inputTokens != null && (
-                  <span>
-                    {'输入 Tokens: '}
-                    {record.cost.inputTokens}
-                  </span>
-                )}
-                {record.cost.outputTokens != null && (
-                  <span>
-                    {'输出 Tokens: '}
-                    {record.cost.outputTokens}
-                  </span>
-                )}
-                {record.cost.resolution && (
-                  <span>
-                    {'分辨率: '}
-                    {record.cost.resolution}
-                  </span>
-                )}
-                {record.cost.duration != null && (
-                  <span>
-                    {'时长: '}
-                    {record.cost.duration}
-                    s
-                  </span>
-                )}
-              </div>
-              {record.cost.totalPriceCents != null && (
-                <p className="font-medium text-foreground">
-                  总计: ¥
-                  {formatCents(record.cost.totalPriceCents, 4)}
-                  {record.cost.estimated && ' (预估)'}
-                </p>
-              )}
-            </div>
-          )}
-
-          {/* 参考素材 */}
-          {mediaUrlParams.length > 0 && (
-            <div className="mt-2">
-              <p className="mb-1 text-[10px] font-medium text-muted-foreground">参考素材</p>
-              <div className="flex gap-1.5 flex-wrap">
-                {mediaUrlParams.map(([key, url]) => {
-                  const u = url as string
-                  if (isImageUrl(u)) {
-                    return (
-                      <img
-                        key={key}
-                        src={u}
-                        alt={key}
-                        className="size-16 cursor-pointer rounded border object-cover hover:opacity-80 transition-opacity"
-                        onClick={() => setPreviewUrl(u)}
-                      />
-                    )
-                  }
-                  if (isVideoUrl(u)) {
-                    return (
-                      <video key={key} src={u} className="w-full max-w-xs rounded-lg border" controls />
-                    )
-                  }
-                  return (
-                    <Badge key={key} variant="outline" className="text-[10px]">
-                      {key}
-                      :
-                      {u.slice(0, 30)}
-                    </Badge>
-                  )
-                })}
-              </div>
-            </div>
-          )}
-
-          {/* 输出预览 */}
-          {record.outputResult && (
-            <div className="mt-2">
-              {isImageOutput(record.outputResult) && (
-                <div className="flex gap-2 flex-wrap">
-                  {(record.outputResult.savedUrls.length > 0 ? record.outputResult.savedUrls : record.outputResult.urls || []).map(url => (
-                    <img
-                      key={url}
-                      src={url}
-                      alt="生成图片"
-                      className="size-28 cursor-pointer rounded-lg border object-cover hover:opacity-80 transition-opacity"
-                      onClick={() => setPreviewUrl(url)}
-                    />
-                  ))}
-                </div>
-              )}
-              {isTextOutput(record.outputResult) && (
-                <pre className="max-h-60 overflow-auto whitespace-pre-wrap rounded-lg bg-muted p-2 text-xs">
-                  {record.outputResult.text}
-                </pre>
-              )}
-              {isVideoOutput(record.outputResult) && (
-                <div className="flex gap-2">
-                  {(record.outputResult.savedUrls.length > 0 ? record.outputResult.savedUrls : record.outputResult.video_url ? [record.outputResult.video_url] : record.outputResult.originalUrl ? [record.outputResult.originalUrl] : []).map(url => (
-                    <video
-                      key={url}
-                      src={url}
-                      className="w-full max-w-xs rounded-lg border aspect-video object-cover"
-                      controls
-                      loop
-                    />
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* 错误信息 */}
-          {record.status === 'failed' && record.errorMessage && (
-            <p className="mt-2 text-xs text-destructive">{record.errorMessage}</p>
-          )}
-
-          {/* 操作按钮 */}
-          <div className="mt-2 flex gap-2">
-            {record.status === 'succeeded'
-              && record.outputResult
-              && (isImageOutput(record.outputResult) || isVideoOutput(record.outputResult))
-              && (isImageOutput(record.outputResult) ? record.outputResult.savedUrls : record.outputResult.savedUrls).map((url, i, arr) => (
-                <Button key={url} variant="outline" size="sm" asChild>
-                  <a href={url} download>
-                    <Download className="size-3" />
-                    {arr.length > 1 ? `下载 ${i + 1}` : '下载'}
-                  </a>
-                </Button>
-              ))}
-            {record.status === 'failed' && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => handleRegenerate(record)}
-              >
-                <RotateCcw className="size-3" />
-                重新生成
-              </Button>
-            )}
-            <Button
-              variant="ghost"
-              size="sm"
-              className="ml-auto text-muted-foreground hover:text-destructive"
-              onClick={() => handleDelete(record.id)}
-            >
-              <Trash2 className="size-3" />
-              删除
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
-    )
-  }
-
   // 分组模式下的项目分组渲染
   function renderGroupedRecords() {
     if (!groupedRecords)
@@ -773,7 +432,20 @@ export default function Workspace() {
                 </span>
               </div>
               <div className="space-y-2">
-                {groupRecords.map(record => renderRecordCard(record))}
+                {groupRecords.map(record => (
+                  <RecordCard
+                    key={record.id}
+                    record={record}
+                    models={models}
+                    expanded={expandedPrompts.has(record.id)}
+                    copied={copiedId === record.id}
+                    onToggleExpand={togglePrompt}
+                    onCopyPrompt={copyPrompt}
+                    onRegenerate={handleRegenerate}
+                    onDelete={handleDelete}
+                    onPreview={setPreviewUrl}
+                  />
+                ))}
               </div>
             </div>
           )
@@ -787,7 +459,20 @@ export default function Workspace() {
               </div>
             )}
             <div className="space-y-2">
-              {standalone.map(record => renderRecordCard(record))}
+              {standalone.map(record => (
+                <RecordCard
+                  key={record.id}
+                  record={record}
+                  models={models}
+                  expanded={expandedPrompts.has(record.id)}
+                  copied={copiedId === record.id}
+                  onToggleExpand={togglePrompt}
+                  onCopyPrompt={copyPrompt}
+                  onRegenerate={handleRegenerate}
+                  onDelete={handleDelete}
+                  onPreview={setPreviewUrl}
+                />
+              ))}
             </div>
           </>
         )}
@@ -955,28 +640,27 @@ export default function Workspace() {
               {groupedRecords && renderGroupedRecords()}
 
               {/* 默认平铺模式 */}
-              {!groupedRecords && records.map(record => renderRecordCard(record))}
+              {!groupedRecords && records.map(record => (
+                <RecordCard
+                  key={record.id}
+                  record={record}
+                  models={models}
+                  expanded={expandedPrompts.has(record.id)}
+                  copied={copiedId === record.id}
+                  onToggleExpand={togglePrompt}
+                  onCopyPrompt={copyPrompt}
+                  onRegenerate={handleRegenerate}
+                  onDelete={handleDelete}
+                  onPreview={setPreviewUrl}
+                />
+              ))}
             </div>
           </ScrollArea>
         </div>
       </div>
 
       {/* 图片预览弹窗 */}
-      {previewUrl && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80" onClick={() => setPreviewUrl(null)}>
-          <div className="relative max-h-[90vh] max-w-[90vw]">
-            <img src={previewUrl} alt="Preview" className="max-h-[90vh] max-w-[90vw] rounded-lg object-contain" />
-            <a
-              href={previewUrl}
-              download
-              className="absolute right-2 top-2 rounded-lg bg-black/50 p-2 text-white hover:bg-black/70"
-              onClick={e => e.stopPropagation()}
-            >
-              <Download className="size-4" />
-            </a>
-          </div>
-        </div>
-      )}
+      <MediaPreviewDialog url={previewUrl} onClose={() => setPreviewUrl(null)} />
 
       <ConfirmDialog
         open={deleteConfirm.open}

@@ -1,13 +1,14 @@
 import type { CharacterDTO } from '@excuse/shared'
 import type { NodeProps } from '@xyflow/react'
 import { Handle, Position } from '@xyflow/react'
+import { RunningBadge, runningBorder, RunningOverlay } from '../RunningOverlay'
 
 export default function CharacterNode({ data }: NodeProps) {
   const { character, isRunning } = data as { character: CharacterDTO, isRunning?: boolean }
   const profile = character.profile
 
   return (
-    <div className={`rounded-lg border-2 bg-violet-50 shadow-md w-[340px] relative ${isRunning ? 'border-yellow-400 ring-2 ring-yellow-200' : 'border-violet-400'}`}>
+    <div className={`rounded-lg border-2 bg-violet-50 shadow-md w-[340px] relative ${runningBorder(isRunning, 'border-violet-400')}`}>
       <Handle type="target" position={Position.Top} className="!bg-violet-400" />
       <div className="bg-violet-400 text-white px-3 py-2 font-semibold text-sm flex items-center justify-between rounded-t-md">
         <span>
@@ -17,16 +18,10 @@ export default function CharacterNode({ data }: NodeProps) {
         <div className="flex items-center gap-1">
           {character.locked && <span className="text-[10px] bg-white/20 rounded px-1">锁定</span>}
           {character.role && <span className="text-[10px] bg-white/20 rounded px-1">{character.role}</span>}
-          {isRunning && <span className="text-[10px] bg-yellow-100 text-yellow-700 rounded-full px-1.5 animate-pulse">生成中</span>}
+          {isRunning && <RunningBadge />}
         </div>
       </div>
-      {isRunning && (
-        <div className="absolute inset-0 bg-white/30 flex items-center justify-center rounded-lg pointer-events-none">
-          <div className="bg-yellow-100 text-yellow-700 text-xs font-medium px-3 py-1.5 rounded-full shadow animate-pulse">
-            正在生成...
-          </div>
-        </div>
-      )}
+      {isRunning && <RunningOverlay />}
       <div className="p-3 space-y-2 text-sm">
         {/* 参考图 */}
         {character.referenceImageUrl && (

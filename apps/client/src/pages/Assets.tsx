@@ -1,6 +1,5 @@
 import type { GenerationRecord } from '@/api/client'
-import { isImageOutput, isTextOutput, isVideoOutput } from '@excuse/shared'
-import currency from 'currency.js'
+import { isTextOutput } from '@excuse/shared'
 import {
   Download,
   FileText,
@@ -16,6 +15,7 @@ import { fetchRecords } from '@/api/client'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
+import { formatCents, getAssetUrls } from '@/lib/generation-utils'
 
 type FilterType = 'all' | 'image' | 'video' | 'text'
 
@@ -197,7 +197,7 @@ export default function Assets() {
               {previewRecord.cost?.totalPriceCents != null && (
                 <p className="text-xs text-muted-foreground">
                   费用: ¥
-                  {currency(previewRecord.cost.totalPriceCents, { fromCents: true, precision: 4 }).format()}
+                  {formatCents(previewRecord.cost.totalPriceCents, 4)}
                 </p>
               )}
             </div>
@@ -216,21 +216,4 @@ export default function Assets() {
       )}
     </div>
   )
-}
-
-function getAssetUrls(record: GenerationRecord): string[] {
-  const output = record.outputResult
-  if (!output)
-    return []
-  if (isImageOutput(output) && output.savedUrls.length > 0)
-    return output.savedUrls
-  if (isVideoOutput(output) && output.savedUrls.length > 0)
-    return output.savedUrls
-  // Image output may have raw `urls` before download-and-save completed
-  if (isImageOutput(output) && output.urls?.length)
-    return output.urls
-  // Video output may have video_url/originalUrl before download-and-save completed
-  if (isVideoOutput(output))
-    return output.video_url ? [output.video_url] : output.originalUrl ? [output.originalUrl] : []
-  return []
 }

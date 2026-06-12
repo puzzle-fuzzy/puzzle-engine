@@ -1,6 +1,7 @@
 import type { ProjectDTO, ShotDTO } from '@excuse/shared'
 import type { NodeProps } from '@xyflow/react'
 import { Handle, Position } from '@xyflow/react'
+import { runningBorder, RunningOverlay } from '../RunningOverlay'
 
 const SHOT_STATUS_COLORS: Record<string, string> = {
   draft: 'bg-gray-200 text-gray-700',
@@ -34,7 +35,7 @@ export default function ShotNode({ data }: NodeProps) {
     : null
 
   return (
-    <div className={`rounded-lg border-2 bg-cyan-50 shadow-md w-[340px] relative ${isRunning ? 'border-yellow-400 ring-2 ring-yellow-200' : 'border-cyan-400'}`}>
+    <div className={`rounded-lg border-2 bg-cyan-50 shadow-md w-[340px] relative ${runningBorder(isRunning, 'border-cyan-400')}`}>
       <Handle type="target" position={Position.Top} className="!bg-cyan-400" />
       <div className="bg-cyan-400 text-white px-3 py-2 font-semibold text-sm flex items-center justify-between rounded-t-md">
         <span>
@@ -53,13 +54,7 @@ export default function ShotNode({ data }: NodeProps) {
               </span>
             )}
       </div>
-      {isRunning && (
-        <div className="absolute inset-0 bg-white/30 flex items-center justify-center rounded-lg pointer-events-none">
-          <div className="bg-yellow-100 text-yellow-700 text-xs font-medium px-3 py-1.5 rounded-full shadow animate-pulse">
-            正在生成...
-          </div>
-        </div>
-      )}
+      {isRunning && <RunningOverlay />}
       <div className="p-3 space-y-2 text-sm">
         {/* 基本信息 */}
         <div className="text-xs space-y-1">

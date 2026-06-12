@@ -1,3 +1,5 @@
+import { isImageOutput, isVideoOutput } from '@excuse/shared'
+import { parseOutputResult } from '@excuse/shared'
 import currency from 'currency.js'
 import {
   AlertCircle,
@@ -83,4 +85,20 @@ export function isVideoUrl(url: string) {
 /** 将整数分格式化为人民币字符串 */
 export function formatCents(cents: number, precision = 2): string {
   return currency(cents, { fromCents: true, precision }).format()
+}
+
+/** 从 outputResult 提取可展示的媒体 URL 列表（自动规范化，带 fallback） */
+export function getAssetUrls(raw: unknown): string[] {
+  const output = parseOutputResult(raw)
+  if (!output)
+    return []
+  if (isImageOutput(output) && output.savedUrls.length > 0)
+    return output.savedUrls
+  if (isVideoOutput(output) && output.savedUrls.length > 0)
+    return output.savedUrls
+  if (isImageOutput(output) && output.urls?.length)
+    return output.urls
+  if (isVideoOutput(output))
+    return output.video_url ? [output.video_url] : output.originalUrl ? [output.originalUrl] : []
+  return []
 }
