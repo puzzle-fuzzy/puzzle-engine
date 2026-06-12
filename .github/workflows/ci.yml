@@ -1,0 +1,69 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+jobs:
+  typecheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - run: bun install --frozen-lockfile
+      - run: bun run typecheck
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - run: bun install --frozen-lockfile
+      - run: bun run lint
+
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: excuse
+          POSTGRES_PASSWORD: excuse_ci
+          POSTGRES_DB: excuse_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgres://excuse:excuse_ci@localhost:5432/excuse_test
+      DASHSCOPE_API_KEY: test-key
+      JWT_SECRET: test-jwt-secret-for-ci
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - run: bun install --frozen-lockfile
+      - name: Run DB migrations
+        run: cd packages/db && bun run db:push
+      - name: Run server tests
+        run: bun test apps/server/test
+      - name: Run worker tests
+        run: bun test apps/worker/test
+      - name: Run provider tests
+        run: bun test packages/provider/test
+      - name: Run billing tests
+        run: bun test packages/billing/test
+      - name: Run shared tests
+        run: bun test packages/shared/test
+
+  client-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - run: bun install --frozen-lockfile
+      - run: bun run test:client
