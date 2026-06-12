@@ -1,5 +1,5 @@
 import type { InferInsertModel, InferSelectModel } from 'drizzle-orm'
-import type { accounts, canvasCharacters, canvasContinuityReports, canvasLocations, canvasPipelinePhaseEnum, canvasPipelineRuns, canvasPipelineRunStatusEnum, canvasProjects, canvasProjectStatusEnum, canvasShots, canvasShotStatusEnum, creditAccounts, creditTransactions, generationCategoryEnum, generationRecords, generationStatusEnum, notifications, uploadedFiles, usageEvents } from './schema'
+import type { accounts, canvasCharacters, canvasContinuityReports, canvasLocations, canvasPipelinePhaseEnum, canvasPipelineRuns, canvasPipelineRunStatusEnum, canvasProjects, canvasProjectStatusEnum, canvasShots, canvasShotStatusEnum, creditAccounts, creditTransactions, generationCategoryEnum, generationRecords, generationStatusEnum, notifications, uploadedFiles, usageEvents, workflowSteps, workflows } from './schema'
 
 // ===== Drizzle 行类型（从 schema 自动推导） =====
 
@@ -80,6 +80,18 @@ export type NotificationRow = InferSelectModel<typeof notifications>
 
 /** notifications 表 — 插入参数类型 */
 export type NotificationInsert = InferInsertModel<typeof notifications>
+
+/** workflows 表 — 查询结果行类型 */
+export type WorkflowRow = InferSelectModel<typeof workflows>
+
+/** workflows 表 — 插入参数类型 */
+export type WorkflowInsert = InferInsertModel<typeof workflows>
+
+/** workflow_steps 表 — 查询结果行类型 */
+export type WorkflowStepRow = InferSelectModel<typeof workflowSteps>
+
+/** workflow_steps 表 — 插入参数类型 */
+export type WorkflowStepInsert = InferInsertModel<typeof workflowSteps>
 
 // ===== 枚举类型（从 pgEnum 定义推断） =====
 
