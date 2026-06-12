@@ -115,7 +115,9 @@ mock.module('@excuse/provider', () => ({
     generate = async () => ({ success: true, output: { text: 'mock' } })
   },
   AssetStorage: class { downloadAndMap = async (urls: string[]) => urls },
-  getModelById: () => ({ id: 'mock', category: 'text', pricing: { inputPriceCents: 100, unit: 'token' } }),
+  getModelById: () => ({ id: 'mock', category: 'text', pricing: { inputPriceCents: 100, unit: 'token' }, parameters: [] }),
+  mergeWithDefaults: (_modelConfig: unknown, params: Record<string, unknown>) => params,
+  validateModelParameters: () => ({ valid: true, errors: [] }),
 }))
 
 mock.module('@excuse/billing', () => ({

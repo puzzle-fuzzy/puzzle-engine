@@ -74,6 +74,8 @@ mock.module('@excuse/provider', () => ({
   },
   DashScopeClient: class {},
   getModelById: () => undefined,
+  mergeWithDefaults: (_modelConfig: unknown, params: Record<string, unknown>) => params,
+  validateModelParameters: () => ({ valid: true, errors: [] }),
 }))
 
 // mock.module 提升到 import 之前

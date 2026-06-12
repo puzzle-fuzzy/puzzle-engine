@@ -102,6 +102,7 @@ mock.module('@excuse/provider', () => ({
     }
     return models[id]
   },
+  mergeWithDefaults: (_modelConfig: unknown, params: Record<string, unknown>) => params,
   validateModelParameters: mockValidateModelParameters,
   AssetStorage: class {
     downloadAndMap = mock(() => Promise.resolve(['https://saved.url/img.png']))

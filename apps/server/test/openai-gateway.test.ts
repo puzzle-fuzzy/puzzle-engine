@@ -73,6 +73,7 @@ mock.module('@excuse/provider', () => ({
     }
     return models[id] ?? null
   },
+  mergeWithDefaults: (_modelConfig: unknown, params: Record<string, unknown>) => params,
   getModelsByCategory: (cat: string) => {
     const all = [
       { id: 'qwen-max', name: '千问 Max', category: 'text' },

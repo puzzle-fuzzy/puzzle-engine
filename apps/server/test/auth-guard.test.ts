@@ -96,6 +96,7 @@ mock.module('@excuse/provider', () => ({
     name: 'Test Model',
     parameters: [{ name: 'prompt', type: 'text', required: true }], // 最小参数声明，让 validateModelParameters 通过
   })),
+  mergeWithDefaults: mock((_modelConfig: unknown, params: Record<string, unknown>) => params),
   validateModelParameters: mock(() => ({ valid: true, errors: [] })),
 }))
 

@@ -33,6 +33,7 @@ mock.module('@excuse/provider', () => ({
   DashScopeClient: class {},
   AssetStorage: class {},
   getModelById: () => null,
+  mergeWithDefaults: (_modelConfig: unknown, params: Record<string, unknown>) => params,
   validateModelParameters: () => ({ valid: true, errors: [] }),
   getModelsByCategory: () => [],
   MODELS: {},
