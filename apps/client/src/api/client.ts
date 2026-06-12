@@ -1,4 +1,4 @@
-import type { AcceptedResponse, AuthResponse, BillingStatistics, CharacterDTO, GenerateResponse, GenerationRecord, LocationDTO, ModelConfig, MutationOkResponse, ProjectDTO, ShotDTO, UploadResponse } from '@excuse/shared'
+import type { AcceptedResponse, AuthResponse, BillingStatisticsResponse, CharacterDTO, GenerateResponse, GenerationRecord, LocationDTO, ModelConfig, MutationOkResponse, ProjectDTO, ShotDTO, UploadResponse } from '@excuse/shared'
 import type { App } from '../../../server/src/index'
 import { treaty } from '@elysia/eden'
 import { sseClient } from './sse'
@@ -210,11 +210,8 @@ export async function deleteUploadedFile(id: string): Promise<MutationOkResponse
   )
 }
 
-export async function fetchBillingStatistics(): Promise<{
-  success: boolean
-  statistics: BillingStatistics
-}> {
-  return unwrapEden<{ success: boolean, statistics: BillingStatistics }>(
+export async function fetchBillingStatistics(): Promise<BillingStatisticsResponse> {
+  return unwrapEden<BillingStatisticsResponse>(
     await api.api.billing.statistics.get(),
   )
 }

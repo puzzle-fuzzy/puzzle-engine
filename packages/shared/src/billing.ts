@@ -1,3 +1,6 @@
+import type { CreditTransactionRow, Serialize } from '@excuse/db'
+import type { EntityResponse, ListResponse } from './api-response'
+
 // ===== 计费相关类型定义 =====
 
 export interface BillingStatistics {
@@ -35,3 +38,17 @@ export interface DailyTrendItem {
   totalCents: number
   total: number // 向后兼容
 }
+
+export interface BillingBalance {
+  availableCents: number
+  frozenCents: number
+  totalCents: number
+}
+
+export type CreditTransactionDTO = Serialize<CreditTransactionRow>
+
+export type BillingStatisticsResponse = EntityResponse<BillingStatistics>
+
+export type BillingBalanceResponse = EntityResponse<BillingBalance>
+
+export type BillingTransactionsResponse = ListResponse<CreditTransactionDTO>

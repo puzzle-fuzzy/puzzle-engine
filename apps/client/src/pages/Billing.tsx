@@ -26,7 +26,7 @@ export default function Billing() {
   useEffect(() => {
     fetchBillingStatistics().then((data) => {
       if (data.success)
-        setStats(data.statistics)
+        setStats(data.data)
     }).catch(() => { toast.error('加载费用统计失败') })
   }, [])
 

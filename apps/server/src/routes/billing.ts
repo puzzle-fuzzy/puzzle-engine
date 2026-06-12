@@ -1,8 +1,27 @@
+import type { BillingBalanceResponse, BillingStatisticsResponse, BillingTransactionsResponse, CreditTransactionDTO } from '@excuse/shared'
 import type { ServerConfig } from '../config'
 import { aggregateStatistics } from '@excuse/billing'
 import { getCostRecords, getOrCreateCreditAccount, listCreditTransactions } from '@excuse/db'
 import { Elysia, t } from 'elysia'
 import { createRequireAuthPlugin } from '../plugins/auth'
+
+function serializeCreditTransaction(row: {
+  id: string
+  accountId: string
+  type: CreditTransactionDTO['type']
+  amountCents: number
+  balanceAfterCents: number
+  frozenAfterCents: number
+  generationRecordId: string | null
+  description: string | null
+  metadata: Record<string, unknown> | null
+  createdAt: Date
+}): CreditTransactionDTO {
+  return {
+    ...row,
+    createdAt: row.createdAt.toISOString(),
+  }
+}
 
 /**
  * 费用统计与信用账户路由
@@ -20,7 +39,10 @@ export function createBillingRoutes(config: ServerConfig) {
       from.setDate(from.getDate() - 29)
       const costRecords = await getCostRecords(userId, { from, to: now })
       const stats = aggregateStatistics(costRecords)
-      return { success: true, statistics: stats }
+      return {
+        success: true,
+        data: stats,
+      } satisfies BillingStatisticsResponse
     }, {
       detail: {
         summary: '获取费用统计',
@@ -33,12 +55,12 @@ export function createBillingRoutes(config: ServerConfig) {
       const account = await getOrCreateCreditAccount(userId)
       return {
         success: true,
-        balance: {
+        data: {
           availableCents: account.availableCents,
           frozenCents: account.frozenCents,
           totalCents: account.availableCents + account.frozenCents,
         },
-      }
+      } satisfies BillingBalanceResponse
     }, {
       detail: {
         summary: '获取信用账户余额',
@@ -51,7 +73,11 @@ export function createBillingRoutes(config: ServerConfig) {
       const limit = query.limit ?? 50
       const offset = query.offset ?? 0
       const transactions = await listCreditTransactions({ accountId: userId, limit, offset })
-      return { success: true, transactions, total: transactions.length }
+      return {
+        success: true,
+        items: transactions.map(serializeCreditTransaction),
+        total: transactions.length,
+      } satisfies BillingTransactionsResponse
     }, {
       query: t.Object({
         limit: t.Optional(t.Numeric()),
