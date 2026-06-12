@@ -10,24 +10,62 @@ import {
 } from '@/api/client'
 import { useGenerationStore } from './generation'
 
+export type WorkspaceParameterValue = string | number | boolean | string[] | null
+
+export interface WorkspaceParameters {
+  [name: string]: WorkspaceParameterValue
+}
+
+function toWorkspaceParameterValue(value: unknown): WorkspaceParameterValue | undefined {
+  if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean' || value === null)
+    return value
+  if (Array.isArray(value) && value.every(item => typeof item === 'string'))
+    return value
+  return undefined
+}
+
 /** 参数默认值：prompt 空字符串，数字 0，布尔 false，其余空字符串 */
-export function getParamDefault(param: ModelParameter): unknown {
+export function getParamDefault(param: ModelParameter): WorkspaceParameterValue {
   if (param.name === 'prompt')
     return ''
-  return param.defaultValue ?? (param.type === 'number' ? 0 : param.type === 'boolean' ? false : '')
+  return toWorkspaceParameterValue(param.defaultValue) ?? (param.type === 'number' ? 0 : param.type === 'boolean' ? false : '')
 }
 
 /** 根据模型参数列表构建初始参数 */
-export function buildInitialParameters(model: ModelConfig): Record<string, unknown> {
-  const defaults: Record<string, unknown> = {}
+export function buildInitialParameters(model: ModelConfig): WorkspaceParameters {
+  const defaults: WorkspaceParameters = {}
   for (const p of model.parameters)
     defaults[p.name] = getParamDefault(p)
   return defaults
 }
 
 /** 检查必填参数是否都已填写 */
-export function checkCanGenerate(model: ModelConfig, parameters: Record<string, unknown>): boolean {
+export function checkCanGenerate(model: ModelConfig, parameters: WorkspaceParameters): boolean {
   return model.parameters.filter(p => p.required && !parameters[p.name]).length === 0
+}
+
+function normalizeParameterValue(param: ModelParameter, value: WorkspaceParameterValue): WorkspaceParameterValue {
+  if (param.type === 'number')
+    return typeof value === 'number' && Number.isFinite(value) ? value : getParamDefault(param)
+  if (param.type === 'boolean')
+    return typeof value === 'boolean' ? value : getParamDefault(param)
+  if (Array.isArray(value))
+    return value
+  if (value == null)
+    return ''
+  return String(value)
+}
+
+function normalizeParameters(model: ModelConfig | undefined, params: WorkspaceParameters): WorkspaceParameters {
+  if (!model)
+    return params
+
+  const next: WorkspaceParameters = {}
+  for (const param of model.parameters) {
+    const value = params[param.name] ?? getParamDefault(param)
+    next[param.name] = normalizeParameterValue(param, value)
+  }
+  return next
 }
 
 export interface ReferenceFile {
@@ -46,7 +84,7 @@ export interface WorkspaceState {
   models: ModelConfig[]
   selectedCategory: Category
   selectedModelId: string
-  parameters: Record<string, unknown>
+  parameters: WorkspaceParameters
   referenceFiles: ReferenceFile[]
   mediaUploadState: Record<string, MediaUploadEntry>
   loading: boolean
@@ -62,8 +100,8 @@ export interface WorkspaceState {
   loadModels: () => Promise<void>
   setCategory: (category: Category) => void
   setModelId: (id: string) => void
-  setParameter: (name: string, value: unknown) => void
-  setParameters: (params: Record<string, unknown>) => void
+  setParameter: (name: string, value: WorkspaceParameterValue) => void
+  setParameters: (params: WorkspaceParameters) => void
   addReferenceFile: (file: ReferenceFile) => void
   removeReferenceFile: (id: string) => void
   setUploadingRefs: (v: boolean) => void
@@ -138,11 +176,17 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   },
 
   setParameter: (name, value) => {
-    set(state => ({ parameters: { ...state.parameters, [name]: value } }))
+    set((state) => {
+      const model = get().selectedModel()
+      const param = model?.parameters.find(p => p.name === name)
+      if (!param)
+        return { parameters: state.parameters }
+      return { parameters: { ...state.parameters, [name]: normalizeParameterValue(param, value) } }
+    })
   },
 
   setParameters: (params) => {
-    set({ parameters: params })
+    set({ parameters: normalizeParameters(get().selectedModel(), params) })
   },
 
   addReferenceFile: (file) => {
