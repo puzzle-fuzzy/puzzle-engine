@@ -8,9 +8,15 @@ import { audit } from '../services/audit'
 import { forbidden, notFound, validationError } from '../utils/errors'
 
 const ALLOWED_MIME_TYPES = [
-  'image/png', 'image/jpeg', 'image/webp', 'image/gif',
+  'image/png',
+  'image/jpeg',
+  'image/webp',
+  'image/gif',
   // 字幕功能支持的视频格式
-  'video/mp4', 'video/webm', 'video/quicktime', 'video/x-msvideo',
+  'video/mp4',
+  'video/webm',
+  'video/quicktime',
+  'video/x-msvideo',
 ]
 const MAX_FILE_SIZE = 200 * 1024 * 1024 // 200MB（视频文件更大）
 
