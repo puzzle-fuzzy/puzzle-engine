@@ -17,7 +17,7 @@ export interface ModelPricing {
   inputPriceCents: number // 文本：每百万 Token 价格（分）；图片：每张价格（分）；视频：720P 每秒价格（分）
   outputPriceCents?: number // 文本输出：每百万 Token 价格（分）
   inputPrice1080Cents?: number // 视频：1080P 每秒价格（分）
-  unit?: 'token' | 'image' | 'video'
+  unit?: 'token' | 'image' | 'video' | 'audio'
   note?: string
 }
 

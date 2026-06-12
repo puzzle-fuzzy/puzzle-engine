@@ -110,9 +110,11 @@ export async function createAndStartProject(
     }
 
     // 5. 创建 generation_record 关联
+    // Paraformer-v2 定价: 0.00008元/秒 = 0.008分/秒，按音频时长计费
+    const audioDurationSec = (videoDurationMs || audioDurationMs) / 1000
     const estimatedCost = calculateCost(
-      { id: 'paraformer-v2', category: 'subtitle', pricing: { inputPriceCents: 66, unit: 'video' } } as any,
-      { duration: (videoDurationMs || audioDurationMs) / 1000 },
+      { id: 'paraformer-v2', category: 'subtitle', pricing: { inputPriceCents: 0.008, unit: 'audio' } },
+      { duration: audioDurationSec },
     )
 
     const asrRecord = await createGenerationRecord({

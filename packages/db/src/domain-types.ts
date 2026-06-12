@@ -189,7 +189,7 @@ export interface GenerationInputParams {
  *  token variant 使用 inputUnitPrice / outputUnitPrice / inputCost / outputCost
  */
 export interface CostDetail {
-  unit: 'token' | 'image' | 'video'
+  unit: 'token' | 'image' | 'video' | 'audio'
   totalPriceCents: number // 整数分，金额的权威值
   totalPrice: number // 元（浮点），向后兼容
   quantity?: number

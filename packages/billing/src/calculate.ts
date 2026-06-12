@@ -1,4 +1,4 @@
-import type { BillingParams, CostDetail, ModelConfig } from '@excuse/shared'
+import type { BillingParams, CostDetail, ModelPricing } from '@excuse/shared'
 import currency from 'currency.js'
 
 /**
@@ -13,12 +13,13 @@ const PRECISION = { precision: 4 }
  * - 文本：按输入/输出 token 数 × 每百万 token 价格（分）
  * - 图片：按张数 × 单价（分）
  * - 视频：按时长（秒）× 单价（分，按分辨率）
+ * - 音频：按时长（秒）× 单价（分，用于 ASR 转录等）
  *
  * 所有金额运算使用 currency.js（precision=4），避免浮点误差。
  * totalPriceCents 为权威值，totalPrice 为分→元的兼容展示值。
  */
 export function calculateCost(
-  model: ModelConfig,
+  model: { pricing: ModelPricing } | { id: string, category: string, pricing: ModelPricing },
   params: BillingParams,
   usage?: {
     inputTokens?: number
@@ -97,6 +98,23 @@ export function calculateCost(
       }
     }
 
+    // 音频计费: 按时长（秒）× 单价，用于 ASR 转录等按秒计费的场景
+    // 例：paraformer-v2 = 0.008 分/秒（0.00008 元/秒）
+    case 'audio': {
+      const duration = params.duration || 0
+      const unitPriceCents = pricing.inputPriceCents
+      const totalCents = currency(unitPriceCents, PRECISION).multiply(duration).value
+
+      return {
+        unit: 'audio',
+        duration,
+        unitPriceCents,
+        unitPrice: centsToYuan(unitPriceCents),
+        totalPriceCents: totalCents,
+        totalPrice: centsToYuan(totalCents),
+      }
+    }
+
     default:
       throw new Error(`未知的计费单位: ${pricing.unit}`)
   }
@@ -108,7 +126,7 @@ export function calculateCost(
  * 与 calculateCost 相同计算逻辑，但标记 estimated=true，
  * usage 参数传 undefined 表示未获得实际用量，使用默认值估算。
  */
-export function estimateCost(model: ModelConfig, params: BillingParams): CostDetail {
+export function estimateCost(model: { pricing: ModelPricing } | { id: string, category: string, pricing: ModelPricing }, params: BillingParams): CostDetail {
   const result = calculateCost(model, params, undefined)
   result.estimated = true
   return result
