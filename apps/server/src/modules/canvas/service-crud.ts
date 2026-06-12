@@ -1,6 +1,7 @@
 import type { ShotCamera, ShotEnvironment } from '@excuse/db'
 import type { CanvasModelPreferences } from '@excuse/shared'
 import {
+  batchGetProjectDetails,
   deleteCanvasCharacterById,
   deleteCanvasLocationById,
   deleteCanvasShotById,
@@ -8,7 +9,6 @@ import {
   getCanvasLocationById,
   getCanvasProjectById,
   getCanvasProjectDetail,
-  listCanvasProjectsByAccount,
   listCanvasShotsByProject,
   softDeleteCanvasProject,
   updateCanvasCharacter,
@@ -60,11 +60,8 @@ export async function getProjectDetail(projectId: string) {
 }
 
 export async function listProjects(accountId: string) {
-  const projects = await listCanvasProjectsByAccount(accountId)
-  return Promise.all(projects.map(async (p) => {
-    const detail = await getCanvasProjectDetail(p.id)
-    return mapProjectDetail(p, detail?.characters ?? [], detail?.locations ?? [], detail?.shots ?? [], detail?.latestContinuity ?? null)
-  }))
+  const details = await batchGetProjectDetails(accountId)
+  return details.map(d => mapProjectDetail(d.project, d.characters, d.locations, d.shots, d.latestContinuity))
 }
 
 export async function softDeleteProject(projectId: string) {

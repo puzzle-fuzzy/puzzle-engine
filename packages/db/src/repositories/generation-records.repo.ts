@@ -1,6 +1,6 @@
 import type { CostDetail, OutputResult } from '../domain-types'
 import type { GenerationRecordInsert, ListGenerationRecordsFilter } from '../types'
-import { and, desc, eq, inArray, isNotNull, sql } from 'drizzle-orm'
+import { and, desc, eq, gte, inArray, isNotNull, lte, sql } from 'drizzle-orm'
 import { getDb } from '../db'
 import { generationRecords } from '../schema'
 
@@ -197,12 +197,15 @@ export async function findGenerationByDedupeKeyForAccount(dedupeKey: string, acc
 
 /**
  * 获取含费用信息的记录，用于账单统计
- * @param accountId 可选：按用户过滤
+ * @param accountId 按用户过滤
+ * @param dateRange 可选日期范围，限定查询区间避免全表扫描
  */
-export async function getCostRecords(accountId?: string) {
-  const conditions = [isNotNull(generationRecords.cost)]
-  if (accountId)
-    conditions.push(eq(generationRecords.accountId, accountId))
+export async function getCostRecords(accountId: string, dateRange?: { from: Date, to: Date }) {
+  const conditions = [isNotNull(generationRecords.cost), eq(generationRecords.accountId, accountId)]
+  if (dateRange) {
+    conditions.push(gte(generationRecords.createdAt, dateRange.from))
+    conditions.push(lte(generationRecords.createdAt, dateRange.to))
+  }
 
   const records = await getDb()
     .select({

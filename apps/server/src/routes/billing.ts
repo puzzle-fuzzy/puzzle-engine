@@ -17,7 +17,10 @@ export function createBillingRoutes(config: ServerConfig) {
     .get('/statistics', async ({ userId, set }) => {
       if (!userId)
         return unauthorized(set, '未登录')
-      const costRecords = await getCostRecords(userId)
+      const now = new Date()
+      const from = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+      from.setDate(from.getDate() - 29)
+      const costRecords = await getCostRecords(userId, { from, to: now })
       const stats = aggregateStatistics(costRecords)
       return { success: true, statistics: stats }
     }, {

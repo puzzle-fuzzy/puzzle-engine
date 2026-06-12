@@ -1,5 +1,5 @@
-import type { CanvasProjectInsert } from '../types'
-import { and, desc, eq } from 'drizzle-orm'
+import type { CanvasContinuityRow, CanvasProjectInsert } from '../types'
+import { and, desc, eq, inArray } from 'drizzle-orm'
 import { getDb } from '../db'
 import { canvasCharacters } from '../schema/canvas-characters'
 import { canvasContinuityReports } from '../schema/canvas-continuity'
@@ -79,4 +79,55 @@ export async function getCanvasProjectDetail(id: string) {
   ])
 
   return { project, characters, locations, shots, latestContinuity: continuityReports[0] ?? null }
+}
+
+/** 批量获取项目详情 — 5 条 SQL 替代 1+N*5 条 */
+export async function batchGetProjectDetails(accountId: string) {
+  const projects = await listCanvasProjectsByAccount(accountId)
+  if (projects.length === 0)
+    return []
+
+  const projectIds = projects.map(p => p.id)
+
+  const [characters, locations, shots, continuityReports] = await Promise.all([
+    getDb().select().from(canvasCharacters).where(inArray(canvasCharacters.projectId, projectIds)),
+    getDb().select().from(canvasLocations).where(inArray(canvasLocations.projectId, projectIds)),
+    getDb().select().from(canvasShots).where(inArray(canvasShots.projectId, projectIds)).orderBy(canvasShots.shotIndex),
+    getDb().select().from(canvasContinuityReports).where(inArray(canvasContinuityReports.projectId, projectIds)).orderBy(desc(canvasContinuityReports.createdAt)),
+  ])
+
+  const charMap = new Map<string, typeof characters>()
+  for (const c of characters) {
+    const arr = charMap.get(c.projectId) ?? []
+    arr.push(c)
+    charMap.set(c.projectId, arr)
+  }
+
+  const locMap = new Map<string, typeof locations>()
+  for (const l of locations) {
+    const arr = locMap.get(l.projectId) ?? []
+    arr.push(l)
+    locMap.set(l.projectId, arr)
+  }
+
+  const shotMap = new Map<string, typeof shots>()
+  for (const s of shots) {
+    const arr = shotMap.get(s.projectId) ?? []
+    arr.push(s)
+    shotMap.set(s.projectId, arr)
+  }
+
+  const contMap = new Map<string, CanvasContinuityRow>()
+  for (const c of continuityReports) {
+    if (!contMap.has(c.projectId))
+      contMap.set(c.projectId, c)
+  }
+
+  return projects.map(p => ({
+    project: p,
+    characters: charMap.get(p.id) ?? [],
+    locations: locMap.get(p.id) ?? [],
+    shots: shotMap.get(p.id) ?? [],
+    latestContinuity: contMap.get(p.id) ?? null,
+  }))
 }

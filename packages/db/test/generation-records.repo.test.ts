@@ -235,7 +235,7 @@ describe('generation-records repository', () => {
       const r3 = await createGenerationRecord(validInsert())
       await markGenerationSucceeded(r3.id, { url: 'c.png' })
 
-      const costs = await getCostRecords()
+      const costs = await getCostRecords(accountId)
       const testCosts = costs.filter(c => c.model === 'qwen-vl')
       expect(testCosts.length).toBeGreaterThanOrEqual(2)
       testCosts.forEach((c) => {
@@ -246,7 +246,7 @@ describe('generation-records repository', () => {
     it('should return empty when no cost records exist', async () => {
       await createGenerationRecord(validInsert({ status: 'pending' }))
 
-      const costs = await getCostRecords()
+      const costs = await getCostRecords(accountId)
       const testCosts = costs.filter(c => c.model === 'qwen-vl')
       expect(testCosts).toHaveLength(0)
     })
