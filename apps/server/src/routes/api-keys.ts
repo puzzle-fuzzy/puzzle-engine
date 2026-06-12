@@ -3,6 +3,7 @@ import { createApiKey, listApiKeysByAccount, revokeApiKey } from '@excuse/db'
 import { Elysia, t } from 'elysia'
 import { createRequireAuthPlugin } from '../plugins/auth'
 import { audit } from '../services/audit'
+import { hashApiKey } from '../utils/crypto'
 import { notFound } from '../utils/errors'
 
 /**
@@ -18,7 +19,7 @@ export function createApiKeyRoutes(config: ServerConfig) {
     .post('/', async ({ userId, body }) => {
       const rawKey = `exc_${crypto.randomUUID().replace(/-/g, '')}`
       const prefix = rawKey.slice(0, 8)
-      const keyHash = await hashKey(rawKey)
+      const keyHash = await hashApiKey(rawKey)
 
       const key = await createApiKey({
         accountId: userId,
@@ -71,10 +72,4 @@ export function createApiKeyRoutes(config: ServerConfig) {
         security: [{ bearerAuth: [] }],
       },
     })
-}
-
-async function hashKey(key: string): Promise<string> {
-  const data = new TextEncoder().encode(key)
-  const hashBuffer = await crypto.subtle.digest('SHA-256', data)
-  return Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2, '0')).join('')
 }

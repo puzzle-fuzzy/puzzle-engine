@@ -1,0 +1,290 @@
+import type { GenerationRecordRow } from '@excuse/db'
+import { treaty } from '@elysia/eden'
+import { beforeEach, describe, expect, it, mock } from 'bun:test'
+import { Elysia } from 'elysia'
+import { makeAccount, makeRecord, makeTestConfig, signTestToken } from './helpers/test-factory'
+
+/**
+ * OpenAI 兼容网关测试 — /v1/chat/completions + /v1/models
+ *
+ * 覆盖:
+ *   - 正常请求 → OpenAI 格式响应
+ *   - 模型别名解析
+ *   - 未知模型 → 404 error
+ *   - 非文本模型 → 400 error
+ *   - stream=true → 400 error
+ *   - 缺少 user message → 400 error
+ *   - 未认证 → 401
+ *   - GET /v1/models → 文本模型列表
+ */
+
+// ─── Mock 数据 ────────────────────────────────────────
+
+const mockRecord = makeRecord({
+  id: 'rec-gw-001',
+  taskId: 'gen_gw_001',
+  model: 'qwen-max',
+  status: 'succeeded',
+  createdAt: new Date('2024-01-01'),
+  updatedAt: new Date('2024-01-01'),
+})
+
+// ─── Mock 依赖 ──────────────────────────────────────────
+
+const mockCreateGenerationRecord = mock<(values: Record<string, unknown>) => Promise<GenerationRecordRow>>(() => Promise.resolve(mockRecord))
+const mockMarkGenerationFailed = mock<(id: string, error: string) => Promise<void>>(() => Promise.resolve(undefined))
+const mockMarkGenerationSucceeded = mock<(id: string, output: Record<string, unknown>, cost?: Record<string, unknown>) => Promise<void>>(() => Promise.resolve(undefined))
+const mockFindApiKeyByHash = mock<(hash: string) => Promise<{ id: string, accountId: string } | null>>(() => Promise.resolve(null))
+const mockTouchApiKeyLastUsed = mock<(id: string) => Promise<void>>(() => Promise.resolve(undefined))
+const mockGetAccountById = mock<() => Promise<unknown>>(() => Promise.resolve(makeAccount()))
+
+const mockChatCompletion = mock<(model: string, params: Record<string, unknown>) => Promise<Record<string, unknown>>>(() => Promise.resolve({
+  success: true,
+  output: { text: 'Hello! How can I help you?' },
+  usage: { inputTokens: 10, outputTokens: 20 },
+}))
+
+mock.module('@excuse/db', () => ({
+  createGenerationRecord: mockCreateGenerationRecord,
+  markGenerationFailed: mockMarkGenerationFailed,
+  markGenerationSucceeded: mockMarkGenerationSucceeded,
+  findApiKeyByHash: mockFindApiKeyByHash,
+  touchApiKeyLastUsed: mockTouchApiKeyLastUsed,
+  getAccountById: mockGetAccountById,
+  pgClient: { listen: async () => {} },
+}))
+
+mock.module('@excuse/provider', () => ({
+  DashScopeClient: class {
+    chatCompletion = mockChatCompletion
+  },
+  AssetStorage: class {},
+  getModelById: (id: string) => {
+    const models: Record<string, Record<string, unknown>> = {
+      'qwen-max': { id: 'qwen-max', category: 'text', pricing: { inputPriceCents: 240, outputPriceCents: 960, unit: 'token' }, parameters: [
+        { name: 'prompt', type: 'text', required: true },
+        { name: 'temperature', type: 'number', defaultValue: 0.7 },
+        { name: 'max_tokens', type: 'number', defaultValue: 1500 },
+      ] },
+      'qwen-plus': { id: 'qwen-plus', category: 'text', pricing: { inputPriceCents: 80, outputPriceCents: 200, unit: 'token' }, parameters: [
+        { name: 'prompt', type: 'text', required: true },
+      ] },
+      'qwen-image-2.0-pro': { id: 'qwen-image-2.0-pro', category: 'image', pricing: { inputPriceCents: 25, unit: 'image' }, parameters: [] },
+    }
+    return models[id] ?? null
+  },
+  getModelsByCategory: (cat: string) => {
+    const all = [
+      { id: 'qwen-max', name: '千问 Max', category: 'text' },
+      { id: 'qwen-plus', name: '千问 Plus', category: 'text' },
+    ]
+    return cat === 'text' ? all : []
+  },
+  validateModelParameters: () => ({ valid: true, errors: [] }),
+  MODELS: {},
+}))
+
+mock.module('@excuse/billing', () => ({
+  calculateCost: () => ({ unit: 'token', totalPriceCents: 0, totalPrice: 0 }),
+  aggregateStatistics: () => ({ totalCents: 0, totalYuan: 0, byCategory: [], byModel: [], dailyTrend: [] }),
+}))
+
+// eslint-disable-next-line import/first
+import { createOpenAIGatewayRoutes } from '../src/routes/openai-gateway'
+
+// ─── 测试配置 ──────────────────────────────────────────
+
+const testConfig = makeTestConfig({ jwtSecret: 'openai-gw-test-secret' })
+
+async function getAuthHeaders(accountId = 'acc-001') {
+  const token = await signTestToken(testConfig.jwtSecret, accountId)
+  return { Authorization: `Bearer ${token}` }
+}
+
+function createGatewayApp() {
+  return new Elysia()
+    .use(createOpenAIGatewayRoutes(testConfig))
+}
+
+/** 从 Eden error 提取 OpenAI error message */
+function getErrorMessage(error: unknown): string {
+  const edenErr = error as { value?: { error?: { message?: string } } | { error?: string }, status?: number } | null
+  if (!edenErr?.value)
+    return ''
+  const val = edenErr.value
+  // OpenAI error format: { error: { message, type, code } }
+  if (typeof val === 'object' && 'error' in val) {
+    const errObj = (val as Record<string, unknown>).error
+    if (typeof errObj === 'object' && errObj !== null && 'message' in errObj)
+      return (errObj as { message: string }).message
+    if (typeof errObj === 'string')
+      return errObj
+  }
+  return String(val)
+}
+
+// ─── 测试 ──────────────────────────────────────────
+
+describe('OpenAI 网关', () => {
+  beforeEach(() => {
+    mockCreateGenerationRecord.mockImplementation(() => Promise.resolve(mockRecord))
+    mockMarkGenerationFailed.mockImplementation(() => Promise.resolve(undefined))
+    mockMarkGenerationSucceeded.mockImplementation(() => Promise.resolve(undefined))
+    mockChatCompletion.mockImplementation(() => Promise.resolve({
+      success: true,
+      output: { text: 'Hello! How can I help you?' },
+      usage: { inputTokens: 10, outputTokens: 20 },
+    }))
+  })
+
+  describe('POST /v1/chat/completions', () => {
+    it('正常请求返回 OpenAI 格式响应', async () => {
+      const headers = await getAuthHeaders()
+      const app = createGatewayApp()
+      const client = treaty(app)
+
+      const { data, error } = await client.v1.chat.completions.post({
+        model: 'qwen-max',
+        messages: [{ role: 'user', content: '你好' }],
+      }, { headers })
+
+      expect(error).toBeNull()
+      const result = data as { id: string, object: string, model: string, choices: Array<{ message: { role: string, content: string }, finish_reason: string }>, usage: { prompt_tokens: number, completion_tokens: number, total_tokens: number } }
+      expect(result.object).toBe('chat.completion')
+      expect(result.model).toBe('qwen-max')
+      expect(result.choices).toHaveLength(1)
+      expect(result.choices[0].message.role).toBe('assistant')
+      expect(result.choices[0].message.content).toBe('Hello! How can I help you?')
+      expect(result.choices[0].finish_reason).toBe('stop')
+      expect(result.usage.prompt_tokens).toBe(10)
+      expect(result.usage.completion_tokens).toBe(20)
+      expect(result.usage.total_tokens).toBe(30)
+      expect(mockCreateGenerationRecord).toHaveBeenCalled()
+      expect(mockMarkGenerationSucceeded).toHaveBeenCalled()
+    })
+
+    it('模型别名解析 — gpt-4 → qwen-max', async () => {
+      const headers = await getAuthHeaders()
+      const app = createGatewayApp()
+      const client = treaty(app)
+
+      const { data, error } = await client.v1.chat.completions.post({
+        model: 'gpt-4',
+        messages: [{ role: 'user', content: 'Hello' }],
+      }, { headers })
+
+      expect(error).toBeNull()
+      const response = data as { id: string, object: string, model: string }
+      expect(response.model).toBe('gpt-4')
+      expect(mockCreateGenerationRecord).toHaveBeenCalled()
+    })
+
+    it('未知模型 → 404', async () => {
+      const headers = await getAuthHeaders()
+      const app = createGatewayApp()
+      const client = treaty(app)
+
+      const { error } = await client.v1.chat.completions.post({
+        model: 'unknown-model',
+        messages: [{ role: 'user', content: 'Hello' }],
+      }, { headers })
+
+      expect(error).toBeTruthy()
+      const errBody = getErrorMessage(error)
+      expect(errBody).toContain('not found')
+    })
+
+    it('非文本模型 → 400', async () => {
+      const headers = await getAuthHeaders()
+      const app = createGatewayApp()
+      const client = treaty(app)
+
+      const { error } = await client.v1.chat.completions.post({
+        model: 'qwen-image-2.0-pro',
+        messages: [{ role: 'user', content: 'Hello' }],
+      }, { headers })
+
+      expect(error).toBeTruthy()
+      const errBody = getErrorMessage(error)
+      expect(errBody).toContain('not a text model')
+    })
+
+    it('stream=true → 400', async () => {
+      const headers = await getAuthHeaders()
+      const app = createGatewayApp()
+      const client = treaty(app)
+
+      const { error } = await client.v1.chat.completions.post({
+        model: 'qwen-max',
+        messages: [{ role: 'user', content: 'Hello' }],
+        stream: true,
+      }, { headers })
+
+      expect(error).toBeTruthy()
+      const errBody = getErrorMessage(error)
+      expect(errBody).toContain('Streaming')
+    })
+
+    it('缺少 user message → 400', async () => {
+      const headers = await getAuthHeaders()
+      const app = createGatewayApp()
+      const client = treaty(app)
+
+      const { error } = await client.v1.chat.completions.post({
+        model: 'qwen-max',
+        messages: [{ role: 'system', content: 'You are helpful' }],
+      }, { headers })
+
+      expect(error).toBeTruthy()
+      const errBody = getErrorMessage(error)
+      expect(errBody).toContain('No user message')
+    })
+
+    it('未认证 → 401', async () => {
+      const app = createGatewayApp()
+      const client = treaty(app)
+
+      const { error } = await client.v1.chat.completions.post({
+        model: 'qwen-max',
+        messages: [{ role: 'user', content: 'Hello' }],
+      })
+
+      expect(error).toBeTruthy()
+    })
+
+    it('provider 失败 → 500 error', async () => {
+      mockChatCompletion.mockImplementation(() => Promise.resolve({
+        success: false,
+        error: 'DashScope error',
+      }))
+
+      const headers = await getAuthHeaders()
+      const app = createGatewayApp()
+      const client = treaty(app)
+
+      const { error } = await client.v1.chat.completions.post({
+        model: 'qwen-max',
+        messages: [{ role: 'user', content: 'Hello' }],
+      }, { headers })
+
+      expect(error).toBeTruthy()
+      expect(mockMarkGenerationFailed).toHaveBeenCalled()
+    })
+  })
+
+  describe('GET /v1/models', () => {
+    it('返回文本模型列表', async () => {
+      const headers = await getAuthHeaders()
+      const app = createGatewayApp()
+      const client = treaty(app)
+
+      const { data, error } = await client.v1.models.get({ headers })
+
+      expect(error).toBeNull()
+      expect(data).toBeTruthy()
+      expect(data!.object).toBe('list')
+      expect(data!.data.length).toBeGreaterThanOrEqual(1)
+      expect(data!.data[0].object).toBe('model')
+    })
+  })
+})

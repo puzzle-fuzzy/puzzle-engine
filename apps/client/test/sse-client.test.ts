@@ -90,7 +90,7 @@ describe('sSEClient', () => {
     vi.clearAllMocks()
     capturedInit = null
     resolveStream = null
-    rejectStream = null
+    _rejectStream = null
     sseClient.disconnect()
     // 等待 disconnect 后的状态清理完成
     // （fetchEventSource 的 finally 会设置 isConnecting=false）

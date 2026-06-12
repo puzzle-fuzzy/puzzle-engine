@@ -3,22 +3,29 @@ import type { ServerConfig } from '../config'
 import { bearer } from '@elysia/bearer'
 import { jwt } from '@elysia/jwt'
 import { cookie } from '@elysiajs/cookie'
+import { findApiKeyByHash, touchApiKeyLastUsed } from '@excuse/db'
 import { status, t } from 'elysia'
+import { hashApiKey } from '../utils/crypto'
 
 /** httpOnly cookie 名称 */
 export const AUTH_COOKIE_NAME = 'auth_token'
 
+/** API Key 前缀标识 */
+const API_KEY_PREFIX = 'exc_'
+
 /**
- * 认证插件 — JWT 解析（httpOnly cookie 优先，Authorization header 回退）
+ * 认证插件 — JWT + API Key 双通道
  *
  * 认证优先级:
- *   1. httpOnly cookie（浏览器自动发送，XSS 无法窃取）
- *   2. Authorization: Bearer header（API 调用、SSE 连接）
+ *   1. httpOnly cookie → JWT（浏览器请求）
+ *   2. Bearer `exc_` 前缀 → API Key hash 查找
+ *   3. Bearer 其他 → JWT verify（编程式 API 调用、SSE）
  *
  * 注册后向上下文注入：
  *   - jwt: JWT 签发/验证实例
  *   - bearer: Bearer token 原文
- *   - userId: 从 JWT sub 提取的用户 ID（未认证时为 null）
+ *   - userId: 用户 ID（未认证时为 null）
+ *   - authMethod: 'jwt' | 'api_key' | null
  */
 export function createAuthPlugin(config: ServerConfig) {
   return (app: Elysia) =>
@@ -36,25 +43,44 @@ export function createAuthPlugin(config: ServerConfig) {
         }),
       )
       .derive(async ({ jwt, bearer, cookie: cookies }) => {
-        // 优先从 httpOnly cookie 读取
+        // 1. httpOnly cookie → JWT
         const cookieToken = cookies[AUTH_COOKIE_NAME]?.value as string | undefined
-        const token = cookieToken || bearer
+        if (cookieToken && typeof cookieToken === 'string') {
+          const payload = await jwt.verify(cookieToken)
+          if (payload) {
+            return { userId: payload.sub, authMethod: 'jwt' as const }
+          }
+        }
 
-        if (!token || typeof token !== 'string') {
-          return { userId: null }
+        if (!bearer || typeof bearer !== 'string') {
+          return { userId: null, authMethod: null }
         }
-        const payload = await jwt.verify(token)
+
+        // 2. Bearer exc_ → API Key 认证
+        if (bearer.startsWith(API_KEY_PREFIX)) {
+          const keyHash = await hashApiKey(bearer)
+          const apiKey = await findApiKeyByHash(keyHash)
+          if (apiKey) {
+            // 非阻塞更新 lastUsedAt
+            touchApiKeyLastUsed(apiKey.id).catch(() => {})
+            return { userId: apiKey.accountId, authMethod: 'api_key' as const }
+          }
+          return { userId: null, authMethod: null }
+        }
+
+        // 3. Bearer 其他 → JWT
+        const payload = await jwt.verify(bearer)
         if (!payload) {
-          return { userId: null }
+          return { userId: null, authMethod: null }
         }
-        return { userId: payload.sub }
+        return { userId: payload.sub, authMethod: 'jwt' as const }
       })
 }
 
 /**
  * 认证守卫插件 — resolve 模式自动拦截未登录请求
  *
- * 内部使用 createAuthPlugin 解析 JWT 获得 userId，
+ * 内部使用 createAuthPlugin 解析认证信息，
  * 然后通过 resolve 验证 userId 是否存在：
  *   - 未登录 → 直接返回 401 响应
  *   - 已登录 → 将 userId 类型从 string | null 收窄为 string
