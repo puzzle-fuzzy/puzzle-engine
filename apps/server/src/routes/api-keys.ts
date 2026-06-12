@@ -1,3 +1,4 @@
+import type { ApiKeyCreateResponse, ApiKeyDTO, ApiKeyListResponse, MutationOkResponse } from '@excuse/shared'
 import type { ServerConfig } from '../config'
 import { createApiKey, listApiKeysByAccount, revokeApiKey } from '@excuse/db'
 import { Elysia, t } from 'elysia'
@@ -5,6 +6,22 @@ import { createRequireAuthPlugin } from '../plugins/auth'
 import { audit } from '../services/audit'
 import { hashApiKey } from '../utils/crypto'
 import { notFound } from '../utils/errors'
+
+function serializeApiKey(row: {
+  id: string
+  prefix: string
+  name: string | null
+  lastUsedAt: Date | null
+  createdAt: Date
+  revokedAt: Date | null
+}): ApiKeyDTO {
+  return {
+    ...row,
+    lastUsedAt: row.lastUsedAt?.toISOString() ?? null,
+    createdAt: row.createdAt.toISOString(),
+    revokedAt: row.revokedAt?.toISOString() ?? null,
+  }
+}
 
 /**
  * API 密钥管理路由
@@ -30,7 +47,10 @@ export function createApiKeyRoutes(config: ServerConfig) {
 
       audit('api_key_create', { accountId: userId, targetId: key.id })
 
-      return { success: true, key: rawKey, prefix }
+      return {
+        success: true,
+        data: { key: rawKey, prefix },
+      } satisfies ApiKeyCreateResponse
     }, {
       body: t.Object({
         name: t.Optional(t.String({ maxLength: 100 })),
@@ -44,7 +64,12 @@ export function createApiKeyRoutes(config: ServerConfig) {
     })
     .get('/', async ({ userId }) => {
       const keys = await listApiKeysByAccount(userId)
-      return { success: true, keys }
+      const serialized = keys.map(serializeApiKey)
+      return {
+        success: true,
+        items: serialized,
+        total: serialized.length,
+      } satisfies ApiKeyListResponse
     }, {
       detail: {
         summary: '列出 API 密钥',
@@ -60,7 +85,7 @@ export function createApiKeyRoutes(config: ServerConfig) {
 
       audit('api_key_revoke', { accountId: userId, targetId: params.id })
 
-      return { success: true }
+      return { success: true } satisfies MutationOkResponse
     }, {
       params: t.Object({
         id: t.String(),
