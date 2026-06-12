@@ -8,8 +8,8 @@ export default function AnalysisNode({ data }: NodeProps) {
   const analysis = project.analysis
 
   return (
-    <div className={`rounded-lg border-2 bg-emerald-50 shadow-md w-[340px] relative ${runningBorder(isRunning, 'border-emerald-400')}`}>
-      <Handle type="target" position={Position.Top} className="!bg-emerald-400" />
+    <div className={`rounded-lg border-2 bg-emerald-50 shadow-md w-85 relative ${runningBorder(isRunning, 'border-emerald-400')}`}>
+      <Handle type="target" position={Position.Top} className="bg-emerald-400!" />
       <div className="bg-emerald-400 text-white px-3 py-2 font-semibold text-sm flex items-center justify-between rounded-t-md">
         <span>故事分析</span>
         {isRunning && <RunningBadge />}
@@ -56,7 +56,7 @@ export default function AnalysisNode({ data }: NodeProps) {
                 {/* Dev mode: raw JSON */}
                 <details className="mt-2">
                   <summary className="text-xs text-muted-foreground cursor-pointer">原始 JSON</summary>
-                  <pre className="text-[10px] bg-white rounded p-2 mt-1 max-h-[200px] overflow-auto whitespace-pre-wrap">
+                  <pre className="text-[10px] bg-white rounded p-2 mt-1 max-h-50 overflow-auto whitespace-pre-wrap">
                     {JSON.stringify(analysis, null, 2)}
                   </pre>
                 </details>
@@ -66,7 +66,7 @@ export default function AnalysisNode({ data }: NodeProps) {
               <p className="text-xs text-muted-foreground">等待分析...</p>
             )}
       </div>
-      <Handle type="source" position={Position.Bottom} className="!bg-emerald-400" />
+      <Handle type="source" position={Position.Bottom} className="bg-emerald-400!" />
     </div>
   )
 }

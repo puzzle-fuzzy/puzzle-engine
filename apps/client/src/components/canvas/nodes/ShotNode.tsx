@@ -35,8 +35,8 @@ export default function ShotNode({ data }: NodeProps) {
     : null
 
   return (
-    <div className={`rounded-lg border-2 bg-cyan-50 shadow-md w-[340px] relative ${runningBorder(isRunning, 'border-cyan-400')}`}>
-      <Handle type="target" position={Position.Top} className="!bg-cyan-400" />
+    <div className={`rounded-lg border-2 bg-cyan-50 shadow-md w-85 relative ${runningBorder(isRunning, 'border-cyan-400')}`}>
+      <Handle type="target" position={Position.Top} className="bg-cyan-400!" />
       <div className="bg-cyan-400 text-white px-3 py-2 font-semibold text-sm flex items-center justify-between rounded-t-md">
         <span>
           镜头
@@ -80,7 +80,7 @@ export default function ShotNode({ data }: NodeProps) {
         {/* 叙事 */}
         <div>
           <span className="text-muted-foreground text-xs">叙事：</span>
-          <p className="text-xs bg-white rounded p-2 mt-0.5 max-h-[60px] overflow-auto">
+          <p className="text-xs bg-white rounded p-2 mt-0.5 max-h-15 overflow-auto">
             {shot.narrative}
           </p>
         </div>
@@ -101,7 +101,7 @@ export default function ShotNode({ data }: NodeProps) {
         {shot.timeline && shot.timeline.length > 0 && (
           <div>
             <span className="text-muted-foreground text-xs">逐秒时间线：</span>
-            <div className="text-xs bg-white rounded p-2 mt-0.5 max-h-[100px] overflow-auto space-y-0.5">
+            <div className="text-xs bg-white rounded p-2 mt-0.5 max-h-25 overflow-auto space-y-0.5">
               {shot.timeline.map(entry => (
                 <div key={entry.time}>
                   <span className="font-mono text-muted-foreground">
@@ -172,7 +172,7 @@ export default function ShotNode({ data }: NodeProps) {
         {shot.videoPrompt && (
           <div>
             <span className="text-muted-foreground text-xs">Video Prompt：</span>
-            <p className="text-xs bg-white rounded p-2 mt-0.5 max-h-[80px] overflow-auto">
+            <p className="text-xs bg-white rounded p-2 mt-0.5 max-h-20 overflow-auto">
               {shot.videoPrompt}
             </p>
           </div>
@@ -182,7 +182,7 @@ export default function ShotNode({ data }: NodeProps) {
         {shot.negativePrompt && (
           <div>
             <span className="text-muted-foreground text-xs">Negative Prompt：</span>
-            <p className="text-xs bg-white rounded p-2 mt-0.5 max-h-[60px] overflow-auto text-red-600">
+            <p className="text-xs bg-white rounded p-2 mt-0.5 max-h-15 overflow-auto text-red-600">
               {shot.negativePrompt}
             </p>
           </div>
@@ -210,12 +210,12 @@ export default function ShotNode({ data }: NodeProps) {
         {/* Dev mode: raw JSON */}
         <details className="mt-2">
           <summary className="text-xs text-muted-foreground cursor-pointer">原始 JSON 数据</summary>
-          <pre className="text-[10px] bg-white rounded p-2 mt-1 max-h-[300px] overflow-auto whitespace-pre-wrap">
+          <pre className="text-[10px] bg-white rounded p-2 mt-1 max-h-75 overflow-auto whitespace-pre-wrap">
             {JSON.stringify(shot, null, 2)}
           </pre>
         </details>
       </div>
-      <Handle type="source" position={Position.Bottom} className="!bg-cyan-400" />
+      <Handle type="source" position={Position.Bottom} className="bg-cyan-400!" />
     </div>
   )
 }

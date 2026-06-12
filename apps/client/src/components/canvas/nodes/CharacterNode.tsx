@@ -8,8 +8,8 @@ export default function CharacterNode({ data }: NodeProps) {
   const profile = character.profile
 
   return (
-    <div className={`rounded-lg border-2 bg-violet-50 shadow-md w-[340px] relative ${runningBorder(isRunning, 'border-violet-400')}`}>
-      <Handle type="target" position={Position.Top} className="!bg-violet-400" />
+    <div className={`rounded-lg border-2 bg-violet-50 shadow-md w-85 relative ${runningBorder(isRunning, 'border-violet-400')}`}>
+      <Handle type="target" position={Position.Top} className="bg-violet-400!" />
       <div className="bg-violet-400 text-white px-3 py-2 font-semibold text-sm flex items-center justify-between rounded-t-md">
         <span>
           角色：
@@ -29,7 +29,7 @@ export default function CharacterNode({ data }: NodeProps) {
             <img
               src={character.referenceImageUrl}
               alt={character.name}
-              className="w-full h-[140px] object-cover rounded border"
+              className="w-full h-35 object-cover rounded border"
             />
           </div>
         )}
@@ -39,7 +39,7 @@ export default function CharacterNode({ data }: NodeProps) {
             <img
               src={character.turnaroundSheetUrl}
               alt="转面图"
-              className="w-full h-[100px] object-cover rounded border mt-0.5"
+              className="w-full h-25 object-cover rounded border mt-0.5"
             />
           </div>
         )}
@@ -94,7 +94,7 @@ export default function CharacterNode({ data }: NodeProps) {
         {character.identityPrompt && (
           <div>
             <span className="text-muted-foreground text-xs">Identity Prompt：</span>
-            <p className="text-xs bg-white rounded p-2 mt-0.5 max-h-[80px] overflow-auto">
+            <p className="text-xs bg-white rounded p-2 mt-0.5 max-h-20 overflow-auto">
               {character.identityPrompt}
             </p>
           </div>
@@ -104,7 +104,7 @@ export default function CharacterNode({ data }: NodeProps) {
         {character.negativePrompt && (
           <div>
             <span className="text-muted-foreground text-xs">Negative Prompt：</span>
-            <p className="text-xs bg-white rounded p-2 mt-0.5 max-h-[60px] overflow-auto text-red-600">
+            <p className="text-xs bg-white rounded p-2 mt-0.5 max-h-15 overflow-auto text-red-600">
               {character.negativePrompt}
             </p>
           </div>
@@ -113,12 +113,12 @@ export default function CharacterNode({ data }: NodeProps) {
         {/* Dev mode: full profileJson */}
         <details className="mt-2">
           <summary className="text-xs text-muted-foreground cursor-pointer">完整 Profile JSON</summary>
-          <pre className="text-[10px] bg-white rounded p-2 mt-1 max-h-[300px] overflow-auto whitespace-pre-wrap">
+          <pre className="text-[10px] bg-white rounded p-2 mt-1 max-h-75 overflow-auto whitespace-pre-wrap">
             {JSON.stringify(profile, null, 2)}
           </pre>
         </details>
       </div>
-      <Handle type="source" position={Position.Bottom} className="!bg-violet-400" />
+      <Handle type="source" position={Position.Bottom} className="bg-violet-400!" />
     </div>
   )
 }
