@@ -1,4 +1,4 @@
-import type { UploadedFileDTO } from '@excuse/shared'
+import type { MutationOkResponse, UploadedFileDTO, UploadResponse } from '@excuse/shared'
 import type { ServerConfig } from '../config'
 import { createUploadedFile, deleteUploadedFileById, getUploadedFileById } from '@excuse/db'
 import { AssetStorage } from '@excuse/provider'
@@ -72,8 +72,8 @@ export function createUploadRoutes(config: ServerConfig) {
 
       return {
         success: true,
-        file: serializeUploadedFile(record),
-      }
+        data: serializeUploadedFile(record),
+      } satisfies UploadResponse
     }, {
       body: t.Object({
         file: t.File({ description: '上传的文件' }),
@@ -102,7 +102,7 @@ export function createUploadRoutes(config: ServerConfig) {
 
       audit('file_delete', { accountId: userId, targetId: id })
 
-      return { success: true }
+      return { success: true } satisfies MutationOkResponse
     }, {
       params: t.Object({
         id: t.String(),

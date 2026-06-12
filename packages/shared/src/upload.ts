@@ -1,4 +1,5 @@
 import type { Serialize, UploadedFileRow } from '@excuse/db'
+import type { EntityResponse } from './api-response'
 
 /**
  * API 返回的上传文件类型（Date → string）
@@ -9,11 +10,5 @@ import type { Serialize, UploadedFileRow } from '@excuse/db'
  */
 export type UploadedFileDTO = Serialize<UploadedFileRow>
 
-/**
- * 上传文件接口响应格式
- */
-export interface UploadResponse {
-  success: boolean
-  file?: UploadedFileDTO
-  error?: string
-}
+/** 上传文件接口响应格式 */
+export type UploadResponse = EntityResponse<UploadedFileDTO>

@@ -273,7 +273,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
       for (const file of Array.from(files)) {
         const result = await uploadFile(file)
         if (result.success)
-          get().addReferenceFile({ id: result.file.id, url: result.file.publicUrl, name: result.file.fileName })
+          get().addReferenceFile({ id: result.data.id, url: result.data.publicUrl, name: result.data.fileName })
       }
     }
     finally {
@@ -294,10 +294,10 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
         const result = await uploadFile(file)
         if (result.success) {
           set(state => ({
-            parameters: { ...state.parameters, [paramName]: result.file.publicUrl },
+            parameters: { ...state.parameters, [paramName]: result.data.publicUrl },
             mediaUploadState: {
               ...state.mediaUploadState,
-              [paramName]: { uploading: false, uploadedUrl: result.file.publicUrl, uploadedName: result.file.fileName },
+              [paramName]: { uploading: false, uploadedUrl: result.data.publicUrl, uploadedName: result.data.fileName },
             },
           }))
         }

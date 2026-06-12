@@ -209,7 +209,7 @@ describe('upload routes', () => {
       }))
 
       const text = await response.text()
-      const data = JSON.parse(text) as { success: boolean, file?: MockUploadedFileResponse, error?: string }
+      const data = JSON.parse(text) as { success: boolean, data?: MockUploadedFileResponse, error?: string }
 
       // 核心断言：认证守卫已通过 — 响应中不包含"请先登录"类错误
       // 注意：Elysia in-process handle() 对 multipart/form-data 解析存在已知限制，

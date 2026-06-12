@@ -53,18 +53,18 @@ export default function NodeDetailPanel({ selectedNode, project, onUpdate }: Nod
     if (!character)
       return ''
     const res = await uploadFile(file)
-    await updateCanvasCharacter(character.id, { referenceImageUrl: res.file.publicUrl })
+    await updateCanvasCharacter(character.id, { referenceImageUrl: res.data.publicUrl })
     onUpdate()
-    return res.file.publicUrl
+    return res.data.publicUrl
   }, [character, onUpdate])
 
   const handleLocationUpload = useCallback(async (file: File) => {
     if (!location)
       return ''
     const res = await uploadFile(file)
-    await updateCanvasLocation(location.id, { referenceImageUrl: res.file.publicUrl })
+    await updateCanvasLocation(location.id, { referenceImageUrl: res.data.publicUrl })
     onUpdate()
-    return res.file.publicUrl
+    return res.data.publicUrl
   }, [location, onUpdate])
 
   // 角色编辑状态
