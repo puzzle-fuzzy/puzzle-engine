@@ -3,17 +3,12 @@ import type { AuthUser } from '@excuse/shared'
 import type { ServerConfig } from '../config'
 import { createAccount, getAccountByEmail, getAccountById, getAccountByUsername } from '@excuse/db'
 import { Elysia, t } from 'elysia'
-import { createAuthPlugin } from '../plugins/auth'
+import { createAuthPlugin, AUTH_COOKIE_NAME } from '../plugins/auth'
 import { audit } from '../services/audit'
 import { conflict, forbidden, notFound, unauthorized } from '../utils/errors'
 
 /**
  * 从账户行中剥离密码哈希并序列化 Date→string，返回 AuthUser DTO
- *
- * 关键：不能直接 spread DB row — createdAt/updatedAt 是 Date 对象，
- * JSON.stringify(Date) 产生字符串但 JSON.parse 后变回字符串，
- * 导致类型不匹配（运行时是 string 但 TypeScript 认为是 Date）。
- * 必须显式 .toISOString() 确保 DTO 类型与 AuthUser 定义一致。
  */
 function sanitizeUser(account: AccountRow): AuthUser {
   const { password: _, createdAt, updatedAt, ...rest } = account
@@ -24,32 +19,37 @@ function sanitizeUser(account: AccountRow): AuthUser {
   }
 }
 
+/** httpOnly cookie 配置 */
+const COOKIE_OPTS = {
+  httpOnly: true,
+  secure: process.env.NODE_ENV === 'production',
+  sameSite: 'lax' as const,
+  path: '/api',
+  maxAge: 7 * 24 * 3600,
+}
+
 /**
- * 认证路由 — 注册 / 登录 / 获取当前用户
+ * 认证路由 — 注册 / 登录 / 登出 / 获取当前用户
  */
 export function createAuthRoutes(config: ServerConfig) {
   return new Elysia({ prefix: '/api/auth' })
     .use(createAuthPlugin(config))
     // 注册
-    .post('/register', async ({ body, jwt, set }) => {
+    .post('/register', async ({ body, jwt, set, cookie: cookies }) => {
       const { username, email, password } = body
 
-      // 检查邮箱是否已注册
       const existingEmail = await getAccountByEmail(email)
       if (existingEmail) {
         return conflict(set, '该邮箱已被注册')
       }
 
-      // 检查用户名是否已存在
       const existingUsername = await getAccountByUsername(username)
       if (existingUsername) {
         return conflict(set, '该用户名已被使用')
       }
 
-      // 使用 Bun 内置 bcrypt 哈希密码
       const hashedPassword = await Bun.password.hash(password, 'bcrypt')
 
-      // 创建账户
       const account = await createAccount({
         username,
         email,
@@ -57,10 +57,11 @@ export function createAuthRoutes(config: ServerConfig) {
         isActive: true,
       })
 
-      // 签发 JWT
       const token = await jwt.sign({ sub: account.id })
 
       audit('register', { accountId: account.id })
+
+      cookies[AUTH_COOKIE_NAME]?.set({ value: token, ...COOKIE_OPTS })
 
       return {
         success: true,
@@ -81,30 +82,28 @@ export function createAuthRoutes(config: ServerConfig) {
     })
 
     // 登录
-    .post('/login', async ({ body, jwt, set, request }) => {
+    .post('/login', async ({ body, jwt, set, request, cookie: cookies }) => {
       const { email, password } = body
 
-      // 查找账户
       const account = await getAccountByEmail(email)
       if (!account) {
         return unauthorized(set, '邮箱或密码错误')
       }
 
-      // 验证密码
       const valid = await Bun.password.verify(password, account.password, 'bcrypt')
       if (!valid) {
         return unauthorized(set, '邮箱或密码错误')
       }
 
-      // 检查账户状态
       if (!account.isActive) {
         return forbidden(set, '账户已被禁用')
       }
 
-      // 签发 JWT
       const token = await jwt.sign({ sub: account.id })
 
       audit('login', { accountId: account.id, ip: request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() })
+
+      cookies[AUTH_COOKIE_NAME]?.set({ value: token, ...COOKIE_OPTS })
 
       return {
         success: true,
@@ -119,6 +118,18 @@ export function createAuthRoutes(config: ServerConfig) {
       detail: {
         summary: '用户登录',
         description: '验证邮箱和密码，返回 JWT token 和用户信息。账户被禁用时返回 403。',
+        tags: ['认证'],
+      },
+    })
+
+    // 登出 — 清除 cookie
+    .post('/logout', async ({ cookie: cookies }) => {
+      cookies[AUTH_COOKIE_NAME]?.remove()
+      return { success: true }
+    }, {
+      detail: {
+        summary: '登出',
+        description: '清除 httpOnly 认证 cookie',
         tags: ['认证'],
       },
     })

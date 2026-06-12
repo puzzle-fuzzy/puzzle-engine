@@ -16,35 +16,31 @@ import { sseClient } from './sse'
 
 // ===== Token 管理 =====
 
-const AUTH_TOKEN_KEY = 'auth_token'
+/**
+ * 认证 token — 仅存内存，用于 SSE Authorization header
+ * 浏览器 API 请求通过 httpOnly cookie 自动认证（无需手动设置 header）
+ */
+let authToken: string | null = null
 
-let authToken: string | null = localStorage.getItem(AUTH_TOKEN_KEY)
-
-/** 设置认证 token（同步到 localStorage，联动 SSE 连接） */
+/** 设置认证 token（内存 + 联动 SSE 连接） */
 export function setAuthToken(token: string | null) {
   authToken = token
   if (token) {
-    localStorage.setItem(AUTH_TOKEN_KEY, token)
     sseClient.connect()
   }
   else {
-    localStorage.removeItem(AUTH_TOKEN_KEY)
     sseClient.disconnect()
   }
 }
 
-/** 获取当前 token */
+/** 获取当前 token（SSE 使用） */
 export function getAuthToken() {
   return authToken
 }
 
 // ===== Eden Treaty 客户端 =====
 
-export const api = treaty<App>(import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:5007', {
-  headers: () => ({
-    ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
-  }),
-})
+export const api = treaty<App>(import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:5007')
 
 // ===== 导出共享类型 =====
 
@@ -106,6 +102,12 @@ export async function loginRequest(email: string, password: string): Promise<Aut
 export async function fetchCurrentUser(): Promise<AuthResponse> {
   return unwrapEden<AuthResponse>(
     await api.api.auth.me.get(),
+  )
+}
+
+export async function logoutRequest(): Promise<{ success: boolean }> {
+  return unwrapEden<{ success: boolean }>(
+    await api.api.auth.logout.post(),
   )
 }
 

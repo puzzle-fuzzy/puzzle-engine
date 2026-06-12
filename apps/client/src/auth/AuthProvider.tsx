@@ -5,8 +5,8 @@ import { useCallback, useEffect, useState } from 'react'
 import { useNavigate } from 'react-router'
 import {
   fetchCurrentUser,
-  getAuthToken,
   loginRequest,
+  logoutRequest,
   registerRequest,
   setAuthToken,
 } from '../api/client'
@@ -21,26 +21,16 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [isLoading, setIsLoading] = useState(true)
   const navigate = useNavigate()
 
-  // 挂载时：从 localStorage 恢复 token 并验证
+  // 挂载时：通过 httpOnly cookie 自动认证（无需 localStorage）
   useEffect(() => {
-    const token = getAuthToken()
-    if (!token) {
-      setIsLoading(false)
-      return
-    }
-
     fetchCurrentUser()
       .then((res) => {
         if (res.success && res.user) {
           setUser(res.user)
         }
-        else {
-          // token 无效，清除
-          setAuthToken(null)
-        }
       })
       .catch(() => {
-        setAuthToken(null)
+        // cookie 无效或过期 — 未登录状态
       })
       .finally(() => {
         setIsLoading(false)
@@ -65,7 +55,13 @@ export function AuthProvider({ children }: AuthProviderProps) {
     setUser(res.user)
   }, [])
 
-  const logout = useCallback(() => {
+  const logout = useCallback(async () => {
+    try {
+      await logoutRequest()
+    }
+    catch {
+      // 服务端清除失败不阻塞本地登出
+    }
     setAuthToken(null)
     setUser(null)
     navigate('/login')

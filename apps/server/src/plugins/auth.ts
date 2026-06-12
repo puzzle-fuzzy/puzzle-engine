@@ -2,25 +2,28 @@ import type { Elysia } from 'elysia'
 import type { ServerConfig } from '../config'
 import { bearer } from '@elysia/bearer'
 import { jwt } from '@elysia/jwt'
+import { cookie } from '@elysiajs/cookie'
 import { status, t } from 'elysia'
 
+/** httpOnly cookie 名称 */
+export const AUTH_COOKIE_NAME = 'auth_token'
+
 /**
- * 认证插件 — JWT + Bearer token 解析
+ * 认证插件 — JWT 解析（httpOnly cookie 优先，Authorization header 回退）
  *
- * 使用 Elysia 回调式插件模式：(app) => app.use(...).derive(...)
- *
- * 认证方式: Authorization: Bearer <token>
- * SSE 连接也使用 Bearer header（通过 @microsoft/fetch-event-source 自定义 headers）。
- * Query token 已移除 — JWT 不再暴露在 URL 中（避免日志泄露风险）。
+ * 认证优先级:
+ *   1. httpOnly cookie（浏览器自动发送，XSS 无法窃取）
+ *   2. Authorization: Bearer header（API 调用、SSE 连接）
  *
  * 注册后向上下文注入：
- *   - jwt: JWT 签发/验证实例（来自 @elysia/jwt）
- *   - bearer: Bearer token 原文（来自 @elysia/bearer）
+ *   - jwt: JWT 签发/验证实例
+ *   - bearer: Bearer token 原文
  *   - userId: 从 JWT sub 提取的用户 ID（未认证时为 null）
  */
 export function createAuthPlugin(config: ServerConfig) {
   return (app: Elysia) =>
     app
+      .use(cookie())
       .use(bearer())
       .use(
         jwt({
@@ -32,11 +35,15 @@ export function createAuthPlugin(config: ServerConfig) {
           exp: config.jwtExpiresIn,
         }),
       )
-      .derive(async ({ jwt, bearer }) => {
-        if (!bearer) {
+      .derive(async ({ jwt, bearer, cookie: cookies }) => {
+        // 优先从 httpOnly cookie 读取
+        const cookieToken = cookies[AUTH_COOKIE_NAME]?.value as string | undefined
+        const token = cookieToken || bearer
+
+        if (!token || typeof token !== 'string') {
           return { userId: null }
         }
-        const payload = await jwt.verify(bearer)
+        const payload = await jwt.verify(token)
         if (!payload) {
           return { userId: null }
         }
