@@ -1,5 +1,5 @@
 import type { InferInsertModel, InferSelectModel } from 'drizzle-orm'
-import type { accounts, canvasCharacters, canvasContinuityReports, canvasLocations, canvasPipelinePhaseEnum, canvasPipelineRuns, canvasPipelineRunStatusEnum, canvasProjects, canvasProjectStatusEnum, canvasShots, canvasShotStatusEnum, generationCategoryEnum, generationRecords, generationStatusEnum, uploadedFiles } from './schema'
+import type { accounts, canvasCharacters, canvasContinuityReports, canvasLocations, canvasPipelinePhaseEnum, canvasPipelineRuns, canvasPipelineRunStatusEnum, canvasProjects, canvasProjectStatusEnum, canvasShots, canvasShotStatusEnum, creditAccounts, creditTransactions, generationCategoryEnum, generationRecords, generationStatusEnum, uploadedFiles, usageEvents } from './schema'
 
 // ===== Drizzle 行类型（从 schema 自动推导） =====
 
@@ -56,6 +56,24 @@ export type CanvasPipelineRunRow = InferSelectModel<typeof canvasPipelineRuns>
 
 /** canvas_pipeline_runs 表 — 插入参数类型 */
 export type CanvasPipelineRunInsert = InferInsertModel<typeof canvasPipelineRuns>
+
+/** credit_accounts 表 — 查询结果行类型 */
+export type CreditAccountRow = InferSelectModel<typeof creditAccounts>
+
+/** credit_accounts 表 — 插入参数类型 */
+export type CreditAccountInsert = InferInsertModel<typeof creditAccounts>
+
+/** credit_transactions 表 — 查询结果行类型 */
+export type CreditTransactionRow = InferSelectModel<typeof creditTransactions>
+
+/** credit_transactions 表 — 插入参数类型 */
+export type CreditTransactionInsert = InferInsertModel<typeof creditTransactions>
+
+/** usage_events 表 — 查询结果行类型 */
+export type UsageEventRow = InferSelectModel<typeof usageEvents>
+
+/** usage_events 表 — 插入参数类型 */
+export type UsageEventInsert = InferInsertModel<typeof usageEvents>
 
 // ===== 枚举类型（从 pgEnum 定义推断） =====
 
