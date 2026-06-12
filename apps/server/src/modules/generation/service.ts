@@ -167,8 +167,8 @@ export async function executeGeneration(
     outputResult = { type: 'image', savedUrls, urls: imageUrls }
   }
 
-  // 计算实际费用（基于 provider 返回的 usage）
-  const actualCost = calculateCost(modelConfig, parameters, result.usage)
+  // 计算实际费用（基于 provider 返回的 usage）— 标记为 billable
+  const actualCost = { ...calculateCost(modelConfig, parameters, result.usage), billable: true, source: 'actual' as const }
 
   await markGenerationSucceeded(recordId, outputResult, actualCost)
   await notifyGenerationStatus({

@@ -121,11 +121,15 @@ export function createTaskProcessor(config: WorkerConfig, deps?: Partial<TaskPro
         // 从 DashScope 返回结果中提取实际视频时长
         const inputDuration = inputParams.duration
         const actualVideoDuration = extractVideoDuration(taskStatus.output) || (typeof inputDuration === 'number' ? inputDuration : 5)
-        const actualCost = modelConfig
+        const calculatedCost = modelConfig
           ? calculateCost(modelConfig, inputParams, {
               videoDuration: actualVideoDuration,
             })
           : record.cost
+        // 标记为 billable + actual（视频异步任务由 worker 完成扣费标记）
+        const actualCost = calculatedCost
+          ? { ...calculatedCost, billable: true, source: 'actual' as const }
+          : null
 
         // 构造类型安全的 VideoOutputResult — 不展开 raw output，只提取必要字段
         const output: VideoOutputResult = {

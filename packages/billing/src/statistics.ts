@@ -4,12 +4,16 @@ import currency from 'currency.js'
 export interface CostRecord {
   model: string
   category: string
+  status: string
   cost: CostDetail | null
   createdAt: string | Date
 }
 
 /**
  * 从生成记录列表中聚合统计计费数据（整数分计费）
+ *
+ * 只汇总 billable 记录（cost.billable !== false），
+ * 非 billable 记录（失败/取消）单独计入 auditFailedCents
  */
 export function aggregateStatistics(records: CostRecord[]): BillingStatistics {
   const now = new Date()
@@ -22,6 +26,7 @@ export function aggregateStatistics(records: CostRecord[]): BillingStatistics {
   let todayCents = 0
   let weekCents = 0
   let monthCents = 0
+  let auditFailedCents = 0
 
   const categoryMap = new Map<string, number>()
   const modelMap = new Map<string, number>()
@@ -29,6 +34,13 @@ export function aggregateStatistics(records: CostRecord[]): BillingStatistics {
 
   for (const record of records) {
     const priceCents = record.cost?.totalPriceCents ?? 0
+    const isBillable = record.cost?.billable !== false
+
+    // 非 billable 的记录单独计入审计项
+    if (!isBillable) {
+      auditFailedCents = currency(auditFailedCents).add(priceCents).value
+      continue
+    }
 
     totalCents = currency(totalCents).add(priceCents).value
 
@@ -94,6 +106,7 @@ export function aggregateStatistics(records: CostRecord[]): BillingStatistics {
     week: centsToYuan(weekCents),
     monthCents,
     month: centsToYuan(monthCents),
+    auditFailedCents,
     byCategory,
     byModel,
     dailyTrend,

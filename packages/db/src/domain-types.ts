@@ -132,6 +132,12 @@ export interface CostDetail {
   resolution?: string
   duration?: number
   estimated?: boolean
+  /** 是否计入账单 — 失败/取消的任务 billable=false */
+  billable?: boolean
+  /** 费用来源: 'actual' = provider 返回实际用量, 'estimated' = 前端预估值 */
+  source?: 'actual' | 'estimated'
+  /** 失败策略: 'charge' = 仍收费, 'waive' = 免除, 'partial' = 部分收费 */
+  failurePolicy?: 'charge' | 'waive' | 'partial'
 }
 
 /** 文本输出 */

@@ -9,6 +9,8 @@ export interface BillingStatistics {
   week: number // 向后兼容
   monthCents: number
   month: number // 向后兼容
+  /** 失败/取消任务的成本汇总（审计用，不计入账单） */
+  auditFailedCents: number
   byCategory: CategoryBreakdown[]
   byModel: ModelBreakdown[]
   dailyTrend: DailyTrendItem[]

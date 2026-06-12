@@ -119,7 +119,7 @@ export function createGenerateRoutes(config: ServerConfig) {
         category,
         status: 'pending',
         inputParams: { ...parameters, referenceFileIds },
-        cost: { ...estimatedCost, estimated: true },
+        cost: { ...estimatedCost, estimated: true, billable: false, source: 'estimated' },
         dedupeKey,
       })
 

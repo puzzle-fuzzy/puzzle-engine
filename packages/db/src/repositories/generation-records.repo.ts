@@ -211,6 +211,7 @@ export async function getCostRecords(accountId: string, dateRange?: { from: Date
     .select({
       model: generationRecords.model,
       category: generationRecords.category,
+      status: generationRecords.status,
       cost: generationRecords.cost,
       createdAt: generationRecords.createdAt,
     })
