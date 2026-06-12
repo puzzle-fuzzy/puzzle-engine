@@ -1,5 +1,5 @@
 import type { AccountRow } from '@excuse/db'
-import type { AuthUser } from '@excuse/shared'
+import type { AuthCurrentUserResponse, AuthResponse, AuthUser, MutationOkResponse } from '@excuse/shared'
 import type { ServerConfig } from '../config'
 import { createAccount, getAccountByEmail, getAccountById, getAccountByUsername } from '@excuse/db'
 import { Elysia, t } from 'elysia'
@@ -65,9 +65,11 @@ export function createAuthRoutes(config: ServerConfig) {
 
       return {
         success: true,
-        token,
-        user: sanitizeUser(account),
-      }
+        data: {
+          token,
+          user: sanitizeUser(account),
+        },
+      } satisfies AuthResponse
     }, {
       body: t.Object({
         username: t.String({ minLength: 3, maxLength: 50 }),
@@ -107,9 +109,11 @@ export function createAuthRoutes(config: ServerConfig) {
 
       return {
         success: true,
-        token,
-        user: sanitizeUser(account),
-      }
+        data: {
+          token,
+          user: sanitizeUser(account),
+        },
+      } satisfies AuthResponse
     }, {
       body: t.Object({
         email: t.String(),
@@ -125,7 +129,7 @@ export function createAuthRoutes(config: ServerConfig) {
     // 登出 — 清除 cookie
     .post('/logout', async ({ cookie: cookies }) => {
       cookies[AUTH_COOKIE_NAME]?.remove()
-      return { success: true }
+      return { success: true } satisfies MutationOkResponse
     }, {
       detail: {
         summary: '登出',
@@ -147,8 +151,8 @@ export function createAuthRoutes(config: ServerConfig) {
 
       return {
         success: true,
-        user: sanitizeUser(account),
-      }
+        data: sanitizeUser(account),
+      } satisfies AuthCurrentUserResponse
     }, {
       detail: {
         summary: '获取当前用户信息',

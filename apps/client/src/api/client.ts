@@ -1,4 +1,4 @@
-import type { AcceptedResponse, AuthResponse, BillingStatisticsResponse, CharacterDTO, GenerateResponse, GenerationRecord, LocationDTO, ModelConfig, MutationOkResponse, ProjectDTO, ShotDTO, UploadResponse } from '@excuse/shared'
+import type { AcceptedResponse, AuthCurrentUserResponse, AuthResponse, BillingStatisticsResponse, CharacterDTO, GenerateResponse, GenerationRecord, LocationDTO, ModelConfig, MutationOkResponse, ProjectDTO, ShotDTO, UploadResponse } from '@excuse/shared'
 import type { App } from '../../../server/src/index'
 import { treaty } from '@elysia/eden'
 import { sseClient } from './sse'
@@ -125,14 +125,14 @@ export async function loginRequest(email: string, password: string): Promise<Aut
   )
 }
 
-export async function fetchCurrentUser(): Promise<AuthResponse> {
-  return unwrapEden<AuthResponse>(
+export async function fetchCurrentUser(): Promise<AuthCurrentUserResponse> {
+  return unwrapEden<AuthCurrentUserResponse>(
     await api.api.auth.me.get(),
   )
 }
 
-export async function logoutRequest(): Promise<{ success: boolean }> {
-  return unwrapEden<{ success: boolean }>(
+export async function logoutRequest(): Promise<MutationOkResponse> {
+  return unwrapEden<MutationOkResponse>(
     await api.api.auth.logout.post(),
   )
 }

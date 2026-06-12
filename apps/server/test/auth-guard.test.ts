@@ -140,7 +140,7 @@ async function getValidToken(client: ReturnType<typeof treaty>) {
     password: 'password123456',
   })
 
-  return (res.data as { token?: string })?.token as string
+  return (res.data as { data?: { token?: string } })?.data?.token as string
 }
 
 // ─── 测试 ──────────────────────────────────────────

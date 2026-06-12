@@ -10,6 +10,7 @@ import {
   registerRequest,
   setAuthToken,
 } from '../api/client'
+import { sseClient } from '../api/sse'
 import { AuthContext } from './AuthContext'
 
 interface AuthProviderProps {
@@ -25,8 +26,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
   useEffect(() => {
     fetchCurrentUser()
       .then((res) => {
-        if (res.success && res.user) {
-          setUser(res.user)
+        if (res.success) {
+          setUser(res.data)
+          sseClient.connect()
         }
       })
       .catch(() => {
@@ -39,20 +41,14 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   const login = useCallback(async (email: string, password: string) => {
     const res = await loginRequest(email, password)
-    if (!res.success || !res.token || !res.user) {
-      throw new Error(res.error || '登录失败')
-    }
-    setAuthToken(res.token)
-    setUser(res.user)
+    setAuthToken(res.data.token)
+    setUser(res.data.user)
   }, [])
 
   const register = useCallback(async (username: string, email: string, password: string) => {
     const res = await registerRequest(username, email, password)
-    if (!res.success || !res.token || !res.user) {
-      throw new Error(res.error || '注册失败')
-    }
-    setAuthToken(res.token)
-    setUser(res.user)
+    setAuthToken(res.data.token)
+    setUser(res.data.user)
   }, [])
 
   const logout = useCallback(async () => {

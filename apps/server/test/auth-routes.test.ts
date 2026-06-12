@@ -32,8 +32,10 @@ interface AccountRow {
 /** 认证响应结构（Eden 推导后通过运行时访问 token/user） */
 interface AuthData {
   success: boolean
-  token?: string
-  user?: AccountRow
+  data?: {
+    token?: string
+    user?: AccountRow
+  }
   error?: string
 }
 
@@ -127,10 +129,10 @@ describe('auth routes', () => {
 
       expect(error).toBeNull()
       expect(data?.success).toBe(true)
-      expect(typeof (data as AuthData | null)?.token).toBe('string')
-      expect((data as AuthData | null)?.user).toBeDefined()
+      expect(typeof (data as AuthData | null)?.data?.token).toBe('string')
+      expect((data as AuthData | null)?.data?.user).toBeDefined()
       // 响应中不能包含 password
-      expect((data as AuthData | null)?.user?.password).toBeUndefined()
+      expect((data as AuthData | null)?.data?.user?.password).toBeUndefined()
       // createAccount 应被调用一次
       expect(mockCreateAccount).toHaveBeenCalledTimes(1)
       // 传入 createAccount 的 password 应该是 bcrypt hash
@@ -216,9 +218,9 @@ describe('auth routes', () => {
 
       expect(error).toBeNull()
       expect(data?.success).toBe(true)
-      expect(typeof (data as AuthData | null)?.token).toBe('string')
-      expect((data as AuthData | null)?.user).toBeDefined()
-      expect((data as AuthData | null)?.user?.password).toBeUndefined()
+      expect(typeof (data as AuthData | null)?.data?.token).toBe('string')
+      expect((data as AuthData | null)?.data?.user).toBeDefined()
+      expect((data as AuthData | null)?.data?.user?.password).toBeUndefined()
     })
 
     it('should reject non-existent email', async () => {
@@ -284,7 +286,7 @@ describe('auth routes', () => {
         email: 'test@example.com',
         password: 'testpassword123',
       })
-      const token = (regRes.data as AuthData | null)?.token
+      const token = (regRes.data as AuthData | null)?.data?.token
       expect(token).toBeDefined()
 
       // /me 查询账户
@@ -296,8 +298,8 @@ describe('auth routes', () => {
 
       expect(error).toBeNull()
       expect(data?.success).toBe(true)
-      expect((data as AuthData | null)?.user).toBeDefined()
-      expect((data as AuthData | null)?.user?.password).toBeUndefined()
+      expect((data as { data?: AccountRow } | null)?.data).toBeDefined()
+      expect((data as { data?: AccountRow } | null)?.data?.password).toBeUndefined()
       // 应该使用 token 中 sub 对应的 id 查询
       expect(mockGetAccountById).toHaveBeenCalledWith('acc-001')
     })
@@ -333,7 +335,7 @@ describe('auth routes', () => {
         email: 'test@example.com',
         password: 'testpassword123',
       })
-      const token = (regRes.data as AuthData | null)?.token
+      const token = (regRes.data as AuthData | null)?.data?.token
 
       // 模拟用户已被删除
       mockGetAccountById.mockResolvedValue(null)
