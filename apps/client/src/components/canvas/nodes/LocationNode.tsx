@@ -5,11 +5,12 @@ import { Handle, Position } from '@xyflow/react'
 import { RunningBadge, runningBorder, RunningOverlay } from '../RunningOverlay'
 
 export default function LocationNode({ data }: NodeProps) {
-  const { location, isRunning, runningPhaseInfo } = data as { location: LocationDTO, isRunning?: boolean, runningPhaseInfo?: RunningPhaseInfo | null }
+  const { location, isRunning, runningPhaseInfo, activeImageTaskIds } = data as { location: LocationDTO, isRunning?: boolean, runningPhaseInfo?: RunningPhaseInfo | null, activeImageTaskIds?: string[] }
   const profile = location.profile
+  const isGeneratingImage = (activeImageTaskIds?.length ?? 0) > 0
 
   return (
-    <div className={`rounded-lg border-2 bg-amber-50 shadow-md w-85 relative ${runningBorder(isRunning, 'border-amber-400')}`}>
+    <div className={`rounded-lg border-2 bg-amber-50 shadow-md w-85 relative ${runningBorder(isRunning || isGeneratingImage, 'border-amber-400')}`}>
       <Handle type="target" position={Position.Top} className="bg-amber-400!" />
       <div className="bg-amber-400 text-white px-3 py-2 font-semibold text-sm flex items-center justify-between rounded-t-md">
         <span>
@@ -20,18 +21,29 @@ export default function LocationNode({ data }: NodeProps) {
           {location.locked && <span className="text-[10px] bg-white/20 rounded px-1">锁定</span>}
           <span className="text-[10px] bg-white/20 rounded px-1">{location.type}</span>
           {isRunning && <RunningBadge label={runningPhaseInfo?.label} />}
+          {isGeneratingImage && !isRunning && <span className="text-[10px] bg-yellow-200/30 rounded px-1 animate-pulse">生成中...</span>}
         </div>
       </div>
       {isRunning && <RunningOverlay runningPhaseInfo={runningPhaseInfo} />}
       <div className="p-3 space-y-2 text-sm">
-        {/* 参考图 */}
+        {/* 参考图 — 正在生成时显示占位 spinner */}
+        {isGeneratingImage && !location.referenceImageUrl && (
+          <div className="w-full h-35 rounded border border-amber-200 bg-amber-100 flex items-center justify-center">
+            <span className="text-amber-500 text-xs animate-pulse">正在生成参考图...</span>
+          </div>
+        )}
         {location.referenceImageUrl && (
-          <div>
+          <div className={isGeneratingImage ? 'relative' : ''}>
             <img
               src={location.referenceImageUrl}
               alt={location.name}
               className="w-full h-35 object-cover rounded border"
             />
+            {isGeneratingImage && (
+              <div className="absolute top-1 right-1 bg-yellow-400 text-white text-[10px] px-1 rounded animate-pulse">
+                生成中
+              </div>
+            )}
           </div>
         )}
 

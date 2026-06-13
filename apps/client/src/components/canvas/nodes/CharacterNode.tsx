@@ -5,11 +5,12 @@ import { Handle, Position } from '@xyflow/react'
 import { RunningBadge, runningBorder, RunningOverlay } from '../RunningOverlay'
 
 export default function CharacterNode({ data }: NodeProps) {
-  const { character, isRunning, runningPhaseInfo } = data as { character: CharacterDTO, isRunning?: boolean, runningPhaseInfo?: RunningPhaseInfo | null }
+  const { character, isRunning, runningPhaseInfo, activeImageTaskIds } = data as { character: CharacterDTO, isRunning?: boolean, runningPhaseInfo?: RunningPhaseInfo | null, activeImageTaskIds?: string[] }
   const profile = character.profile
+  const isGeneratingImage = (activeImageTaskIds?.length ?? 0) > 0
 
   return (
-    <div className={`rounded-lg border-2 bg-violet-50 shadow-md w-85 relative ${runningBorder(isRunning, 'border-violet-400')}`}>
+    <div className={`rounded-lg border-2 bg-violet-50 shadow-md w-85 relative ${runningBorder(isRunning || isGeneratingImage, 'border-violet-400')}`}>
       <Handle type="target" position={Position.Top} className="bg-violet-400!" />
       <div className="bg-violet-400 text-white px-3 py-2 font-semibold text-sm flex items-center justify-between rounded-t-md">
         <span>
@@ -20,28 +21,50 @@ export default function CharacterNode({ data }: NodeProps) {
           {character.locked && <span className="text-[10px] bg-white/20 rounded px-1">锁定</span>}
           {character.role && <span className="text-[10px] bg-white/20 rounded px-1">{character.role}</span>}
           {isRunning && <RunningBadge label={runningPhaseInfo?.label} />}
+          {isGeneratingImage && !isRunning && <span className="text-[10px] bg-yellow-200/30 rounded px-1 animate-pulse">生成中...</span>}
         </div>
       </div>
       {isRunning && <RunningOverlay runningPhaseInfo={runningPhaseInfo} />}
       <div className="p-3 space-y-2 text-sm">
-        {/* 参考图 */}
+        {/* 参考图 — 正在生成时显示占位 spinner */}
+        {isGeneratingImage && !character.referenceImageUrl && (
+          <div className="w-full h-35 rounded border border-violet-200 bg-violet-100 flex items-center justify-center">
+            <span className="text-violet-500 text-xs animate-pulse">正在生成参考图...</span>
+          </div>
+        )}
         {character.referenceImageUrl && (
-          <div>
+          <div className={isGeneratingImage ? 'relative' : ''}>
             <img
               src={character.referenceImageUrl}
               alt={character.name}
               className="w-full h-35 object-cover rounded border"
             />
+            {isGeneratingImage && (
+              <div className="absolute top-1 right-1 bg-yellow-400 text-white text-[10px] px-1 rounded animate-pulse">
+                生成中
+              </div>
+            )}
+          </div>
+        )}
+        {/* 转面图 — 正在生成时显示占位 */}
+        {isGeneratingImage && !character.turnaroundSheetUrl && (
+          <div className="w-full h-25 rounded border border-violet-200 bg-violet-100 flex items-center justify-center mt-0.5">
+            <span className="text-violet-500 text-xs animate-pulse">正在生成转面图...</span>
           </div>
         )}
         {character.turnaroundSheetUrl && (
-          <div>
+          <div className={isGeneratingImage ? 'relative' : ''}>
             <span className="text-muted-foreground text-xs">转面图：</span>
             <img
               src={character.turnaroundSheetUrl}
               alt="转面图"
               className="w-full h-25 object-cover rounded border mt-0.5"
             />
+            {isGeneratingImage && (
+              <div className="absolute top-1 right-1 bg-yellow-400 text-white text-[10px] px-1 rounded animate-pulse">
+                生成中
+              </div>
+            )}
           </div>
         )}
 

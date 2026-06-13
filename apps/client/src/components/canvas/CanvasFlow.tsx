@@ -1,4 +1,4 @@
-import type { ProjectDTO } from '@excuse/shared'
+import type { CanvasAssetsPoll, ProjectDTO } from '@excuse/shared'
 import type { Edge, Node, NodeTypes } from '@xyflow/react'
 import type { RunningPhaseInfo } from './PipelineController'
 import dagre from '@dagrejs/dagre'
@@ -74,11 +74,25 @@ function computeLayout(nodes: Node[], edges: Edge[]): Node[] {
   })
 }
 
-export function buildNodesAndEdges(project: ProjectDTO, runningPhase: RunningPhaseInfo | null = null): { nodes: Node[], edges: Edge[] } {
+export function buildNodesAndEdges(project: ProjectDTO, runningPhase: RunningPhaseInfo | null = null, pollData?: CanvasAssetsPoll | null): { nodes: Node[], edges: Edge[] } {
   const nodes: Node[] = []
   const edges: Edge[] = []
   const runningNodeType = runningPhase ? PHASE_NODE_TYPE[runningPhase.key] : null
   const isRunning = (type: string) => runningNodeType === type
+
+  // Build lookup maps for activeImageTaskIds from poll data
+  const characterActiveTaskIds = new Map<string, string[]>()
+  const locationActiveTaskIds = new Map<string, string[]>()
+  if (pollData) {
+    for (const c of pollData.characters) {
+      if (c.activeImageTaskIds.length > 0)
+        characterActiveTaskIds.set(c.characterId, c.activeImageTaskIds)
+    }
+    for (const l of pollData.locations) {
+      if (l.activeImageTaskIds.length > 0)
+        locationActiveTaskIds.set(l.locationId, l.activeImageTaskIds)
+    }
+  }
 
   nodes.push({
     id: 'story',
@@ -103,7 +117,7 @@ export function buildNodesAndEdges(project: ProjectDTO, runningPhase: RunningPha
       id: nodeId,
       type: 'character',
       position: { x: 0, y: 0 },
-      data: { character: char, project, isRunning: isRunning('character'), runningPhaseInfo: isRunning('character') ? runningPhase : null },
+      data: { character: char, project, isRunning: isRunning('character'), runningPhaseInfo: isRunning('character') ? runningPhase : null, activeImageTaskIds: characterActiveTaskIds.get(char.id) ?? [] },
     })
     if (project.analysis) {
       edges.push({ id: `e-analysis-${nodeId}`, source: 'analysis', target: nodeId })
@@ -116,7 +130,7 @@ export function buildNodesAndEdges(project: ProjectDTO, runningPhase: RunningPha
       id: nodeId,
       type: 'location',
       position: { x: 0, y: 0 },
-      data: { location: loc, project, isRunning: isRunning('location'), runningPhaseInfo: isRunning('location') ? runningPhase : null },
+      data: { location: loc, project, isRunning: isRunning('location'), runningPhaseInfo: isRunning('location') ? runningPhase : null, activeImageTaskIds: locationActiveTaskIds.get(loc.id) ?? [] },
     })
     if (project.analysis) {
       edges.push({ id: `e-analysis-${nodeId}`, source: 'analysis', target: nodeId })
@@ -157,9 +171,10 @@ export function buildNodesAndEdges(project: ProjectDTO, runningPhase: RunningPha
 function CanvasFlowInner(props: {
   project: ProjectDTO
   runningPhase: RunningPhaseInfo | null
+  pollData?: CanvasAssetsPoll | null
   onNodeClick?: (nodeId: string, nodeType: string) => void
 }) {
-  const { project, runningPhase, onNodeClick } = props
+  const { project, runningPhase, pollData, onNodeClick } = props
   const { fitView, getNodes, getEdges } = useReactFlow()
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([])
   const [edges, setEdges] = useEdgesState<Edge>([])
@@ -169,7 +184,7 @@ function CanvasFlowInner(props: {
 
   // Build nodes when project or running phase changes
   useEffect(() => {
-    const { nodes: built, edges: builtEdges } = buildNodesAndEdges(project, runningPhase)
+    const { nodes: built, edges: builtEdges } = buildNodesAndEdges(project, runningPhase, pollData)
 
     // Merge with existing nodes to preserve positions and measurements
     const current = getNodes()
@@ -289,6 +304,7 @@ function CanvasFlowInner(props: {
 export default function CanvasFlow(props: {
   project: ProjectDTO
   runningPhase: RunningPhaseInfo | null
+  pollData?: CanvasAssetsPoll | null
   onNodeClick?: (nodeId: string, nodeType: string) => void
 }) {
   return (

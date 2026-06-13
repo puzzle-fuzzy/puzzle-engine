@@ -128,6 +128,7 @@ export default function CanvasEditor() {
         <CanvasFlow
           project={project}
           runningPhase={runningPhase}
+          pollData={pollData}
           onNodeClick={(nodeId, nodeType) => {
             setSelectedNode(selectedNode?.id === nodeId ? null : { id: nodeId, type: nodeType })
           }}
