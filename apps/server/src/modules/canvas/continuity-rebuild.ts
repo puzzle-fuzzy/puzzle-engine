@@ -1,10 +1,16 @@
+import type { CanvasAssetOutput } from '@excuse/db'
 import type { NormalizedCharacter, NormalizedLocation, NormalizedShot } from './continuity'
 import {
+  createCanvasAsset,
   createContinuityReport,
   getCanvasProjectDetail,
+  markCanvasAssetFailed,
+  markCanvasAssetRunning,
+  markCanvasAssetSucceeded,
   markPipelineRunFailed,
   markPipelineRunRunning,
   markPipelineRunSucceeded,
+  setCanvasAssetActive,
   updateCanvasProject,
   updateCanvasShot,
 } from '@excuse/db'
@@ -24,7 +30,20 @@ export async function checkContinuity(projectId: string, runId?: string) {
   if (runId)
     await markPipelineRunRunning(runId)
 
+  // ── 为连续性检查创建 canvas_asset ──────────────────
+  const continuityAsset = await createCanvasAsset({
+    accountId,
+    projectId,
+    category: 'continuityReport',
+    targetEntityType: 'project',
+    targetEntityId: projectId,
+    pipelineRunId: runId ?? undefined,
+  })
+
   try {
+    // ── 标记资产为运行状态 ──────────────────────────
+    await markCanvasAssetRunning(continuityAsset.id)
+
     const normalizedShots: NormalizedShot[] = detail.shots.map((s): NormalizedShot => ({
       id: s.id,
       shotIndex: s.shotIndex,
@@ -67,6 +86,11 @@ export async function checkContinuity(projectId: string, runId?: string) {
       issuesJson: issues,
     })
 
+    // ── 标记连续性资产成功 + 设为活跃 ──────────────────
+    const outputJson: CanvasAssetOutput = { type: 'json', data: { issuesCount: issues.length, issues } }
+    await markCanvasAssetSucceeded(continuityAsset.id, outputJson)
+    await setCanvasAssetActive(continuityAsset.id)
+
     notifyNode(accountId, projectId, 'continuity', projectId, 'completed', { issues }, undefined, runId)
     await updateCanvasProject(projectId, { status: 'continuity_checked' })
     if (runId)
@@ -74,9 +98,12 @@ export async function checkContinuity(projectId: string, runId?: string) {
     return getProjectDetail(projectId)
   }
   catch (error) {
-    notifyNode(accountId, projectId, 'continuity', projectId, 'failed', undefined, (error as Error).message, runId)
+    const errorMessage = (error as Error).message
+    // ── 标记连续性资产失败 ──────────────────────────────
+    await markCanvasAssetFailed(continuityAsset.id, errorMessage).catch(() => {})
+    notifyNode(accountId, projectId, 'continuity', projectId, 'failed', undefined, errorMessage, runId)
     if (runId)
-      await markPipelineRunFailed(runId, (error as Error).message)
+      await markPipelineRunFailed(runId, errorMessage)
     throw error
   }
 }
@@ -105,6 +132,19 @@ export async function rebuildShotPrompts(projectId: string, runId?: string) {
 
       if (!shotLocation)
         continue
+
+      // ── 为每个镜头的视频提示词创建 canvas_asset ────
+      const promptAsset = await createCanvasAsset({
+        accountId,
+        projectId,
+        category: 'videoPrompt',
+        targetEntityType: 'shot',
+        targetEntityId: shot.id,
+        pipelineRunId: runId ?? undefined,
+      })
+
+      // ── 标记资产为运行状态 ──────────────────────────
+      await markCanvasAssetRunning(promptAsset.id)
 
       const { videoPrompt, negativePrompt } = buildShotVideoPrompt({
         shot: {
@@ -141,6 +181,11 @@ export async function rebuildShotPrompts(projectId: string, runId?: string) {
         negativePrompt,
         status: 'ready',
       })
+
+      // ── 标记视频提示词资产成功 + 设为活跃 ────────────
+      const outputJson: CanvasAssetOutput = { type: 'text', text: videoPrompt }
+      await markCanvasAssetSucceeded(promptAsset.id, outputJson)
+      await setCanvasAssetActive(promptAsset.id)
     }
 
     await updateCanvasProject(projectId, { status: 'prompts_ready' })
@@ -150,9 +195,10 @@ export async function rebuildShotPrompts(projectId: string, runId?: string) {
     return getProjectDetail(projectId)
   }
   catch (error) {
-    notifyNode(accountId, projectId, 'rebuild', projectId, 'failed', undefined, (error as Error).message, runId)
+    const errorMessage = (error as Error).message
+    notifyNode(accountId, projectId, 'rebuild', projectId, 'failed', undefined, errorMessage, runId)
     if (runId)
-      await markPipelineRunFailed(runId, (error as Error).message)
+      await markPipelineRunFailed(runId, errorMessage)
     throw error
   }
 }

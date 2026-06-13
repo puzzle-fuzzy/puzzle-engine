@@ -1,12 +1,18 @@
+import type { CanvasAssetOutput } from '@excuse/db'
 import type { NovelAnalysis } from '@excuse/shared'
 import {
+  createCanvasAsset,
   deleteCanvasCharactersByProject,
   deleteCanvasLocationsByProject,
   deleteCanvasShotsByProject,
   getCanvasProjectById,
+  markCanvasAssetFailed,
+  markCanvasAssetRunning,
+  markCanvasAssetSucceeded,
   markPipelineRunFailed,
   markPipelineRunRunning,
   markPipelineRunSucceeded,
+  setCanvasAssetActive,
   updateCanvasProject,
 } from '@excuse/db'
 import { getModelById, validateAndMerge } from '@excuse/provider'
@@ -24,6 +30,18 @@ export async function analyzeProject(projectId: string, config: { dashscopeApiKe
     await markPipelineRunRunning(runId)
   notifyNode(project.accountId, projectId, 'analysis', projectId, 'running', undefined, undefined, runId)
 
+  // ── 为分析阶段创建 canvas_asset ──────────────────
+  const textModel = getTextModel(project.modelPreferencesJson)
+  const analysisAsset = await createCanvasAsset({
+    accountId: project.accountId,
+    projectId,
+    category: 'analysis',
+    targetEntityType: 'project',
+    targetEntityId: projectId,
+    pipelineRunId: runId ?? undefined,
+    model: textModel,
+  })
+
   if (project.status !== 'draft') {
     await deleteCanvasShotsByProject(projectId)
     await deleteCanvasLocationsByProject(projectId, { excludeLocked: true })
@@ -31,10 +49,12 @@ export async function analyzeProject(projectId: string, config: { dashscopeApiKe
   }
 
   try {
+    // ── 标记资产为运行状态 ──────────────────────────
+    await markCanvasAssetRunning(analysisAsset.id)
+
     const client = createClient(config)
     const { system, prompt: userPrompt } = buildAnalysisPrompt(project.storyText)
 
-    const textModel = getTextModel(project.modelPreferencesJson)
     const modelConfig = getModelById(textModel)
     if (!modelConfig)
       throw new Error(`未知文本模型：${textModel}`)
@@ -64,15 +84,23 @@ export async function analyzeProject(projectId: string, config: { dashscopeApiKe
       analysisJson: analysis,
     })
 
+    // ── 标记分析资产成功 + 设为活跃 ──────────────────
+    const outputJson: CanvasAssetOutput = { type: 'json', data: { ...analysis } }
+    await markCanvasAssetSucceeded(analysisAsset.id, outputJson)
+    await setCanvasAssetActive(analysisAsset.id)
+
     notifyNode(project.accountId, projectId, 'analysis', projectId, 'completed', { analysis }, undefined, runId)
     if (runId)
       await markPipelineRunSucceeded(runId, { phase: 'analyze' })
     return getProjectDetail(projectId)
   }
   catch (error) {
-    notifyNode(project.accountId, projectId, 'analysis', projectId, 'failed', undefined, (error as Error).message, runId)
+    const errorMessage = (error as Error).message
+    // ── 标记分析资产失败 ──────────────────────────────
+    await markCanvasAssetFailed(analysisAsset.id, errorMessage).catch(() => {})
+    notifyNode(project.accountId, projectId, 'analysis', projectId, 'failed', undefined, errorMessage, runId)
     if (runId)
-      await markPipelineRunFailed(runId, (error as Error).message)
+      await markPipelineRunFailed(runId, errorMessage)
     throw error
   }
 }

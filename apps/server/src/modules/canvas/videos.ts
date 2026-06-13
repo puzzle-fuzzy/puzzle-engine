@@ -2,9 +2,12 @@ import type { GenerationInputParams } from '@excuse/db'
 import type { ValidatedModelParameters } from '@excuse/provider'
 import { calculateCost } from '@excuse/billing'
 import {
+  createCanvasAsset,
   createGenerationRecord,
   getCanvasProjectDetail,
   getCanvasShotById,
+  markCanvasAssetFailed,
+  markCanvasAssetRunning,
   markPipelineRunFailed,
   markPipelineRunRunning,
   markPipelineRunSucceeded,
@@ -140,6 +143,18 @@ export async function generateVideos(projectId: string, config: { dashscopeApiKe
 
     notifyNode(accountId, projectId, 'shot', shot.id, 'running', undefined, undefined, runId)
 
+    // ── 为镜头视频创建 canvas_asset ──────────────────
+    const shotVideoAsset = await createCanvasAsset({
+      accountId,
+      projectId,
+      category: 'shotVideo',
+      targetEntityType: 'shot',
+      targetEntityId: shot.id,
+      pipelineRunId: runId ?? undefined,
+      model: getVideoModel(detail.project.modelPreferencesJson, []),
+    })
+    await markCanvasAssetRunning(shotVideoAsset.id)
+
     try {
       const charRefUrls = shot.characterIdsJson
         .map(id => characterMap.get(id)?.referenceImageUrl)
@@ -164,6 +179,8 @@ export async function generateVideos(projectId: string, config: { dashscopeApiKe
 
       if (!submitResult.success || !submitResult.taskId) {
         await updateCanvasShot(shot.id, { status: 'failed', errorMessage: submitResult.error })
+        // ── 标记视频资产失败 ──────────────────────────
+        await markCanvasAssetFailed(shotVideoAsset.id, submitResult.error ?? '视频提交失败').catch(() => {})
         notifyNode(accountId, projectId, 'shot', shot.id, 'failed', undefined, submitResult.error, runId)
         continue
       }
@@ -190,6 +207,8 @@ export async function generateVideos(projectId: string, config: { dashscopeApiKe
     catch (error) {
       const message = getErrorMessage(error)
       await updateCanvasShot(shot.id, { status: 'failed', errorMessage: message })
+      // ── 标记视频资产失败 ──────────────────────────
+      await markCanvasAssetFailed(shotVideoAsset.id, message).catch(() => {})
       notifyNode(accountId, projectId, 'shot', shot.id, 'failed', undefined, message, runId)
     }
   }

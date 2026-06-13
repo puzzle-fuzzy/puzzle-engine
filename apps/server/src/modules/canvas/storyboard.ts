@@ -1,11 +1,17 @@
+import type { CanvasAssetOutput } from '@excuse/db'
 import type { ShotDraft } from '@excuse/shared'
 import {
   batchCreateCanvasShots,
+  createCanvasAsset,
   deleteCanvasShotsByProject,
   getCanvasProjectDetail,
+  markCanvasAssetFailed,
+  markCanvasAssetRunning,
+  markCanvasAssetSucceeded,
   markPipelineRunFailed,
   markPipelineRunRunning,
   markPipelineRunSucceeded,
+  setCanvasAssetActive,
   updateCanvasProject,
 } from '@excuse/db'
 import { getModelById, validateAndMerge } from '@excuse/provider'
@@ -26,13 +32,28 @@ export async function generateStoryboard(projectId: string, config: { dashscopeA
 
   const analysis = project.analysisJson!
   const accountId = project.accountId
+  const textModel = getTextModel(project.modelPreferencesJson)
 
   notifyNode(accountId, projectId, 'storyboard', projectId, 'running', undefined, undefined, runId)
 
   if (runId)
     await markPipelineRunRunning(runId)
 
+  // ── 为分镜脚本创建 canvas_asset ──────────────────
+  const storyboardAsset = await createCanvasAsset({
+    accountId,
+    projectId,
+    category: 'storyboard',
+    targetEntityType: 'project',
+    targetEntityId: projectId,
+    pipelineRunId: runId ?? undefined,
+    model: textModel,
+  })
+
   try {
+    // ── 标记资产为运行状态 ──────────────────────────
+    await markCanvasAssetRunning(storyboardAsset.id)
+
     const client = createClient(config)
     const { system, prompt: userPrompt } = buildStoryboardPrompt(
       project.storyText,
@@ -41,7 +62,6 @@ export async function generateStoryboard(projectId: string, config: { dashscopeA
       detail.locations.map(l => ({ id: l.id, name: l.name, scenePrompt: l.scenePrompt || '' })),
     )
 
-    const textModel = getTextModel(project.modelPreferencesJson)
     const modelConfig = getModelById(textModel)
     if (!modelConfig)
       throw new Error(`未知文本模型：${textModel}`)
@@ -86,15 +106,23 @@ export async function generateStoryboard(projectId: string, config: { dashscopeA
       notifyNode(accountId, projectId, 'shot', shot.id, 'completed', undefined, undefined, runId)
     }
 
+    // ── 标记分镜资产成功 + 设为活跃 ──────────────────
+    const outputJson: CanvasAssetOutput = { type: 'json', data: { shotsCount: created.length, shots } }
+    await markCanvasAssetSucceeded(storyboardAsset.id, outputJson)
+    await setCanvasAssetActive(storyboardAsset.id)
+
     await updateCanvasProject(projectId, { status: 'storyboard_ready' })
     if (runId)
       await markPipelineRunSucceeded(runId, { phase: 'storyboard', shotsCreated: created.length })
     return getProjectDetail(projectId)
   }
   catch (error) {
-    notifyNode(accountId, projectId, 'storyboard', projectId, 'failed', undefined, (error as Error).message, runId)
+    const errorMessage = (error as Error).message
+    // ── 标记分镜资产失败 ──────────────────────────────
+    await markCanvasAssetFailed(storyboardAsset.id, errorMessage).catch(() => {})
+    notifyNode(accountId, projectId, 'storyboard', projectId, 'failed', undefined, errorMessage, runId)
     if (runId)
-      await markPipelineRunFailed(runId, (error as Error).message)
+      await markPipelineRunFailed(runId, errorMessage)
     throw error
   }
 }
