@@ -134,7 +134,7 @@ async function main() {
         const stopHeartbeat = startTaskHeartbeat(claimedTask.id, workerId, config.claimTtlMs)
 
         try {
-          const output = await handleTask(claimedTask)
+          const output = await handleTask(claimedTask, config)
           // Handler 成功 → markTaskSucceeded
           const { markTaskSucceeded, notifyTaskStatusChange } = await import('@excuse/db')
           const succeeded = await markTaskSucceeded(claimedTask.id, output)

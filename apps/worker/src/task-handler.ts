@@ -1,13 +1,15 @@
 /**
  * 统一任务 handler dispatch — 基于 task.type 分发到具体 handler
  *
- * P0-2 只建立骨架，各 handler 在 P0-3 中实现。
- * 目前如果 claim 到的 task 没有对应 handler，会标记为 failed 并记录错误。
+ * Canvas phase handlers 在 P0-3 中已实现（canvas-handlers.ts）。
+ * 其他类型暂抛 TaskNotImplementedError。
  */
 
 import type { TaskErrorInfo, TaskRow } from '@excuse/db'
+import type { WorkerConfig } from './config'
 import { markTaskFailed } from '@excuse/db'
 import { createLogger } from '@excuse/shared'
+import { markRunFailedAndNotify } from './canvas-handlers'
 
 const logger = createLogger('task-handler')
 
@@ -17,22 +19,48 @@ const logger = createLogger('task-handler')
  * handler 返回值：成功时返回 output（可选），失败时抛异常
  * 抛异常由 index.ts 的 handleTaskError 统一处理（retryable vs permanent）
  */
-export async function handleTask(task: TaskRow): Promise<Record<string, unknown> | undefined> {
+export async function handleTask(task: TaskRow, workerConfig: WorkerConfig): Promise<Record<string, unknown> | undefined> {
   logger.info({ taskId: task.id, type: task.type, domain: task.domain }, 'Handling task')
 
   switch (task.type) {
     // ── Canvas pipeline phases ─────────────────────────
-    // P0-3 中实现：调用现有 canvas service 函数
-    case 'canvas.analyze':
-    case 'canvas.characters':
-    case 'canvas.locations':
-    case 'canvas.characterRefs':
-    case 'canvas.locationRefs':
-    case 'canvas.storyboard':
-    case 'canvas.continuity':
-    case 'canvas.rebuild':
-    case 'canvas.videos':
-      throw new TaskNotImplementedError(task.type)
+    // Delegated to canvas-handlers.ts — dynamic import of server service functions
+    case 'canvas.analyze': {
+      const { handleCanvasAnalyze } = await import('./canvas-handlers')
+      return handleCanvasAnalyze(task, workerConfig)
+    }
+    case 'canvas.characters': {
+      const { handleCanvasCharacters } = await import('./canvas-handlers')
+      return handleCanvasCharacters(task, workerConfig)
+    }
+    case 'canvas.locations': {
+      const { handleCanvasLocations } = await import('./canvas-handlers')
+      return handleCanvasLocations(task, workerConfig)
+    }
+    case 'canvas.characterRefs': {
+      const { handleCanvasCharacterRefs } = await import('./canvas-handlers')
+      return handleCanvasCharacterRefs(task, workerConfig)
+    }
+    case 'canvas.locationRefs': {
+      const { handleCanvasLocationRefs } = await import('./canvas-handlers')
+      return handleCanvasLocationRefs(task, workerConfig)
+    }
+    case 'canvas.storyboard': {
+      const { handleCanvasStoryboard } = await import('./canvas-handlers')
+      return handleCanvasStoryboard(task, workerConfig)
+    }
+    case 'canvas.continuity': {
+      const { handleCanvasContinuity } = await import('./canvas-handlers')
+      return handleCanvasContinuity(task, workerConfig)
+    }
+    case 'canvas.rebuild': {
+      const { handleCanvasRebuild } = await import('./canvas-handlers')
+      return handleCanvasRebuild(task, workerConfig)
+    }
+    case 'canvas.videos': {
+      const { handleCanvasVideos } = await import('./canvas-handlers')
+      return handleCanvasVideos(task, workerConfig)
+    }
 
     // ── 通用生成任务 ────────────────────────────────────
     case 'generate.text':
@@ -59,9 +87,7 @@ export async function handleTask(task: TaskRow): Promise<Record<string, unknown>
  *
  * retriable 且 attempts < maxAttempts → markTaskRetrying（nextRunAt 推迟）
  * permanent 或超过 maxAttempts → markTaskFailed
- *
- * @param task 被 claim 的 task
- * @param error handler 抛出的错误
+ * Canvas domain: additionally markRunFailedAndNotify (pipeline run + PG NOTIFY)
  */
 export async function handleTaskError(task: TaskRow, error: unknown): Promise<void> {
   const isNotImplemented = error instanceof TaskNotImplementedError
@@ -69,7 +95,6 @@ export async function handleTaskError(task: TaskRow, error: unknown): Promise<vo
   const errorMessage = error instanceof Error ? error.message : String(error)
 
   if (isNotImplemented) {
-    // 未实现的 handler → 直接标记为 failed（不应该 retry）
     const errorInfo: TaskErrorInfo = {
       category: 'validation',
       retriable: false,
@@ -81,7 +106,6 @@ export async function handleTaskError(task: TaskRow, error: unknown): Promise<vo
   }
 
   if (retriable && task.attempts < task.maxAttempts) {
-    // 可重试 → 计算 retry delay 并 markTaskRetrying
     const delayMs = computeRetryDelay(task.type, task.attempts)
     const nextRunAt = new Date(Date.now() + delayMs)
     const { markTaskRetrying } = await import('@excuse/db')
@@ -89,7 +113,6 @@ export async function handleTaskError(task: TaskRow, error: unknown): Promise<vo
     logger.info({ taskId: task.id, type: task.type, attempts: task.attempts, nextRetryDelay: delayMs }, 'Task retrying')
   }
   else {
-    // 不可重试 或超过 maxAttempts → 永久失败
     const errorInfo: TaskErrorInfo = {
       category: categorizeError(error),
       retriable,
@@ -98,12 +121,16 @@ export async function handleTaskError(task: TaskRow, error: unknown): Promise<vo
     }
     await markTaskFailed(task.id, errorInfo, errorMessage)
     logger.error({ taskId: task.id, type: task.type, attempts: task.attempts }, `Task permanently failed: ${errorMessage}`)
+
+    // Canvas 任务额外标记 pipeline run 为 failed + PG NOTIFY
+    if (task.domain === 'canvas' && task.projectId) {
+      await markRunFailedAndNotify(task, errorMessage)
+    }
   }
 }
 
 // ── 错误分类 ────────────────────────────────────────────
 
-/** 自定义错误：handler 未实现 */
 class TaskNotImplementedError extends Error {
   constructor(taskType: string) {
     super(`Task handler not implemented: ${taskType}`)
@@ -111,36 +138,17 @@ class TaskNotImplementedError extends Error {
   }
 }
 
-/**
- * 判断错误是否可重试
- *
- * 参考 puzzle-bobble/apps/worker/src/retry.ts
- * - Provider timeout / throttling / internal error → retriable
- * - 连接错误 → retriable
- * - 参数校验失败 / 认证失败 → 不可重试
- * - 未知错误 → 不可重试（保守策略）
- */
 function isRetriableError(error: unknown): boolean {
   if (!(error instanceof Error))
     return false
-
-  // Provider 错误 — 根据 cause.code 分类
   const cause = error.cause as { code?: string } | undefined
   const causeCode = cause?.code
-
-  // 网络连接错误 → retriable
   if (causeCode === 'ECONNREFUSED' || causeCode === 'ETIMEDOUT' || causeCode === 'ECONNRESET')
     return true
-
-  // Provider throttling / internal error → retriable
   if (causeCode === 'Throttling' || causeCode === 'InternalError' || causeCode === 'TIMEOUT')
     return true
-
-  // 参数校验 / 认证失败 → permanent
   if (causeCode === 'InvalidParameter' || causeCode === 'AuthFailed' || causeCode === 'Forbidden')
     return false
-
-  // 未知 → 保守策略：不重试
   return false
 }
 
@@ -164,13 +172,6 @@ function extractErrorCode(error: unknown): string | undefined {
   return cause?.code
 }
 
-/**
- * 计算 retry delay（毫秒）
- *
- * 参考 puzzle-bobble/apps/worker/src/retry.ts
- * - 视频: 60s × 2^min(attempt-1, 3) — 上限 480s
- * - 其他: 固定 30s
- */
 export function computeRetryDelay(taskType: string, attempts: number): number {
   if (taskType.includes('video') || taskType === 'canvas.videos' || taskType === 'generate.video') {
     return 60_000 * 2 ** Math.min(attempts - 1, 3)
