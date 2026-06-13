@@ -1,9 +1,10 @@
-import type { NormalizedCharacter, NormalizedLocation, NormalizedShot } from '@excuse/canvas-engine'
 import type { CanvasAssetOutput } from '@excuse/db'
-import { validateShotContinuity } from '@excuse/canvas-engine'
-import { runCanvasAssetStep } from '@excuse/canvas-runtime'
 import {
-  createContinuityReport,
+  buildShotVideoPromptEntity,
+  runCanvasAssetStep,
+  runContinuityPhase,
+} from '@excuse/canvas-runtime'
+import {
   getCanvasProjectDetail,
   markPipelineRunFailed,
   markPipelineRunRunning,
@@ -11,7 +12,6 @@ import {
   updateCanvasProject,
   updateCanvasShot,
 } from '@excuse/db'
-import { buildShotVideoPrompt } from '@excuse/prompt-engine'
 import { getProjectDetail } from './service-crud'
 import { assertNotGenerating, notifyNode } from './service-helpers'
 
@@ -37,47 +37,7 @@ export async function checkContinuity(projectId: string, runId?: string) {
         pipelineRunId: runId ?? undefined,
       },
       execute: async () => {
-        const normalizedShots: NormalizedShot[] = detail.shots.map((s): NormalizedShot => ({
-          id: s.id,
-          shotIndex: s.shotIndex,
-          locationId: s.locationId,
-          characterIds: (s.characterIdsJson ?? []) as string[],
-          narrative: s.narrative,
-          duration: s.duration,
-          camera: s.cameraJson,
-          continuity: s.continuityJson,
-          timeline: s.timelineJson ?? undefined,
-          environment: s.environmentJson ?? undefined,
-        }))
-
-        const normalizedCharacters: NormalizedCharacter[] = detail.characters.map(c => ({
-          id: c.id,
-          name: c.name,
-          identityPrompt: c.identityPrompt ?? '',
-          negativePrompt: c.negativePrompt ?? '',
-        }))
-
-        const normalizedLocations: NormalizedLocation[] = detail.locations.map((l) => {
-          const cameraRules = l.profileJson?.cameraRules
-          return {
-            id: l.id,
-            name: l.name,
-            scenePrompt: l.scenePrompt ?? '',
-            negativePrompt: l.negativePrompt ?? '',
-            cameraRules: cameraRules ?? { axisDirection: '', allowedAngles: [] as string[], forbiddenAngles: [] as string[] },
-          }
-        })
-
-        const issues = validateShotContinuity({
-          shots: normalizedShots,
-          characters: normalizedCharacters,
-          locations: normalizedLocations,
-        })
-
-        await createContinuityReport({
-          projectId,
-          issuesJson: issues,
-        })
+        const { issues } = await runContinuityPhase({ projectId, detail })
 
         const output: CanvasAssetOutput = { type: 'json', data: { issuesCount: issues.length, issues } }
         return { result: issues, output }
@@ -134,34 +94,10 @@ export async function rebuildShotPrompts(projectId: string, runId?: string) {
           pipelineRunId: runId ?? undefined,
         },
         execute: async () => {
-          const { videoPrompt, negativePrompt } = buildShotVideoPrompt({
-            shot: {
-              id: shot.id,
-              shotIndex: shot.shotIndex,
-              locationId: shot.locationId,
-              characterIds: shot.characterIdsJson,
-              narrative: shot.narrative,
-              camera: shot.cameraJson,
-              continuity: shot.continuityJson,
-              timeline: shot.timelineJson ?? undefined,
-              environment: shot.environmentJson ?? undefined,
-              duration: shot.duration,
-            },
-            characters: shotCharacters.map(c => ({
-              id: c.id,
-              name: c.name,
-              identityPrompt: c.identityPrompt ?? '',
-              negativePrompt: c.negativePrompt ?? '',
-            })),
-            location: {
-              id: shotLocation.id,
-              name: shotLocation.name,
-              scenePrompt: shotLocation.scenePrompt ?? '',
-              negativePrompt: shotLocation.negativePrompt ?? '',
-              cameraRules: shotLocation.profileJson?.cameraRules ?? { axisDirection: '', allowedAngles: [] as string[], forbiddenAngles: [] as string[] },
-            },
-            timeline: shot.timelineJson ?? undefined,
-            environment: shot.environmentJson ?? undefined,
+          const { videoPrompt, negativePrompt } = buildShotVideoPromptEntity({
+            shot,
+            characters: shotCharacters,
+            location: shotLocation,
           })
 
           await updateCanvasShot(shot.id, {

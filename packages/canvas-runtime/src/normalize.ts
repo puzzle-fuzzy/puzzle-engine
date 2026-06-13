@@ -5,7 +5,7 @@ import type { getCanvasProjectDetail } from '@excuse/db'
  * Canvas 项目详情行的派生类型 — normalize 映射的输入形状。
  * server 与 worker 共用 `getCanvasProjectDetail` 的返回，所以归一化逻辑也共用。
  */
-type CanvasProjectDetail = NonNullable<Awaited<ReturnType<typeof getCanvasProjectDetail>>>
+export type CanvasProjectDetail = NonNullable<Awaited<ReturnType<typeof getCanvasProjectDetail>>>
 
 export function toNormalizedShot(shot: CanvasProjectDetail['shots'][number]): NormalizedShot {
   return {

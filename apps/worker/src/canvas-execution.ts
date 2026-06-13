@@ -6,9 +6,6 @@ import {
 } from '@excuse/db'
 import { DashScopeClient } from '@excuse/provider'
 
-// toNormalized* 现已下沉到 @excuse/canvas-runtime，server 与 worker 共用同一份归一化逻辑。
-export { toNormalizedCharacter, toNormalizedLocation, toNormalizedShot } from '@excuse/canvas-runtime'
-
 type CanvasProjectDetail = NonNullable<Awaited<ReturnType<typeof getCanvasProjectDetail>>>
 const DEFAULT_TEXT_MODEL = 'qwen3.7-plus'
 const DEFAULT_IMAGE_MODEL = 'qwen-image-2.0-pro'

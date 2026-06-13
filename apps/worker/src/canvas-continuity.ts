@@ -1,16 +1,7 @@
 import type { CanvasAssetOutput } from '@excuse/db'
-import { validateShotContinuity } from '@excuse/canvas-engine'
-import { runCanvasAssetStep } from '@excuse/canvas-runtime'
-import {
-  createContinuityReport,
-  updateCanvasProject,
-} from '@excuse/db'
-import {
-  loadRunnableCanvasProject,
-  toNormalizedCharacter,
-  toNormalizedLocation,
-  toNormalizedShot,
-} from './canvas-execution'
+import { runCanvasAssetStep, runContinuityPhase } from '@excuse/canvas-runtime'
+import { updateCanvasProject } from '@excuse/db'
+import { loadRunnableCanvasProject } from './canvas-execution'
 
 export interface CanvasContinuityResult extends Record<string, unknown> {
   phase: 'continuity'
@@ -32,16 +23,7 @@ export async function executeCanvasContinuity(projectId: string, runId?: string)
       pipelineRunId: runId ?? undefined,
     },
     execute: async () => {
-      const issues = validateShotContinuity({
-        shots: detail.shots.map(toNormalizedShot),
-        characters: detail.characters.map(toNormalizedCharacter),
-        locations: detail.locations.map(toNormalizedLocation),
-      })
-
-      await createContinuityReport({
-        projectId,
-        issuesJson: issues,
-      })
+      const { issues } = await runContinuityPhase({ projectId, detail })
 
       const outputJson: CanvasAssetOutput = { type: 'json', data: { issuesCount: issues.length, issues } }
       return {
