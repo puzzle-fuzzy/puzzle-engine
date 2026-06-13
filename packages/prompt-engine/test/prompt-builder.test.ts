@@ -1,8 +1,8 @@
-import type { NormalizedCharacter, NormalizedLocation, NormalizedShot } from '../src/modules/canvas/continuity'
+import type { PromptCharacter, PromptLocation, PromptShot } from '../src'
 import { describe, expect, it } from 'bun:test'
-import { buildShotVideoPrompt } from '@excuse/prompt-engine'
+import { buildShotVideoPrompt } from '../src'
 
-function makeShot(overrides: Partial<NormalizedShot> = {}): NormalizedShot {
+function makeShot(overrides: Partial<PromptShot> = {}): PromptShot {
   return {
     id: 'shot-1',
     shotIndex: 1,
@@ -23,7 +23,7 @@ function makeShot(overrides: Partial<NormalizedShot> = {}): NormalizedShot {
   }
 }
 
-function makeCharacter(overrides: Partial<NormalizedCharacter> = {}): NormalizedCharacter {
+function makeCharacter(overrides: Partial<PromptCharacter> = {}): PromptCharacter {
   return {
     id: 'char-1',
     name: 'Alice',
@@ -33,7 +33,7 @@ function makeCharacter(overrides: Partial<NormalizedCharacter> = {}): Normalized
   }
 }
 
-function makeLocation(overrides: Partial<NormalizedLocation> = {}): NormalizedLocation {
+function makeLocation(overrides: Partial<PromptLocation> = {}): PromptLocation {
   return {
     id: 'loc-1',
     name: 'Dark Forest',
@@ -161,7 +161,7 @@ describe('buildShotVideoPrompt', () => {
   })
 
   it('should handle multiple characters', () => {
-    const char2: NormalizedCharacter = {
+    const char2: PromptCharacter = {
       id: 'char-2',
       name: 'Bob',
       identityPrompt: 'A tall man with glasses',

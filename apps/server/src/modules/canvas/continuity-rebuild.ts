@@ -14,8 +14,8 @@ import {
   updateCanvasProject,
   updateCanvasShot,
 } from '@excuse/db'
+import { buildShotVideoPrompt } from '@excuse/prompt-engine'
 import { validateShotContinuity } from './continuity'
-import { buildShotVideoPrompt } from './prompt-builder'
 import { getProjectDetail } from './service-crud'
 import { assertNotGenerating, notifyNode } from './service-helpers'
 

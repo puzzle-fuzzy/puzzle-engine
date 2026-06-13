@@ -21,6 +21,7 @@
     "@excuse/db": "workspace:*",
     "@excuse/events": "workspace:*",
     "@excuse/metrics": "workspace:*",
+    "@excuse/prompt-engine": "workspace:*",
     "@excuse/provider": "workspace:*",
     "@excuse/rate-limit": "workspace:*",
     "@excuse/shared": "workspace:*",

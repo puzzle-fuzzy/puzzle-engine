@@ -84,6 +84,7 @@
         "@excuse/db": "workspace:*",
         "@excuse/events": "workspace:*",
         "@excuse/metrics": "workspace:*",
+        "@excuse/prompt-engine": "workspace:*",
         "@excuse/provider": "workspace:*",
         "@excuse/rate-limit": "workspace:*",
         "@excuse/shared": "workspace:*",
@@ -150,6 +151,10 @@
     },
     "packages/metrics": {
       "name": "@excuse/metrics",
+      "version": "0.0.1",
+    },
+    "packages/prompt-engine": {
+      "name": "@excuse/prompt-engine",
       "version": "0.0.1",
     },
     "packages/provider": {
@@ -434,6 +439,8 @@
     "@excuse/ffmpeg": ["@excuse/ffmpeg@workspace:packages/ffmpeg"],
 
     "@excuse/metrics": ["@excuse/metrics@workspace:packages/metrics"],
+
+    "@excuse/prompt-engine": ["@excuse/prompt-engine@workspace:packages/prompt-engine"],
 
     "@excuse/provider": ["@excuse/provider@workspace:packages/provider"],
 

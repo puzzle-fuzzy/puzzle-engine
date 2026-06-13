@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'bun:test'
-import { parseLLMJson } from '@excuse/prompt-engine'
+import { parseLLMJson } from '../src'
 
 describe('parseLLMJson', () => {
   it('should parse clean JSON object', () => {

@@ -8,16 +8,64 @@
  *   - videoPrompt: 包含角色一致性、场景、叙事、逐帧时间线、情绪、朝向、环境、摄影参数
  *   - negativePrompt: 合并角色 + 场景负面提示词 + 通用质量约束
  */
-import type { NormalizedCharacter, NormalizedLocation, NormalizedShot } from './continuity'
+export interface PromptShot {
+  id: string
+  shotIndex: number
+  locationId: string | null
+  characterIds: string[]
+  narrative: string
+  duration: number
+  camera: {
+    shotSize: string
+    angle: string
+    movement: string
+    lens: string
+  }
+  continuity: {
+    screenDirection: string
+    characterFacing: Record<string, string>
+    actionStart: string
+    actionEnd: string
+    emotionStart: string
+    emotionEnd: string
+  }
+  timeline?: Array<{ time: string, action: string }>
+  environment?: PromptEnvironment
+}
 
-export type { NormalizedCharacter, NormalizedLocation, NormalizedShot }
+export interface PromptCharacter {
+  id: string
+  name: string
+  identityPrompt: string
+  negativePrompt: string
+}
+
+export interface PromptLocation {
+  id: string
+  name: string
+  scenePrompt: string
+  negativePrompt: string
+  cameraRules?: {
+    axisDirection: string
+    allowedAngles: string[]
+    forbiddenAngles: string[]
+  }
+}
+
+export interface PromptEnvironment {
+  backgroundMotion?: string
+  lighting?: string
+  mood?: string
+  style?: string
+}
 
 /** 解析时间范围字符串 "0s-5s" → { start: 0, end: 5 } */
 function parseTimeRange(timeRange: string): { start: number, end: number } {
   const match = timeRange.match(/(\d+)s-(\d+)s/)
   if (!match)
     return { start: 0, end: 5 }
-  return { start: Number.parseInt(match[1]), end: Number.parseInt(match[2]) }
+  const [, start = '0', end = '5'] = match
+  return { start: Number.parseInt(start), end: Number.parseInt(end) }
 }
 
 /** 将多秒区间时间线展开为逐秒时间线，如 "0s-3s: 动作A" → 3 条单秒条目 */
@@ -58,6 +106,8 @@ function buildTimelineSection(
 
     for (let i = 0; i < perSecondTimeline.length; i++) {
       const entry = perSecondTimeline[i]
+      if (!entry)
+        continue
       if (entry.action !== currentAction || i === perSecondTimeline.length - 1) {
         if (currentAction) {
           if (startTime === endTime) {
@@ -68,11 +118,11 @@ function buildTimelineSection(
           }
         }
         currentAction = entry.action
-        startTime = Number.parseInt(entry.time.split('-')[0])
+        startTime = Number.parseInt(entry.time.split('-')[0] ?? '0')
         endTime = startTime
       }
       else {
-        endTime = Number.parseInt(entry.time.split('-')[0])
+        endTime = Number.parseInt(entry.time.split('-')[0] ?? '0')
       }
     }
 
@@ -105,11 +155,11 @@ function buildTimelineSection(
  *   9. Quality requirements — 高一致性 AI 视频的硬性约束
  */
 export function buildShotVideoPrompt(args: {
-  shot: NormalizedShot
-  characters: NormalizedCharacter[]
-  location: NormalizedLocation
+  shot: PromptShot
+  characters: PromptCharacter[]
+  location: PromptLocation
   timeline?: Array<{ time: string, action: string }>
-  environment?: { backgroundMotion?: string, lighting?: string, mood?: string, style?: string }
+  environment?: PromptEnvironment
 }): { videoPrompt: string, negativePrompt: string } {
   const { shot, characters, location, timeline, environment } = args
 

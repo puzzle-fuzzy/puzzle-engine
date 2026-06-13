@@ -25,10 +25,13 @@ import {
   setCanvasAssetActive,
   updateCanvasShot,
 } from '@excuse/db'
+import {
+  buildCharacterPrompt,
+  buildLocationPrompt,
+  parseLLMJson,
+} from '@excuse/prompt-engine'
 import { getModelById as getProviderModelById, validateAndMerge } from '@excuse/provider'
 import { extractBillingParams } from '@excuse/shared'
-import { parseLLMJson } from './json-helper'
-import { buildCharacterPrompt, buildLocationPrompt } from './prompts'
 import { createClient, getTextModel, getVideoModel, notifyNode } from './service-helpers'
 import { prepareCanvasVideoParams } from './videos'
 

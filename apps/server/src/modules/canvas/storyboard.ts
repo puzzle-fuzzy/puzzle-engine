@@ -1,6 +1,10 @@
 import type { CanvasAssetOutput } from '@excuse/db'
 import type { ShotDraft } from '@excuse/shared'
 import {
+  buildStoryboardPrompt,
+  parseLLMJson,
+} from '@excuse/prompt-engine'
+import {
   batchCreateCanvasShots,
   createCanvasAsset,
   deleteCanvasShotsByProject,
@@ -15,8 +19,6 @@ import {
   updateCanvasProject,
 } from '@excuse/db'
 import { getModelById, validateAndMerge } from '@excuse/provider'
-import { parseLLMJson } from './json-helper'
-import { buildStoryboardPrompt } from './prompts'
 import { getProjectDetail } from './service-crud'
 import { assertNotGenerating, createClient, getTextModel, notifyNode } from './service-helpers'
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'bun:test'
-import { buildAnalysisPrompt, buildCharacterPrompt, buildLocationPrompt, buildStoryboardPrompt } from '@excuse/prompt-engine'
+import { buildAnalysisPrompt, buildCharacterPrompt, buildLocationPrompt, buildStoryboardPrompt } from '../src'
 
 const storyText = '在一个遥远的王国里，住着一位勇敢的少年。他踏上了一段冒险旅程。'
 const analysis = {

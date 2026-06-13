@@ -1,6 +1,10 @@
 import type { CanvasAssetOutput } from '@excuse/db'
 import type { LocationProfile } from '@excuse/shared'
 import {
+  buildLocationPrompt,
+  parseLLMJson,
+} from '@excuse/prompt-engine'
+import {
   createCanvasAsset,
   createCanvasLocation,
   deleteCanvasLocationsByProject,
@@ -15,8 +19,6 @@ import {
   updateCanvasProject,
 } from '@excuse/db'
 import { getModelById, validateAndMerge } from '@excuse/provider'
-import { parseLLMJson } from './json-helper'
-import { buildLocationPrompt } from './prompts'
 import { getProjectDetail } from './service-crud'
 import { assertNotGenerating, createClient, getTextModel, notifyNode } from './service-helpers'
 
