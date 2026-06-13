@@ -1028,6 +1028,7 @@ interface TaskDefinition {
 | Subtitle 管线 | ✅ 已完成 | ASR → SRT → burn 全链路已落地 |
 | SSE polling 兜底（局部） | ✅ 部分完成 | PipelineController 有 3 秒 polling pipeline runs 兜底，但非通用化 |
 | P0-1：统一 tasks 表 + claim 机制 | ✅ 已完成 | `tasks` 表（schema + repo + migration），`FOR UPDATE SKIP LOCKED` claim，heartbeat extend，orphan sweep，canvas_pipeline_runs 加 taskId FK |
+| P0-2：Lock heartbeat + Orphan sweep | ✅ 已完成 | Worker claim 循环 + `startTaskHeartbeat()` + `sweepOrphanTasks(5min)` + handler dispatch 骨架 + retriable/permanent 错误分类 |
 
 ## 优先级调整说明
 
