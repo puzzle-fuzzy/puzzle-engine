@@ -1,6 +1,6 @@
 import type { WorkerHealthState } from './health'
 import type { TaskResult } from './task-processor'
-import { claimNextTask, extendTaskLock, markTaskSucceeded, notifyTaskStatusChange, pollExportingProjects, pollPendingASRProjects, pollPendingVideoTasks, sweepOrphanTasks } from '@excuse/db'
+import { claimNextTask, extendTaskLock, getTaskById, markTaskSucceeded, notifyTaskStatusChange, pollExportingProjects, pollPendingASRProjects, pollPendingVideoTasks, sweepOrphanTasks } from '@excuse/db'
 import { ASRClient, checkFFmpegAsync } from '@excuse/provider'
 import { createLogger } from '@excuse/shared'
 import { claimNextTaskWithAdapter, completeTaskWithAdapter, sweepOrphanTasksWithAdapter } from '@excuse/task-engine'
@@ -160,7 +160,6 @@ async function main() {
         catch (error) {
           // Handler 失败 → handleTaskError (retryable vs permanent)
           await handleTaskError(claimedTask, error)
-          const { notifyTaskStatusChange, getTaskById } = await import('@excuse/db')
           const updatedTask = await getTaskById(claimedTask.id)
           if (updatedTask) {
             await notifyTaskStatusChange(updatedTask)
