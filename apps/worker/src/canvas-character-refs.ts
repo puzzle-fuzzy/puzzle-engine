@@ -1,29 +1,32 @@
-import type { CanvasAssetOutput } from '@excuse/db'
 import type { WorkerConfig } from './config'
 import {
   createCanvasAsset,
   markCanvasAssetFailed,
   markCanvasAssetRunning,
-  markCanvasAssetSucceeded,
-  setCanvasAssetActive,
   updateCanvasCharacter,
   updateCanvasProject,
 } from '@excuse/db'
 import {
   AssetStorage,
   getModelById,
-  validateAndMerge,
 } from '@excuse/provider'
 import {
   createDashScopeClient,
   getImageModel,
   loadRunnableCanvasProject,
 } from './canvas-execution'
+import { generateCanvasImageAsset } from './canvas-image-assets'
 
 interface CharacterRefSpec {
+  assetId: string
+  characterId: string
+  imageModel: string
+  imageModelConfig: NonNullable<ReturnType<typeof getModelById>>
   prompt: string
   prefix: string
   updateField: 'referenceImageUrl' | 'turnaroundSheetUrl'
+  client: ReturnType<typeof createDashScopeClient>
+  storage: AssetStorage
 }
 
 export interface CanvasCharacterRefsResult extends Record<string, unknown> {
@@ -143,38 +146,21 @@ export async function executeCanvasCharacterRefs(
   }
 }
 
-async function generateCharacterRef(args: CharacterRefSpec & {
-  assetId: string
-  characterId: string
-  imageModel: string
-  imageModelConfig: NonNullable<ReturnType<typeof getModelById>>
-  client: ReturnType<typeof createDashScopeClient>
-  storage: AssetStorage
-}): Promise<boolean> {
-  const validation = validateAndMerge(args.imageModelConfig, {
+async function generateCharacterRef(args: CharacterRefSpec): Promise<boolean> {
+  const generated = await generateCanvasImageAsset({
+    assetId: args.assetId,
+    imageModel: args.imageModel,
+    imageModelConfig: args.imageModelConfig,
     prompt: args.prompt,
-    size: '2048*2048',
-    n: 1,
+    subDir: `canvas/${args.characterId}`,
+    prefix: args.prefix,
+    errorMessage: '角色参考图生成失败',
+    client: args.client,
+    storage: args.storage,
   })
-  if (!validation.ok) {
-    const detail = validation.errors.map(error => `${error.field}: ${error.message}`).join('; ')
-    throw new Error(`参数校验失败：${detail}`)
-  }
-
-  const result = await args.client.generateImage(args.imageModel, validation.params)
-  if (result.type === 'failed')
-    throw new Error(result.error || '角色参考图生成失败')
-
-  const urls = result.output.urls
-  if (!Array.isArray(urls) || urls.length === 0)
+  if (!generated)
     return false
 
-  const savedUrls = await args.storage.downloadAndMap(urls as string[], `canvas/${args.characterId}`, args.prefix)
-  const publicUrl = savedUrls[0] || urls[0]
-  await updateCanvasCharacter(args.characterId, { [args.updateField]: publicUrl })
-
-  const outputJson: CanvasAssetOutput = { type: 'image', urls: savedUrls.length > 0 ? savedUrls : urls }
-  await markCanvasAssetSucceeded(args.assetId, outputJson, publicUrl, savedUrls[0] ?? undefined, urls[0], undefined)
-  await setCanvasAssetActive(args.assetId)
+  await updateCanvasCharacter(args.characterId, { [args.updateField]: generated.publicUrl })
   return true
 }

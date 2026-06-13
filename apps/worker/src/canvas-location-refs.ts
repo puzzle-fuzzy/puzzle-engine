@@ -1,24 +1,21 @@
-import type { CanvasAssetOutput } from '@excuse/db'
 import type { WorkerConfig } from './config'
 import {
   createCanvasAsset,
   markCanvasAssetFailed,
   markCanvasAssetRunning,
-  markCanvasAssetSucceeded,
-  setCanvasAssetActive,
   updateCanvasLocation,
   updateCanvasProject,
 } from '@excuse/db'
 import {
   AssetStorage,
   getModelById,
-  validateAndMerge,
 } from '@excuse/provider'
 import {
   createDashScopeClient,
   getImageModel,
   loadRunnableCanvasProject,
 } from './canvas-execution'
+import { generateCanvasImageAsset } from './canvas-image-assets'
 
 export interface CanvasLocationRefsResult extends Record<string, unknown> {
   phase: 'locationRefs'
@@ -72,31 +69,21 @@ export async function executeCanvasLocationRefs(
     try {
       await markCanvasAssetRunning(refAsset.id)
 
-      const validation = validateAndMerge(imageModelConfig, {
+      const generated = await generateCanvasImageAsset({
+        assetId: refAsset.id,
+        imageModel,
+        imageModelConfig,
         prompt,
-        size: '2048*2048',
-        n: 1,
+        subDir: `canvas/${location.id}`,
+        prefix: 'ref',
+        errorMessage: '场景参考图生成失败',
+        client,
+        storage,
       })
-      if (!validation.ok) {
-        const detail = validation.errors.map(error => `${error.field}: ${error.message}`).join('; ')
-        throw new Error(`参数校验失败：${detail}`)
-      }
-
-      const result = await client.generateImage(imageModel, validation.params)
-      if (result.type === 'failed')
-        throw new Error(result.error || '场景参考图生成失败')
-
-      const urls = result.output.urls
-      if (!Array.isArray(urls) || urls.length === 0)
+      if (!generated)
         continue
 
-      const savedUrls = await storage.downloadAndMap(urls as string[], `canvas/${location.id}`, 'ref')
-      const publicUrl = savedUrls[0] || urls[0]
-      await updateCanvasLocation(location.id, { referenceImageUrl: publicUrl })
-
-      const outputJson: CanvasAssetOutput = { type: 'image', urls: savedUrls.length > 0 ? savedUrls : urls }
-      await markCanvasAssetSucceeded(refAsset.id, outputJson, publicUrl, savedUrls[0] ?? undefined, urls[0], undefined)
-      await setCanvasAssetActive(refAsset.id)
+      await updateCanvasLocation(location.id, { referenceImageUrl: generated.publicUrl })
       refsCreated += 1
     }
     catch (error) {
