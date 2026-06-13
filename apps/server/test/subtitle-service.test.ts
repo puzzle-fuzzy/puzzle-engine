@@ -21,9 +21,24 @@ import { describe, expect, it, mock } from 'bun:test'
 
 // ── Mock 依赖 ──────────────────────────────────────────
 
+/** mock createGenerationRecord 返回的记录类型 */
+interface MockGenerationRecord {
+  id: string
+  accountId: string
+  taskId: string
+  model: string
+  category: string
+  status: string
+  cost: Record<string, unknown>
+  inputParams: unknown
+  traceId: string
+  createdAt: Date
+  updatedAt: Date
+}
+
 const dbState = {
   projects: [] as SubtitleProjectRow[],
-  records: [] as Array<{ id: string, model: string, category: string, status: string, taskId: string, cost: Record<string, unknown> }>,
+  records: [] as MockGenerationRecord[],
   files: [] as UploadedFileRow[],
   notifications: [] as Array<Record<string, unknown>>,
 }
@@ -68,7 +83,7 @@ mock.module('@excuse/db', () => ({
     return project
   },
   createGenerationRecord: async (values: Record<string, unknown>) => {
-    const record = {
+    const record: MockGenerationRecord = {
       id: `rec-${crypto.randomUUID().slice(0, 8)}`,
       accountId: values.accountId as string,
       taskId: values.taskId as string,
@@ -81,8 +96,8 @@ mock.module('@excuse/db', () => ({
       createdAt: new Date(),
       updatedAt: new Date(),
     }
-    dbState.records.push(record as any)
-    return record as any
+    dbState.records.push(record)
+    return record
   },
   notifyGenerationStatus: async (payload: Record<string, unknown>) => {
     dbState.notifications.push(payload)
