@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'bun:test'
 import {
   applyTaskFailureWithAdapter,
+  cancelTaskWithAdapter,
   claimNextTaskWithAdapter,
   classifyTaskError,
   completeTaskWithAdapter,
@@ -255,6 +256,34 @@ describe('@excuse/task-engine', () => {
       claimTtlMs: 30_000,
       adapter: {
         extendTaskLock: async () => null,
+      },
+    })
+
+    expect(result).toBeNull()
+  })
+
+  it('cancels a task through an adapter and returns the cancelled task', async () => {
+    const calls: string[] = []
+    const cancelled = { id: 'task-1', status: 'cancelled' }
+    const result = await cancelTaskWithAdapter({
+      taskId: 'task-1',
+      adapter: {
+        cancelTask: async (id) => {
+          calls.push(id)
+          return cancelled
+        },
+      },
+    })
+
+    expect(result).toBe(cancelled)
+    expect(calls).toEqual(['task-1'])
+  })
+
+  it('returns null when cancel adapter reports task already in terminal state', async () => {
+    const result = await cancelTaskWithAdapter({
+      taskId: 'task-1',
+      adapter: {
+        cancelTask: async () => null,
       },
     })
 

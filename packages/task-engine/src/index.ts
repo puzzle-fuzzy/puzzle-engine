@@ -75,6 +75,15 @@ export interface ExtendTaskLockWithAdapterInput<TTask> {
   adapter: TaskHeartbeatAdapter<TTask>
 }
 
+export interface TaskCancelAdapter<TTask> {
+  cancelTask: (id: string) => Promise<TTask | null> | TTask | null
+}
+
+export interface CancelTaskWithAdapterInput<TTask> {
+  taskId: string
+  adapter: TaskCancelAdapter<TTask>
+}
+
 export interface TaskFailureAdapter {
   markTaskRetrying: (id: string, nextRunAt: Date) => Promise<unknown> | unknown
   markTaskFailed: (id: string, errorInfo?: TaskErrorInfo, errorMessage?: string) => Promise<unknown> | unknown
@@ -181,6 +190,20 @@ export async function extendTaskLockWithAdapter<TTask>(
   input: ExtendTaskLockWithAdapterInput<TTask>,
 ): Promise<TTask | null> {
   return input.adapter.extendTaskLock(input.taskId, input.workerId, input.claimTtlMs)
+}
+
+/**
+ * 通过 adapter 取消任务 — 取消状态转换注入，task-engine 不依赖 DB
+ *
+ * 仅收口 `tasks` 表的取消动作；Canvas pipeline run / canvas_assets 取消属于业务边界，
+ * 仍由外层 route 决定「取消哪个 run / 哪些资产」。
+ *
+ * @returns 被取消的 task；null 表示任务已不在可取消状态
+ */
+export async function cancelTaskWithAdapter<TTask>(
+  input: CancelTaskWithAdapterInput<TTask>,
+): Promise<TTask | null> {
+  return input.adapter.cancelTask(input.taskId)
 }
 
 export async function applyTaskFailureWithAdapter<TTask extends TaskRetryCandidate & { id: string }>(

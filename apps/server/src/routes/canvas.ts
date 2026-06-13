@@ -58,6 +58,7 @@ import {
   updateCanvasProject,
 } from '@excuse/db'
 import { createLogger } from '@excuse/shared'
+import { cancelTaskWithAdapter } from '@excuse/task-engine'
 import { Elysia, t } from 'elysia'
 import * as svc from '../modules/canvas/service'
 import { createRequireAuthPlugin } from '../plugins/auth'
@@ -461,7 +462,7 @@ export function createCanvasRoutes(config: ServerConfig) {
           cancelledCount++
           // 取消关联的 task（如果有）
           if (cancelled.taskId) {
-            await cancelTask(cancelled.taskId).catch(() => { /* task 可能已终态 */ })
+            await cancelTaskWithAdapter({ taskId: cancelled.taskId, adapter: { cancelTask } }).catch(() => { /* task 可能已终态 */ })
           }
           // SSE 通知：阶段已取消
           dispatchToUser(userId, 'pipeline_node_update', {
