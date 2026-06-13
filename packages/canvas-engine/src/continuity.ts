@@ -127,6 +127,8 @@ export function validateShotContinuity(args: {
   for (let i = 1; i < shots.length; i++) {
     const prev = shots[i - 1]
     const curr = shots[i]
+    if (!prev || !curr)
+      continue
 
     if (prev.locationId !== curr.locationId)
       continue

@@ -637,7 +637,7 @@
 
 ### 11. 新增 `packages/prompt-engine` 或 `packages/canvas-engine`
 
-状态：部分完成，`packages/prompt-engine` 已完成 Canvas prompt 模板、LLM JSON parser、shot video prompt builder 的基础拆分（commit：`refactor(prompt-engine): extract canvas prompt utilities`）。剩余：storyboard builder 的结构化校验、continuity rules、character/location extraction schema 和更完整的 Canvas domain engine 后续继续拆。
+状态：部分完成，`packages/prompt-engine` 已完成 Canvas prompt 模板、LLM JSON parser、shot video prompt builder 的基础拆分（commit：`refactor(prompt-engine): extract canvas prompt utilities`）；`packages/canvas-engine` 已完成镜头连续性校验规则基础拆分（commit：`refactor(canvas-engine): extract continuity rules`）。剩余：storyboard builder 的结构化校验、character/location extraction schema 和更完整的 Canvas domain engine 后续继续拆。
 
 当前迹象：
 
@@ -646,7 +646,7 @@
 
 待办：
 
-- 将 prompt 模板、结构化输出 parser、storyboard builder、continuity rules、character/location extraction schema 抽成 package。基础 prompt/parser/video prompt builder 已完成，剩余结构化校验、continuity rules 和 Canvas domain engine 继续推进。
+- 将 prompt 模板、结构化输出 parser、storyboard builder、continuity rules、character/location extraction schema 抽成 package。基础 prompt/parser/video prompt builder 和 continuity rules 已完成，剩余结构化校验和更完整 Canvas domain engine 继续推进。
 - server route 只负责接收请求和创建任务。
 - worker 调用 engine 完成实际生成或解析。
 

@@ -1,5 +1,5 @@
-import type { NormalizedCharacter, NormalizedLocation, NormalizedShot } from '../src/modules/canvas/continuity'
 import { describe, expect, it } from 'bun:test'
+import type { NormalizedCharacter, NormalizedLocation, NormalizedShot } from '@excuse/canvas-engine'
 import { buildShotVideoPrompt } from '@excuse/prompt-engine'
 
 function makeShot(overrides: Partial<NormalizedShot> = {}): NormalizedShot {

@@ -81,6 +81,7 @@
         "@elysiajs/openapi": "^1.4.15",
         "@excuse/auth": "workspace:*",
         "@excuse/billing": "workspace:*",
+        "@excuse/canvas-engine": "workspace:*",
         "@excuse/db": "workspace:*",
         "@excuse/events": "workspace:*",
         "@excuse/gateway": "workspace:*",
@@ -125,6 +126,13 @@
       "dependencies": {
         "@excuse/shared": "workspace:*",
         "currency.js": "2",
+      },
+    },
+    "packages/canvas-engine": {
+      "name": "@excuse/canvas-engine",
+      "version": "0.0.1",
+      "dependencies": {
+        "@excuse/shared": "workspace:*",
       },
     },
     "packages/db": {
@@ -439,6 +447,8 @@
     "@excuse/auth": ["@excuse/auth@workspace:packages/auth"],
 
     "@excuse/billing": ["@excuse/billing@workspace:packages/billing"],
+
+    "@excuse/canvas-engine": ["@excuse/canvas-engine@workspace:packages/canvas-engine"],
 
     "@excuse/db": ["@excuse/db@workspace:packages/db"],
 

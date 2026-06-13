@@ -18,6 +18,7 @@
     "@elysiajs/openapi": "^1.4.15",
     "@excuse/auth": "workspace:*",
     "@excuse/billing": "workspace:*",
+    "@excuse/canvas-engine": "workspace:*",
     "@excuse/db": "workspace:*",
     "@excuse/events": "workspace:*",
     "@excuse/gateway": "workspace:*",

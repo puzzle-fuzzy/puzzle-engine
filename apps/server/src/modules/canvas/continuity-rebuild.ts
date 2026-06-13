@@ -1,5 +1,6 @@
+import type { NormalizedCharacter, NormalizedLocation, NormalizedShot } from '@excuse/canvas-engine'
 import type { CanvasAssetOutput } from '@excuse/db'
-import type { NormalizedCharacter, NormalizedLocation, NormalizedShot } from './continuity'
+import { validateShotContinuity } from '@excuse/canvas-engine'
 import {
   createCanvasAsset,
   createContinuityReport,
@@ -15,7 +16,6 @@ import {
   updateCanvasShot,
 } from '@excuse/db'
 import { buildShotVideoPrompt } from '@excuse/prompt-engine'
-import { validateShotContinuity } from './continuity'
 import { getProjectDetail } from './service-crud'
 import { assertNotGenerating, notifyNode } from './service-helpers'
 
