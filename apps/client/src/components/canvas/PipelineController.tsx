@@ -41,7 +41,7 @@ function resolveModelDisplayName(
 ): string | null {
   if (!category)
     return null // continuity 阶段无模型
-  const prefKey = `${category}Model` as keyof CanvasModelPreferences
+  const prefKey = `${category}Model` as 'textModel' | 'imageModel' | 'videoModel'
   const modelId = prefs[prefKey] || DEFAULT_MODEL_IDS[category]
   const config = models.find(m => m.id === modelId)
   return config?.name || modelId // 兜底显示原始 ID

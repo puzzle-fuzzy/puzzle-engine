@@ -141,6 +141,13 @@
       "when": 1781348709763,
       "tag": "0019_gifted_the_professor",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1781357955522,
+      "tag": "0020_long_doomsday",
+      "breakpoints": true
     }
   ]
 }

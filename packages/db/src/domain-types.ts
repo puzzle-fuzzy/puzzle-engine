@@ -43,6 +43,31 @@ export interface CanvasModelPreferences {
   textModel?: string
   imageModel?: string
   videoModel?: string
+  /** 是否启用后端自动推进流水线阶段（Worker 完成一个阶段后自动创建下一个阶段的任务） */
+  autoProgress?: boolean
+}
+
+// ===== Canvas Asset Domain Types =====
+
+/**
+ * Canvas 资产输出 — 存储在 canvas_assets.outputJson JSONB 中
+ *
+ * 根据 category 不同，输出形态不同：
+ *   text 类（analysis/characterProfile/locationProfile/storyboard/continuityReport/videoPrompt）：
+ *     type='json', data={...} 存储解析后的 LLM 输出
+ *   image 类（characterPortrait/characterTurnaround/locationRef）：
+ *     type='image', urls=[...] 存储 provider 返回的图片 URL 列表
+ *   video 类（shotVideo）：
+ *     type='video', urls=[...] 存储下载后的视频 URL
+ */
+export interface CanvasAssetOutput {
+  type: 'text' | 'image' | 'video' | 'json'
+  /** LLM 输出的文本内容（text 类型） */
+  text?: string
+  /** 图片/视频 URL 列表（image/video 类型） */
+  urls?: string[]
+  /** 结构化 JSON 数据（json 类型） */
+  data?: Record<string, unknown>
 }
 
 // ===== Task Domain Types =====

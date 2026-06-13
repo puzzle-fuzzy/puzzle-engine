@@ -1,5 +1,5 @@
 import type { InferInsertModel, InferSelectModel } from 'drizzle-orm'
-import type { accounts, canvasCharacters, canvasContinuityReports, canvasLocations, canvasPipelinePhaseEnum, canvasPipelineRuns, canvasPipelineRunStatusEnum, canvasProjects, canvasProjectStatusEnum, canvasShots, canvasShotStatusEnum, creditAccounts, creditTransactions, generationCategoryEnum, generationRecords, generationStatusEnum, notifications, subtitleProjects, subtitleProjectStatusEnum, taskDomainEnum, tasks, taskStatusEnum, uploadedFiles, usageEvents, workflows, workflowSteps } from './schema'
+import type { accounts, canvasAssets, canvasAssetCategoryEnum, canvasAssetStatusEnum, canvasCharacters, canvasContinuityReports, canvasLocations, canvasPipelinePhaseEnum, canvasPipelineRuns, canvasPipelineRunStatusEnum, canvasProjects, canvasProjectStatusEnum, canvasShots, canvasShotStatusEnum, creditAccounts, creditTransactions, generationCategoryEnum, generationRecords, generationStatusEnum, notifications, subtitleProjects, subtitleProjectStatusEnum, taskDomainEnum, tasks, taskStatusEnum, uploadedFiles, usageEvents, workflows, workflowSteps } from './schema'
 
 // ===== Drizzle 行类型（从 schema 自动推导） =====
 
@@ -32,6 +32,12 @@ export type CanvasCharacterRow = InferSelectModel<typeof canvasCharacters>
 
 /** canvas_characters 表 — 插入参数类型 */
 export type CanvasCharacterInsert = InferInsertModel<typeof canvasCharacters>
+
+/** canvas_assets 表 — 查询结果行类型 */
+export type CanvasAssetRow = InferSelectModel<typeof canvasAssets>
+
+/** canvas_assets 表 — 插入参数类型 */
+export type CanvasAssetInsert = InferInsertModel<typeof canvasAssets>
 
 /** canvas_locations 表 — 查询结果行类型 */
 export type CanvasLocationRow = InferSelectModel<typeof canvasLocations>
@@ -125,6 +131,12 @@ export type CanvasPipelinePhase = typeof canvasPipelinePhaseEnum.enumValues exte
 /** 画布流水线运行状态：从 pgEnum 定义推断 */
 export type CanvasPipelineRunStatus = typeof canvasPipelineRunStatusEnum.enumValues extends (infer T)[] ? T : never
 
+/** 画布资产类别：从 pgEnum 定义推断 */
+export type CanvasAssetCategory = typeof canvasAssetCategoryEnum.enumValues extends (infer T)[] ? T : never
+
+/** 画布资产状态：从 pgEnum 定义推断 */
+export type CanvasAssetStatus = typeof canvasAssetStatusEnum.enumValues extends (infer T)[] ? T : never
+
 /** 字幕项目状态：从 pgEnum 定义推断 */
 export type SubtitleProjectStatus = typeof subtitleProjectStatusEnum.enumValues extends (infer T)[] ? T : never
 
@@ -170,6 +182,9 @@ export type CanvasShotSerialized = Serialize<CanvasShotRow>
 
 /** canvas_pipeline_runs 序列化后类型（Date → string） */
 export type CanvasPipelineRunSerialized = Serialize<CanvasPipelineRunRow>
+
+/** canvas_assets 序列化后类型（Date → string） */
+export type CanvasAssetSerialized = Serialize<CanvasAssetRow>
 
 // ===== 查询过滤条件 =====
 
