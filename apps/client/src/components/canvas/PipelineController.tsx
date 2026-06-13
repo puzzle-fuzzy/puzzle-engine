@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import {
   analyzeCanvasProject,
+  cancelCanvasActivePhase,
   checkCanvasContinuity,
   fetchCanvasPipelineRuns,
   fetchModels,
@@ -511,6 +512,24 @@ export default function PipelineController({
     }
   }
 
+  async function handleCancelActive() {
+    try {
+      const result = await cancelCanvasActivePhase(projectId)
+      toast.success(result.message)
+      setRunning(false)
+      setCurrentPhase(-1)
+      setPendingConfirmIdx(-1)
+      activeRunIdRef.current = null
+      setElapsed(0)
+      phaseStartedAtRef.current = 0
+      onPhaseChange?.(null)
+      onPhaseComplete()
+    }
+    catch {
+      toast.error('终止阶段出错')
+    }
+  }
+
   return (
     <div className="border-t bg-background/95 backdrop-blur-sm px-4 py-3">
       {/* Shot statistics */}
@@ -664,6 +683,14 @@ export default function PipelineController({
             <span className="text-xs text-muted-foreground">
               执行中...
             </span>
+          )}
+          {running && (
+            <button
+              onClick={handleCancelActive}
+              className="text-xs px-2 py-1 rounded border border-red-300 text-red-700 hover:bg-red-50"
+            >
+              终止当前阶段
+            </button>
           )}
 
           {error && (

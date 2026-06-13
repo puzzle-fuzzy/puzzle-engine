@@ -399,6 +399,13 @@ export async function retryFailedCanvasShots(projectId: string): Promise<Accepte
   )
 }
 
+/** 终止当前活跃阶段 — 取消 pipeline run + 关联 task + 活跃 canvas_assets */
+export async function cancelCanvasActivePhase(projectId: string): Promise<{ cancelled: number, message: string }> {
+  return unwrapEden<{ cancelled: number, message: string }>(
+    await api.api.canvas.projects({ projectId })['cancel-active'].post(),
+  )
+}
+
 export async function fetchCanvasPipelineRuns(projectId: string): Promise<CanvasPipelineRunDTO[]> {
   const res = await unwrapEden<CanvasPipelineRunListResponse>(
     await api.api.canvas.projects({ projectId }).runs.get(),

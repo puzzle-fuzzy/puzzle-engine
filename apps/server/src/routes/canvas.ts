@@ -38,6 +38,8 @@ import type { CanvasPipelinePhase } from '@excuse/db'
 import type { AcceptedResponse, CanvasAssetsPollResponse, CanvasCharacterResponse, CanvasLocationResponse, CanvasMutationOkResponse, CanvasPipelineRunDTO, CanvasPipelineRunListResponse, CanvasPipelineRunResponse, CanvasProjectListResponse, CanvasProjectResponse, CanvasShotResponse } from '@excuse/shared'
 import type { ServerConfig } from '../config'
 import {
+  cancelActiveCanvasAssetsByProject,
+  cancelTask,
   createPipelineRun,
   createTask,
   findActiveRunForPhase,
@@ -48,6 +50,7 @@ import {
   getPipelineRunById,
   linkPipelineRunToTask,
   listPipelineRunsByProject,
+  markPipelineRunCancelled,
   updateCanvasProject,
 } from '@excuse/db'
 import { createLogger } from '@excuse/shared'
@@ -431,6 +434,46 @@ export function createCanvasRoutes(config: ServerConfig) {
       const run = await createPipelineRun({ projectId, phase, createdBy: userId })
       fireAndForgetWithRun(userId, projectId, phase, run.id, svc.generateVideos(projectId, config, run.id))
       return acceptedResponse(run.id)
+    })
+
+    // ── 终止当前活跃阶段 ──────────────────────────────────
+    // 取消 pipeline run + 关联 task + 项目所有活跃 canvas_asset
+    .post('/projects/:projectId/cancel-active', async ({ params: { projectId }, userId, set }) => {
+      const owned = await getCanvasProjectByIdForAccount(projectId, userId)
+      if (!owned)
+        return notFound(set, '项目不存在或无权访问')
+
+      // 查找项目所有活跃 pipeline runs（pending 或 running 状态）
+      const runs = await listPipelineRunsByProject(projectId)
+      const activeRuns = runs.filter(r => r.status === 'pending' || r.status === 'running')
+      if (activeRuns.length === 0)
+        return { cancelled: 0, message: '当前没有活跃的阶段任务' }
+
+      // 取消所有活跃 pipeline runs + 关联 tasks
+      let cancelledCount = 0
+      for (const run of activeRuns) {
+        const cancelled = await markPipelineRunCancelled(run.id)
+        if (cancelled) {
+          cancelledCount++
+          // 取消关联的 task（如果有）
+          if (cancelled.taskId) {
+            await cancelTask(cancelled.taskId).catch(() => { /* task 可能已终态 */ })
+          }
+          // SSE 通知：阶段已取消
+          dispatchToUser(userId, 'pipeline_node_update', {
+            projectId,
+            nodeType: 'phase',
+            nodeId: cancelled.phase,
+            status: 'cancelled',
+            runId: run.id,
+          })
+        }
+      }
+
+      // 批量取消项目所有活跃 canvas_assets（queued/running 的图片生成等）
+      await cancelActiveCanvasAssetsByProject(projectId).catch(() => { /* 资产取消失败不阻塞 */ })
+
+      return { cancelled: cancelledCount, message: `已取消 ${cancelledCount} 个活跃阶段` }
     })
 
     .post('/projects/:projectId/layout', async ({ params: { projectId }, body, userId, set }) => {
