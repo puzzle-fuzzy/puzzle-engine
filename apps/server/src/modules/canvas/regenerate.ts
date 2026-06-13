@@ -5,15 +5,14 @@
  * 场景重新生成: 同上
  * 镜头视频重新生成: 复制镜头数据创建新镜头行，提交视频任务
  */
-import type { CanvasAssetOutput, GenerationInputParams } from '@excuse/db'
+import type { CanvasAssetOutput } from '@excuse/db'
 import type { CharacterProfile, LocationProfile } from '@excuse/shared'
-import { calculateCost } from '@excuse/billing'
+import { submitCanvasShotVideo } from '@excuse/canvas-runtime'
 import {
   createCanvasAsset,
   createCanvasCharacter,
   createCanvasLocation,
   createCanvasShot,
-  createGenerationRecord,
   getCanvasCharacterById,
   getCanvasLocationById,
   getCanvasProjectById,
@@ -23,7 +22,6 @@ import {
   markCanvasAssetRunning,
   markCanvasAssetSucceeded,
   setCanvasAssetActive,
-  updateCanvasShot,
 } from '@excuse/db'
 import {
   buildCharacterPrompt,
@@ -31,9 +29,7 @@ import {
   parseLLMJson,
 } from '@excuse/prompt-engine'
 import { getModelById as getProviderModelById, validateAndMerge } from '@excuse/provider'
-import { extractBillingParams } from '@excuse/shared'
 import { createClient, getTextModel, getVideoModel, notifyNode } from './service-helpers'
-import { prepareCanvasVideoParams } from './videos'
 
 // ── 角色重新生成 ──────────────────────────────────────
 
@@ -262,45 +258,18 @@ export async function regenerateShotVideo(shotId: string, config: { dashscopeApi
     const referenceUrls = [...charRefUrls, ...(locRefUrl ? [locRefUrl] : [])]
 
     const model = getVideoModel(project.modelPreferencesJson, referenceUrls)
-    const { params: videoParams } = prepareCanvasVideoParams(model, {
+    await submitCanvasShotVideo({
+      accountId,
+      projectId: shot.projectId,
+      shotId: newShot.id,
+      assetId: shotVideoAsset.id,
+      model,
       videoPrompt: newShot.videoPrompt || '',
       negativePrompt: newShot.negativePrompt || undefined,
       duration: newShot.duration,
+      referenceUrls,
+      client,
     })
-
-    const submitResult = await client.submitVideoTaskWithFallback(
-      model,
-      videoParams,
-      referenceUrls.length > 0 ? referenceUrls : undefined,
-    )
-
-    if (!submitResult.success || !submitResult.taskId) {
-      await updateCanvasShot(newShot.id, { status: 'failed', errorMessage: submitResult.error })
-      // ── 标记视频资产失败 ──────────────────────────
-      await markCanvasAssetFailed(shotVideoAsset.id, submitResult.error ?? '视频提交失败').catch(() => {})
-      notifyNode(accountId, shot.projectId, 'shot', newShot.id, 'failed', undefined, submitResult.error)
-      throw new Error(submitResult.error || '视频提交失败')
-    }
-
-    await updateCanvasShot(newShot.id, {
-      videoTaskId: submitResult.taskId,
-      status: 'generating',
-    })
-
-    // 创建计费记录
-    const usedModelConfig = getProviderModelById(submitResult.model)
-    if (usedModelConfig) {
-      const cost = calculateCost(usedModelConfig, extractBillingParams(videoParams))
-      await createGenerationRecord({
-        accountId,
-        taskId: submitResult.taskId!,
-        model: submitResult.model,
-        category: 'video',
-        status: 'processing',
-        inputParams: { source: 'canvas', projectId: shot.projectId, shotId: newShot.id, ...videoParams } as GenerationInputParams,
-        cost,
-      })
-    }
 
     return newShot
   }

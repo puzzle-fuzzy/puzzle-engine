@@ -1,5 +1,6 @@
 import type { OSSConfig } from '@excuse/provider'
 import type { CanvasModelPreferences } from '@excuse/shared'
+import { getCanvasVideoModel } from '@excuse/canvas-runtime'
 import {
   getGenerationRecordsByTaskIds,
   listCanvasShotsByProject,
@@ -33,9 +34,7 @@ export function getImageModel(prefs: CanvasModelPreferences | null | undefined):
 }
 
 export function getVideoModel(prefs: CanvasModelPreferences | null | undefined, referenceUrls: string[]): string {
-  const base = prefs?.videoModel || 'happyhorse-1.0'
-  const strippedBase = base.replace(/-r2v$|-t2v$|-i2v$/, '')
-  return referenceUrls.length > 0 ? `${strippedBase}-r2v` : `${strippedBase}-t2v`
+  return getCanvasVideoModel(prefs, referenceUrls)
 }
 
 export function assertNotGenerating(status: string | null | undefined): void {

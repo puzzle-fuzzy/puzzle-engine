@@ -19,6 +19,7 @@
     "@excuse/auth": "workspace:*",
     "@excuse/billing": "workspace:*",
     "@excuse/canvas-engine": "workspace:*",
+    "@excuse/canvas-runtime": "workspace:*",
     "@excuse/db": "workspace:*",
     "@excuse/events": "workspace:*",
     "@excuse/gateway": "workspace:*",

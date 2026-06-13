@@ -7,8 +7,8 @@ import {
   updateCanvasShot,
 } from '@excuse/db'
 import {
-  getModelById,
-  validateAndMerge,
+  getModelById as getProviderModelById,
+  validateAndMerge as validateProviderAndMerge,
 } from '@excuse/provider'
 import { extractBillingParams } from '@excuse/shared'
 
@@ -25,6 +25,7 @@ export interface CanvasVideoSubmitInput {
   duration: number
   referenceUrls: string[]
   client: DashScopeClient
+  estimatedCost?: boolean
 }
 
 export interface CanvasVideoSubmitResult {
@@ -39,10 +40,29 @@ interface CanvasVideoParameters {
   negative_prompt?: string
 }
 
+export interface PrepareCanvasVideoParamDeps {
+  getModelById: typeof getProviderModelById
+  validateAndMerge: typeof validateProviderAndMerge
+}
+
+const providerParamDeps: PrepareCanvasVideoParamDeps = {
+  getModelById: getProviderModelById,
+  validateAndMerge: validateProviderAndMerge,
+}
+
+export function getCanvasVideoModel(
+  prefs: { videoModel?: string | null } | null | undefined,
+  referenceUrls: string[],
+): string {
+  const base = prefs?.videoModel || 'happyhorse-1.0'
+  const strippedBase = base.replace(/-r2v$|-t2v$|-i2v$/, '')
+  return referenceUrls.length > 0 ? `${strippedBase}-r2v` : `${strippedBase}-t2v`
+}
+
 export async function submitCanvasShotVideo(
   input: CanvasVideoSubmitInput,
 ): Promise<CanvasVideoSubmitResult> {
-  const videoParams = prepareCanvasVideoParams(input.model, {
+  const { params: videoParams } = prepareCanvasVideoParams(input.model, {
     videoPrompt: input.videoPrompt,
     negativePrompt: input.negativePrompt,
     duration: input.duration,
@@ -63,7 +83,7 @@ export async function submitCanvasShotVideo(
     status: 'generating',
   })
 
-  const usedModelConfig = getModelById(submitResult.model)!
+  const usedModelConfig = getProviderModelById(submitResult.model)!
   const inputParams: GenerationInputParams = {
     source: 'canvas',
     projectId: input.projectId,
@@ -78,7 +98,7 @@ export async function submitCanvasShotVideo(
     category: 'video',
     status: 'processing',
     inputParams,
-    cost,
+    cost: input.estimatedCost ? { ...cost, estimated: true } : cost,
   })
 
   return {
@@ -87,11 +107,12 @@ export async function submitCanvasShotVideo(
   }
 }
 
-function prepareCanvasVideoParams(
+export function prepareCanvasVideoParams(
   model: string,
   shot: { videoPrompt: string, negativePrompt?: string | null, duration: number },
-): ValidatedModelParameters {
-  const modelConfig = getModelById(model)
+  deps: PrepareCanvasVideoParamDeps = providerParamDeps,
+): { modelConfig: ReturnType<typeof deps.getModelById>, params: ValidatedModelParameters } {
+  const modelConfig = deps.getModelById(model)
   if (!modelConfig)
     throw new Error(`未知视频模型：${model}`)
 
@@ -105,14 +126,17 @@ function prepareCanvasVideoParams(
   if (declaredParams.has('negative_prompt') && shot.negativePrompt)
     rawParams.negative_prompt = shot.negativePrompt
 
-  const validationResult = validateAndMerge(modelConfig, rawParams)
+  const validationResult = deps.validateAndMerge(modelConfig, rawParams)
   if (!validationResult.ok) {
     const detail = validationResult.errors.map(error => `${error.field}: ${error.message}`).join('; ')
     throw new Error(`视频参数校验失败：${detail}`)
   }
 
   parseCanvasVideoParameters(validationResult.params)
-  return validationResult.params
+  return {
+    modelConfig,
+    params: validationResult.params,
+  }
 }
 
 function parseCanvasVideoParameters(value: ValidatedModelParameters): CanvasVideoParameters {

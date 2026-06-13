@@ -1,7 +1,7 @@
 import type { ValidatedModelParameters } from '@excuse/provider'
 import type { ModelConfig } from '@excuse/shared'
 import { describe, expect, it } from 'bun:test'
-import { prepareCanvasVideoParams } from '../src/modules/canvas/videos'
+import { prepareCanvasVideoParams } from '../src'
 
 const baseVideoModel: ModelConfig = {
   id: 'test-video',
@@ -28,7 +28,6 @@ const modelWithNegativePrompt: ModelConfig = {
   ],
 }
 
-/** Helper: branded type constructor — casts validated Record to ValidatedModelParameters */
 function asValidated(params: Record<string, unknown>): ValidatedModelParameters {
   return params as ValidatedModelParameters
 }
@@ -42,38 +41,23 @@ function makeDeps(modelConfig: ModelConfig, overrides?: {
     validateAndMerge: (config: ModelConfig, params: Record<string, unknown>) => {
       const errors: Array<{ field: string, message: string }> = []
 
-      if (typeof params.duration === 'number' && params.duration > 10) {
+      if (typeof params.duration === 'number' && params.duration > 10)
         errors.push({ field: 'duration', message: 'duration is too large' })
-      }
 
       for (const key of Object.keys(params)) {
         if (!config.parameters.some(param => param.name === key))
           errors.push({ field: key, message: 'unknown parameter' })
       }
 
-      if (errors.length > 0) {
+      if (errors.length > 0)
         return { ok: false as const, errors }
-      }
+
       return { ok: true as const, params: asValidated(mergeWithDefaults(config, params)) }
-    },
-    validateModelParameters: (config: ModelConfig, params: Record<string, unknown>) => {
-      const errors: Array<{ field: string, message: string }> = []
-
-      if (typeof params.duration === 'number' && params.duration > 10) {
-        errors.push({ field: 'duration', message: 'duration is too large' })
-      }
-
-      for (const key of Object.keys(params)) {
-        if (!config.parameters.some(param => param.name === key))
-          errors.push({ field: key, message: 'unknown parameter' })
-      }
-
-      return { valid: errors.length === 0, errors }
     },
   }
 }
 
-describe('canvas videos', () => {
+describe('canvas video runtime', () => {
   describe('prepareCanvasVideoParams', () => {
     it('omits negative_prompt when the selected video model does not declare it', () => {
       const { params } = prepareCanvasVideoParams('test-video', {

@@ -2,6 +2,7 @@ import type { NormalizedCharacter, NormalizedLocation, NormalizedShot } from '@e
 import type { CanvasAssetOutput } from '@excuse/db'
 import type { CanvasModelPreferences } from '@excuse/shared'
 import type { WorkerConfig } from './config'
+import { getCanvasVideoModel } from '@excuse/canvas-runtime'
 import {
   createCanvasAsset,
   getCanvasProjectDetail,
@@ -16,7 +17,6 @@ type CanvasProjectDetail = NonNullable<Awaited<ReturnType<typeof getCanvasProjec
 type CreateCanvasAssetInput = Parameters<typeof createCanvasAsset>[0]
 const DEFAULT_TEXT_MODEL = 'qwen3.7-plus'
 const DEFAULT_IMAGE_MODEL = 'qwen-image-2.0-pro'
-const DEFAULT_VIDEO_MODEL = 'happyhorse-1.0'
 
 export function createDashScopeClient(workerConfig: WorkerConfig): DashScopeClient {
   return new DashScopeClient({
@@ -34,9 +34,7 @@ export function getImageModel(prefs: CanvasModelPreferences | null | undefined):
 }
 
 export function getVideoModel(prefs: CanvasModelPreferences | null | undefined, referenceUrls: string[]): string {
-  const base = prefs?.videoModel || DEFAULT_VIDEO_MODEL
-  const strippedBase = base.replace(/-r2v$|-t2v$|-i2v$/, '')
-  return referenceUrls.length > 0 ? `${strippedBase}-r2v` : `${strippedBase}-t2v`
+  return getCanvasVideoModel(prefs, referenceUrls)
 }
 
 export async function loadRunnableCanvasProject(projectId: string): Promise<CanvasProjectDetail> {

@@ -1,9 +1,6 @@
-import type { GenerationInputParams } from '@excuse/db'
-import type { ValidatedModelParameters } from '@excuse/provider'
-import { calculateCost } from '@excuse/billing'
+import { submitCanvasShotVideo } from '@excuse/canvas-runtime'
 import {
   createCanvasAsset,
-  createGenerationRecord,
   getCanvasProjectDetail,
   getCanvasShotById,
   markCanvasAssetFailed,
@@ -15,109 +12,11 @@ import {
   updateCanvasProject,
   updateCanvasShot,
 } from '@excuse/db'
-import {
-  getModelById as getProviderModelById,
-  validateAndMerge as validateProviderAndMerge,
-  validateModelParameters as validateProviderModelParameters,
-} from '@excuse/provider'
-import { extractBillingParams } from '@excuse/shared'
 import { getProjectDetail } from './service-crud'
 import { createClient, getVideoModel, notifyNode } from './service-helpers'
 
 function getErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
-}
-
-interface PrepareCanvasVideoParamDeps {
-  getModelById: typeof getProviderModelById
-  validateAndMerge: typeof validateProviderAndMerge
-  validateModelParameters: typeof validateProviderModelParameters
-}
-
-const providerParamDeps: PrepareCanvasVideoParamDeps = {
-  getModelById: getProviderModelById,
-  validateAndMerge: validateProviderAndMerge,
-  validateModelParameters: validateProviderModelParameters,
-}
-
-type CanvasVideoResolution = '720P' | '1080P'
-
-export interface CanvasVideoParameters {
-  prompt: string
-  resolution: CanvasVideoResolution
-  duration: number
-  negative_prompt?: string
-}
-
-export interface CanvasVideoGenerationInput {
-  source: 'canvas'
-  projectId: string
-  shotId: string
-  prompt: string
-  resolution: CanvasVideoResolution
-  duration: number
-  negative_prompt?: string
-}
-
-function parseCanvasVideoParameters(value: ValidatedModelParameters): CanvasVideoParameters {
-  const prompt = value.prompt
-  if (typeof prompt !== 'string' || prompt.length === 0)
-    throw new Error('视频参数校验失败：prompt 必须是非空字符串')
-
-  const resolution = value.resolution
-  if (resolution !== '720P' && resolution !== '1080P')
-    throw new Error('视频参数校验失败：resolution 必须是 720P 或 1080P')
-
-  const duration = value.duration
-  if (typeof duration !== 'number' || !Number.isFinite(duration) || duration <= 0)
-    throw new Error('视频参数校验失败：duration 必须是正数')
-
-  const negativePrompt = value.negative_prompt
-  if (negativePrompt !== undefined && typeof negativePrompt !== 'string')
-    throw new Error('视频参数校验失败：negative_prompt 必须是字符串')
-
-  return {
-    prompt,
-    resolution,
-    duration,
-    ...(negativePrompt !== undefined && { negative_prompt: negativePrompt }),
-  }
-}
-
-export function prepareCanvasVideoParams(
-  model: string,
-  shot: { videoPrompt: string, negativePrompt?: string | null, duration: number },
-  deps: PrepareCanvasVideoParamDeps = providerParamDeps,
-): { modelConfig: ReturnType<typeof deps.getModelById>, params: ValidatedModelParameters } {
-  const modelConfig = deps.getModelById(model)
-  if (!modelConfig)
-    throw new Error(`未知视频模型：${model}`)
-
-  const declaredParams = new Set(modelConfig.parameters.map(p => p.name))
-  const rawParams: Record<string, unknown> = {
-    prompt: shot.videoPrompt.slice(0, 2500),
-    resolution: '720P',
-    duration: shot.duration,
-  }
-
-  if (declaredParams.has('negative_prompt') && shot.negativePrompt) {
-    rawParams.negative_prompt = shot.negativePrompt
-  }
-
-  // validateAndMerge 是 ValidatedModelParameters 的唯一构造路径 — 校验 + 合并默认值
-  const validationResult = deps.validateAndMerge(modelConfig, rawParams)
-  if (!validationResult.ok) {
-    const message = validationResult.errors.map(error => `${error.field}: ${error.message}`).join('; ')
-    throw new Error(`视频参数校验失败：${message}`)
-  }
-
-  // 防御性运行时检查 — parseCanvasVideoParameters 在 branded type 之上仍做边界校验
-  parseCanvasVideoParameters(validationResult.params)
-
-  return {
-    modelConfig,
-    params: validationResult.params,
-  }
 }
 
 export async function generateVideos(projectId: string, config: { dashscopeApiKey: string, dashscopeBaseUrl?: string }, runId?: string) {
@@ -165,44 +64,19 @@ export async function generateVideos(projectId: string, config: { dashscopeApiKe
       const referenceUrls = [...charRefUrls, ...(locRefUrl ? [locRefUrl] : [])]
 
       const model = getVideoModel(detail.project.modelPreferencesJson, referenceUrls)
-      const { params: videoParams } = prepareCanvasVideoParams(model, {
+      await submitCanvasShotVideo({
+        accountId,
+        projectId,
+        shotId: shot.id,
+        assetId: shotVideoAsset.id,
+        model,
         videoPrompt: shot.videoPrompt,
         negativePrompt: shot.negativePrompt,
         duration: shot.duration,
-      })
-
-      const submitResult = await client.submitVideoTaskWithFallback(
-        model,
-        videoParams,
-        referenceUrls.length > 0 ? referenceUrls : undefined,
-      )
-
-      if (!submitResult.success || !submitResult.taskId) {
-        await updateCanvasShot(shot.id, { status: 'failed', errorMessage: submitResult.error })
-        // ── 标记视频资产失败 ──────────────────────────
-        await markCanvasAssetFailed(shotVideoAsset.id, submitResult.error ?? '视频提交失败').catch(() => {})
-        notifyNode(accountId, projectId, 'shot', shot.id, 'failed', undefined, submitResult.error, runId)
-        continue
-      }
-
-      await updateCanvasShot(shot.id, {
-        videoTaskId: submitResult.taskId,
-        status: 'generating',
+        referenceUrls,
+        client,
       })
       hasAnyVideo = true
-
-      const usedModelConfig = getProviderModelById(submitResult.model)!
-      const inputParams: GenerationInputParams = { source: 'canvas', projectId, shotId: shot.id, ...videoParams }
-      const cost = calculateCost(usedModelConfig, extractBillingParams(videoParams))
-      await createGenerationRecord({
-        accountId,
-        taskId: submitResult.taskId!,
-        model: submitResult.model,
-        category: 'video',
-        status: 'processing',
-        inputParams,
-        cost,
-      })
     }
     catch (error) {
       const message = getErrorMessage(error)
@@ -257,38 +131,38 @@ export async function retryShotVideo(shotId: string, config: { dashscopeApiKey: 
   const referenceUrls = [...charRefUrls, ...(locRefUrl ? [locRefUrl] : [])]
 
   const model = getVideoModel(detail.project.modelPreferencesJson, referenceUrls)
-  const { params: videoParams } = prepareCanvasVideoParams(model, {
-    videoPrompt: shot.videoPrompt!,
-    negativePrompt: shot.negativePrompt,
-    duration: shot.duration,
-  })
-
-  const submitResult = await client.submitVideoTaskWithFallback(
-    model,
-    videoParams,
-    referenceUrls.length > 0 ? referenceUrls : undefined,
-  )
-
-  if (!submitResult.success || !submitResult.taskId) {
-    await updateCanvasShot(shot.id, { status: 'failed', errorMessage: submitResult.error })
-    notifyNode(detail.project.accountId, shot.projectId, 'shot', shot.id, 'failed', undefined, submitResult.error)
-    throw new Error(submitResult.error)
-  }
-
-  await updateCanvasShot(shot.id, { videoTaskId: submitResult.taskId, status: 'generating' })
-
-  const usedModelConfig = getProviderModelById(submitResult.model)!
-  const inputParams: GenerationInputParams = { source: 'canvas', projectId: shot.projectId, shotId, ...videoParams }
-  const cost = calculateCost(usedModelConfig, extractBillingParams(videoParams))
-  await createGenerationRecord({
+  const shotVideoAsset = await createCanvasAsset({
     accountId: detail.project.accountId,
-    taskId: submitResult.taskId,
-    model: submitResult.model,
-    category: 'video',
-    status: 'processing',
-    inputParams,
-    cost: { ...cost, estimated: true },
+    projectId: shot.projectId,
+    category: 'shotVideo',
+    targetEntityType: 'shot',
+    targetEntityId: shot.id,
+    model,
   })
+  await markCanvasAssetRunning(shotVideoAsset.id)
+
+  try {
+    await submitCanvasShotVideo({
+      accountId: detail.project.accountId,
+      projectId: shot.projectId,
+      shotId,
+      assetId: shotVideoAsset.id,
+      model,
+      videoPrompt: shot.videoPrompt!,
+      negativePrompt: shot.negativePrompt,
+      duration: shot.duration,
+      referenceUrls,
+      client,
+      estimatedCost: true,
+    })
+  }
+  catch (error) {
+    const message = getErrorMessage(error)
+    await updateCanvasShot(shot.id, { status: 'failed', errorMessage: message })
+    await markCanvasAssetFailed(shotVideoAsset.id, message).catch(() => {})
+    notifyNode(detail.project.accountId, shot.projectId, 'shot', shot.id, 'failed', undefined, message)
+    throw error
+  }
 }
 
 export async function retryFailedShots(projectId: string, accountId: string, config: { dashscopeApiKey: string, dashscopeBaseUrl?: string }) {
@@ -319,37 +193,36 @@ export async function retryFailedShots(projectId: string, accountId: string, con
     const referenceUrls = [...charRefUrls, ...(locRefUrl ? [locRefUrl] : [])]
 
     const model = getVideoModel(detail.project.modelPreferencesJson, referenceUrls)
-    const { params: videoParams } = prepareCanvasVideoParams(model, {
-      videoPrompt: shot.videoPrompt!,
-      negativePrompt: shot.negativePrompt,
-      duration: shot.duration,
-    })
-
-    const submitResult = await client.submitVideoTaskWithFallback(
-      model,
-      videoParams,
-      referenceUrls.length > 0 ? referenceUrls : undefined,
-    )
-
-    if (!submitResult.success || !submitResult.taskId) {
-      await updateCanvasShot(shot.id, { status: 'failed', errorMessage: submitResult.error })
-      notifyNode(accountId, projectId, 'shot', shot.id, 'failed', undefined, submitResult.error)
-      continue
-    }
-
-    await updateCanvasShot(shot.id, { videoTaskId: submitResult.taskId, status: 'generating' })
-
-    const usedModelConfig = getProviderModelById(submitResult.model)!
-    const inputParams: GenerationInputParams = { source: 'canvas', projectId, shotId: shot.id, ...videoParams }
-    const cost = calculateCost(usedModelConfig, extractBillingParams(videoParams))
-    await createGenerationRecord({
+    const shotVideoAsset = await createCanvasAsset({
       accountId,
-      taskId: submitResult.taskId,
-      model: submitResult.model,
-      category: 'video',
-      status: 'processing',
-      inputParams,
-      cost: { ...cost, estimated: true },
+      projectId,
+      category: 'shotVideo',
+      targetEntityType: 'shot',
+      targetEntityId: shot.id,
+      model,
     })
+    await markCanvasAssetRunning(shotVideoAsset.id)
+
+    try {
+      await submitCanvasShotVideo({
+        accountId,
+        projectId,
+        shotId: shot.id,
+        assetId: shotVideoAsset.id,
+        model,
+        videoPrompt: shot.videoPrompt!,
+        negativePrompt: shot.negativePrompt,
+        duration: shot.duration,
+        referenceUrls,
+        client,
+        estimatedCost: true,
+      })
+    }
+    catch (error) {
+      const message = getErrorMessage(error)
+      await updateCanvasShot(shot.id, { status: 'failed', errorMessage: message })
+      await markCanvasAssetFailed(shotVideoAsset.id, message).catch(() => {})
+      notifyNode(accountId, projectId, 'shot', shot.id, 'failed', undefined, message)
+    }
   }
 }

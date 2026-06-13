@@ -49,7 +49,7 @@ export const PAUSE_BEFORE: ReadonlySet<CanvasPipelinePhase> = CANVAS_PAUSE_BEFOR
  */
 export async function advancePipelineAfterTaskSuccess(
   task: { id: string, type: string, domain: string, projectId: string | null, accountId: string | null },
-  workerConfig: WorkerConfig,
+  _workerConfig: WorkerConfig,
 ): Promise<string | null> {
   const preflight = decideCanvasAutoAdvance(task, true)
   if (!preflight.currentPhase || !preflight.nextPhase)

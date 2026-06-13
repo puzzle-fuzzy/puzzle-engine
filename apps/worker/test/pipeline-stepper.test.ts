@@ -9,7 +9,7 @@
  *   - 正常推进 → 创建 pipeline_run + task
  */
 import type { CanvasModelPreferences, CanvasPipelinePhase } from '@excuse/db'
-import { beforeAll, beforeEach, describe, expect, it, mock } from 'bun:test'
+import { beforeEach, describe, expect, it, mock } from 'bun:test'
 
 // Mock DB functions
 const mockGetCanvasProjectById = mock<(id: string) => Promise<any>>(() => Promise.resolve(null))

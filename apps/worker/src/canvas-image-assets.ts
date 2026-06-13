@@ -1,15 +1,13 @@
 import type { CanvasAssetOutput } from '@excuse/db'
 import type { AssetStorage, DashScopeClient } from '@excuse/provider'
-import {
-  markCanvasAssetSucceeded,
-  setCanvasAssetActive,
-} from '@excuse/db'
-import { getModelById, validateAndMerge } from '@excuse/provider'
+import type { ModelConfig } from '@excuse/shared'
+import { markCanvasAssetSucceeded, setCanvasAssetActive } from '@excuse/db'
+import { validateAndMerge } from '@excuse/provider'
 
 export interface GenerateCanvasImageAssetInput {
   assetId: string
   imageModel: string
-  imageModelConfig: NonNullable<ReturnType<typeof getModelById>>
+  imageModelConfig: ModelConfig
   prompt: string
   subDir: string
   prefix: string

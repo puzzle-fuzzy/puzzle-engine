@@ -1,3 +1,5 @@
+import type { WorkerConfig } from './config'
+import { submitCanvasShotVideo } from '@excuse/canvas-runtime'
 import {
   createCanvasAsset,
   markCanvasAssetFailed,
@@ -10,8 +12,6 @@ import {
   getVideoModel,
   loadRunnableCanvasProject,
 } from './canvas-execution'
-import { submitCanvasShotVideo } from './canvas-video-submit'
-import type { WorkerConfig } from './config'
 
 export interface CanvasVideosResult extends Record<string, unknown> {
   phase: 'videos'

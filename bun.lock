@@ -82,6 +82,7 @@
         "@excuse/auth": "workspace:*",
         "@excuse/billing": "workspace:*",
         "@excuse/canvas-engine": "workspace:*",
+        "@excuse/canvas-runtime": "workspace:*",
         "@excuse/db": "workspace:*",
         "@excuse/events": "workspace:*",
         "@excuse/gateway": "workspace:*",
@@ -105,6 +106,7 @@
       "dependencies": {
         "@excuse/billing": "workspace:*",
         "@excuse/canvas-engine": "workspace:*",
+        "@excuse/canvas-runtime": "workspace:*",
         "@excuse/db": "workspace:*",
         "@excuse/prompt-engine": "workspace:*",
         "@excuse/provider": "workspace:*",
@@ -134,6 +136,16 @@
       "name": "@excuse/canvas-engine",
       "version": "0.0.1",
       "dependencies": {
+        "@excuse/shared": "workspace:*",
+      },
+    },
+    "packages/canvas-runtime": {
+      "name": "@excuse/canvas-runtime",
+      "version": "0.0.1",
+      "dependencies": {
+        "@excuse/billing": "workspace:*",
+        "@excuse/db": "workspace:*",
+        "@excuse/provider": "workspace:*",
         "@excuse/shared": "workspace:*",
       },
     },
@@ -451,6 +463,8 @@
     "@excuse/billing": ["@excuse/billing@workspace:packages/billing"],
 
     "@excuse/canvas-engine": ["@excuse/canvas-engine@workspace:packages/canvas-engine"],
+
+    "@excuse/canvas-runtime": ["@excuse/canvas-runtime@workspace:packages/canvas-runtime"],
 
     "@excuse/db": ["@excuse/db@workspace:packages/db"],
 
