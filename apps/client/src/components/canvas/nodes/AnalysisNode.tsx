@@ -1,10 +1,11 @@
 import type { ProjectDTO } from '@excuse/shared'
 import type { NodeProps } from '@xyflow/react'
+import type { RunningPhaseInfo } from '../PipelineController'
 import { Handle, Position } from '@xyflow/react'
 import { RunningBadge, runningBorder, RunningOverlay } from '../RunningOverlay'
 
 export default function AnalysisNode({ data }: NodeProps) {
-  const { project, isRunning } = data as { project: ProjectDTO, isRunning?: boolean }
+  const { project, isRunning, runningPhaseInfo } = data as { project: ProjectDTO, isRunning?: boolean, runningPhaseInfo?: RunningPhaseInfo | null }
   const analysis = project.analysis
 
   return (
@@ -12,9 +13,9 @@ export default function AnalysisNode({ data }: NodeProps) {
       <Handle type="target" position={Position.Top} className="bg-emerald-400!" />
       <div className="bg-emerald-400 text-white px-3 py-2 font-semibold text-sm flex items-center justify-between rounded-t-md">
         <span>故事分析</span>
-        {isRunning && <RunningBadge />}
+        {isRunning && <RunningBadge label={runningPhaseInfo?.label} />}
       </div>
-      {isRunning && <RunningOverlay label="正在分析..." />}
+      {isRunning && <RunningOverlay runningPhaseInfo={runningPhaseInfo} />}
       <div className="p-3 space-y-2 text-sm">
         {analysis
           ? (

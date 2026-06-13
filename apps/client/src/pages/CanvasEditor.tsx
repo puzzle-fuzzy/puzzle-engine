@@ -1,4 +1,5 @@
 import type { ProjectDTO } from '@excuse/shared'
+import type { RunningPhaseInfo } from '../components/canvas/PipelineController'
 import { useCallback, useEffect, useState } from 'react'
 import { useParams } from 'react-router'
 import { getCanvasProject } from '../api/client'
@@ -13,7 +14,7 @@ export default function CanvasEditor() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [selectedNode, setSelectedNode] = useState<{ id: string, type: string } | null>(null)
-  const [runningPhase, setRunningPhase] = useState<string | null>(null)
+  const [runningPhase, setRunningPhase] = useState<RunningPhaseInfo | null>(null)
 
   // 从 RealtimeSync 获取项目版本号和 pipeline 阶段完成信号
   const projectVersion = useRealtimeSync(s => projectId ? s.projectVersions[projectId] : 0)
@@ -41,8 +42,11 @@ export default function CanvasEditor() {
 
   // 项目版本号变化时重新加载（由 pipeline_node_update SSE 事件驱动）
   useEffect(() => {
-    if (projectVersion && projectVersion > 0)
+    if (projectVersion && projectVersion > 0) {
       loadProject()
+      const timer = window.setTimeout(loadProject, 800)
+      return () => clearTimeout(timer)
+    }
   }, [projectVersion, loadProject])
 
   if (loading) {
@@ -69,9 +73,9 @@ export default function CanvasEditor() {
         </span>
         {runningPhase && (
           <span className="text-xs px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 animate-pulse">
-            正在执行:
-            {' '}
-            {runningPhase}
+            正在
+            {runningPhase.label}
+            {runningPhase.modelName && ` · ${runningPhase.modelName}`}
           </span>
         )}
       </div>

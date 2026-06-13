@@ -70,7 +70,6 @@ export async function analyzeProject(projectId: string, config: { dashscopeApiKe
     return getProjectDetail(projectId)
   }
   catch (error) {
-    await updateCanvasProject(projectId, { status: 'failed' })
     notifyNode(project.accountId, projectId, 'analysis', projectId, 'failed', undefined, (error as Error).message, runId)
     if (runId)
       await markPipelineRunFailed(runId, (error as Error).message)

@@ -1,10 +1,11 @@
 import type { CharacterDTO } from '@excuse/shared'
 import type { NodeProps } from '@xyflow/react'
+import type { RunningPhaseInfo } from '../PipelineController'
 import { Handle, Position } from '@xyflow/react'
 import { RunningBadge, runningBorder, RunningOverlay } from '../RunningOverlay'
 
 export default function CharacterNode({ data }: NodeProps) {
-  const { character, isRunning } = data as { character: CharacterDTO, isRunning?: boolean }
+  const { character, isRunning, runningPhaseInfo } = data as { character: CharacterDTO, isRunning?: boolean, runningPhaseInfo?: RunningPhaseInfo | null }
   const profile = character.profile
 
   return (
@@ -18,10 +19,10 @@ export default function CharacterNode({ data }: NodeProps) {
         <div className="flex items-center gap-1">
           {character.locked && <span className="text-[10px] bg-white/20 rounded px-1">锁定</span>}
           {character.role && <span className="text-[10px] bg-white/20 rounded px-1">{character.role}</span>}
-          {isRunning && <RunningBadge />}
+          {isRunning && <RunningBadge label={runningPhaseInfo?.label} />}
         </div>
       </div>
-      {isRunning && <RunningOverlay />}
+      {isRunning && <RunningOverlay runningPhaseInfo={runningPhaseInfo} />}
       <div className="p-3 space-y-2 text-sm">
         {/* 参考图 */}
         {character.referenceImageUrl && (

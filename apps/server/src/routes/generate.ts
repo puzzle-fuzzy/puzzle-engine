@@ -190,7 +190,7 @@ export function createGenerateRoutes(config: ServerConfig) {
 
     // 获取生成记录列表
     .get('/records', async ({ query, userId }) => {
-      const VALID_CATEGORIES = ['text', 'image', 'video'] as const
+      const VALID_CATEGORIES = ['text', 'image', 'video', 'subtitle'] as const
       const VALID_STATUSES = ['pending', 'submitting', 'processing', 'saving_output', 'succeeded', 'failed', 'cancelled'] as const
 
       const rawCategory = typeof query.category === 'string' ? query.category : undefined
@@ -218,7 +218,7 @@ export function createGenerateRoutes(config: ServerConfig) {
       }),
       detail: {
         summary: '获取生成记录列表',
-        description: '分页查询当前用户的生成记录，支持按 category（text/image/video）和 status 过滤',
+        description: '分页查询当前用户的生成记录，支持按 category（text/image/video/subtitle）和 status 过滤',
         tags: ['生成'],
         security: [{ bearerAuth: [] }],
       },

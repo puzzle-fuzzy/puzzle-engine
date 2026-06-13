@@ -496,4 +496,39 @@ export function createCanvasRoutes(config: ServerConfig) {
       })
       return acceptedResponse()
     })
+
+  // ── 单个实体重新生成（创建同级节点）──────────────────
+
+    // 重新生成角色 profile — 创建新角色行（不删除旧角色）
+    .post('/characters/:characterId/regenerate', async ({ params: { characterId }, userId, set }) => {
+      const character = await getCanvasCharacterForAccount(characterId, userId)
+      if (!character)
+        return notFound(set, '角色不存在或无权访问')
+      svc.regenerateCharacter(characterId, config).catch((err) => {
+        logger.error({ err, characterId }, 'regenerate character failed')
+      })
+      return acceptedResponse()
+    })
+
+    // 重新生成场景 profile — 创建新场景行（不删除旧场景）
+    .post('/locations/:locationId/regenerate', async ({ params: { locationId }, userId, set }) => {
+      const location = await getCanvasLocationForAccount(locationId, userId)
+      if (!location)
+        return notFound(set, '场景不存在或无权访问')
+      svc.regenerateLocation(locationId, config).catch((err) => {
+        logger.error({ err, locationId }, 'regenerate location failed')
+      })
+      return acceptedResponse()
+    })
+
+    // 重新生成镜头视频 — 创建新镜头行（同级变体）并提交视频任务
+    .post('/shots/:shotId/regenerate', async ({ params: { shotId }, userId, set }) => {
+      const shot = await getCanvasShotForAccount(shotId, userId)
+      if (!shot)
+        return notFound(set, '镜头不存在或无权访问')
+      svc.regenerateShotVideo(shotId, config).catch((err) => {
+        logger.error({ err, shotId }, 'regenerate shot video failed')
+      })
+      return acceptedResponse()
+    })
 }

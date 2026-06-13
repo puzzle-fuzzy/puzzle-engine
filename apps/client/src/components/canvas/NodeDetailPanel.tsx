@@ -1,7 +1,7 @@
 import type { ProjectDTO } from '@excuse/shared'
 import { useCallback, useState } from 'react'
 import { toast } from 'sonner'
-import { deleteCanvasCharacter, deleteCanvasLocation, deleteCanvasShot, retryCanvasShot, updateCanvasCharacter, updateCanvasLocation, updateCanvasProject, updateCanvasShot, uploadFile } from '../../api/client'
+import { deleteCanvasCharacter, deleteCanvasLocation, deleteCanvasShot, regenerateCanvasCharacter, regenerateCanvasLocation, regenerateCanvasShot, retryCanvasShot, updateCanvasCharacter, updateCanvasLocation, updateCanvasProject, updateCanvasShot, uploadFile } from '../../api/client'
 import { Button } from '../ui/button'
 import { ConfirmDialog } from '../ui/confirm-dialog'
 import { Input } from '../ui/input'
@@ -287,6 +287,18 @@ export default function NodeDetailPanel({ selectedNode, project, onUpdate }: Nod
           )}
 
           <Button
+            size="sm"
+            onClick={() => {
+              regenerateCanvasShot(shot.id).then(() => {
+                toast.success('正在创建镜头变体...')
+                onUpdate()
+              })
+            }}
+          >
+            重新生成变体
+          </Button>
+
+          <Button
             variant="destructive"
             size="sm"
             onClick={() => {
@@ -351,6 +363,18 @@ export default function NodeDetailPanel({ selectedNode, project, onUpdate }: Nod
           />
 
           <Button
+            size="sm"
+            onClick={() => {
+              regenerateCanvasCharacter(character.id).then(() => {
+                toast.success('正在重新生成角色...')
+                onUpdate()
+              })
+            }}
+          >
+            重新生成
+          </Button>
+
+          <Button
             variant="destructive"
             size="sm"
             onClick={() => {
@@ -401,6 +425,18 @@ export default function NodeDetailPanel({ selectedNode, project, onUpdate }: Nod
             }}
             label="场景参考图"
           />
+
+          <Button
+            size="sm"
+            onClick={() => {
+              regenerateCanvasLocation(location.id).then(() => {
+                toast.success('正在重新生成场景...')
+                onUpdate()
+              })
+            }}
+          >
+            重新生成
+          </Button>
 
           <Button
             variant="destructive"

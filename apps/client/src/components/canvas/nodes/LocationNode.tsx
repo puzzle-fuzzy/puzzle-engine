@@ -1,10 +1,11 @@
 import type { LocationDTO } from '@excuse/shared'
 import type { NodeProps } from '@xyflow/react'
+import type { RunningPhaseInfo } from '../PipelineController'
 import { Handle, Position } from '@xyflow/react'
 import { RunningBadge, runningBorder, RunningOverlay } from '../RunningOverlay'
 
 export default function LocationNode({ data }: NodeProps) {
-  const { location, isRunning } = data as { location: LocationDTO, isRunning?: boolean }
+  const { location, isRunning, runningPhaseInfo } = data as { location: LocationDTO, isRunning?: boolean, runningPhaseInfo?: RunningPhaseInfo | null }
   const profile = location.profile
 
   return (
@@ -18,10 +19,10 @@ export default function LocationNode({ data }: NodeProps) {
         <div className="flex items-center gap-1">
           {location.locked && <span className="text-[10px] bg-white/20 rounded px-1">锁定</span>}
           <span className="text-[10px] bg-white/20 rounded px-1">{location.type}</span>
-          {isRunning && <RunningBadge />}
+          {isRunning && <RunningBadge label={runningPhaseInfo?.label} />}
         </div>
       </div>
-      {isRunning && <RunningOverlay />}
+      {isRunning && <RunningOverlay runningPhaseInfo={runningPhaseInfo} />}
       <div className="p-3 space-y-2 text-sm">
         {/* 参考图 */}
         {location.referenceImageUrl && (

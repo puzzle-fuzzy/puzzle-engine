@@ -118,6 +118,17 @@ export async function startSSEListener() {
           status: payload.status === 'succeeded' ? 'completed' : payload.status === 'failed' ? 'failed' : 'running',
         }
         dispatchToUser(payload.accountId, 'pipeline_node_update', pipelineEvent)
+
+        if (payload.canvasMeta.projectStatus) {
+          const phaseEvent: SSEPipelineNodeEvent = {
+            projectId: payload.canvasMeta.projectId,
+            nodeType: 'phase',
+            nodeId: 'videos',
+            status: payload.canvasMeta.projectStatus === 'completed' ? 'completed' : 'failed',
+            data: { projectStatus: payload.canvasMeta.projectStatus },
+          }
+          dispatchToUser(payload.accountId, 'pipeline_node_update', phaseEvent)
+        }
       }
     }
     catch (err) {

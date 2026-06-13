@@ -1,7 +1,8 @@
 import type { ProjectDTO, ShotDTO } from '@excuse/shared'
 import type { NodeProps } from '@xyflow/react'
+import type { RunningPhaseInfo } from '../PipelineController'
 import { Handle, Position } from '@xyflow/react'
-import { runningBorder, RunningOverlay } from '../RunningOverlay'
+import { RunningBadge, runningBorder, RunningOverlay } from '../RunningOverlay'
 
 const SHOT_STATUS_COLORS: Record<string, string> = {
   draft: 'bg-gray-200 text-gray-700',
@@ -20,7 +21,7 @@ const SHOT_STATUS_LABELS: Record<string, string> = {
 }
 
 export default function ShotNode({ data }: NodeProps) {
-  const { shot, project, isRunning } = data as { shot: ShotDTO, project: ProjectDTO, isRunning?: boolean }
+  const { shot, project, isRunning, runningPhaseInfo } = data as { shot: ShotDTO, project: ProjectDTO, isRunning?: boolean, runningPhaseInfo?: RunningPhaseInfo | null }
 
   const camera = shot.camera
   const continuity = shot.continuity
@@ -44,9 +45,7 @@ export default function ShotNode({ data }: NodeProps) {
         </span>
         {isRunning
           ? (
-              <span className="text-[10px] rounded-full px-2 py-0.5 bg-yellow-100 text-yellow-700 animate-pulse">
-                生成中...
-              </span>
+              <RunningBadge label={runningPhaseInfo?.label} />
             )
           : (
               <span className={`text-[10px] rounded-full px-2 py-0.5 ${SHOT_STATUS_COLORS[shot.status] || ''}`}>
@@ -54,7 +53,7 @@ export default function ShotNode({ data }: NodeProps) {
               </span>
             )}
       </div>
-      {isRunning && <RunningOverlay />}
+      {isRunning && <RunningOverlay runningPhaseInfo={runningPhaseInfo} />}
       <div className="p-3 space-y-2 text-sm">
         {/* 基本信息 */}
         <div className="text-xs space-y-1">

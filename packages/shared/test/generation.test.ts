@@ -2,6 +2,7 @@ import { describe, expect, it } from 'bun:test'
 import {
   isImageOutput,
   isProcessingOutput,
+  isSubtitleOutput,
   isTextOutput,
   isVideoOutput,
   parseCostDetail,
@@ -160,6 +161,49 @@ describe('parseOutputResult', () => {
     expect(parseOutputResult({ type: 'video', savedUrls: [], originalUrl: 'x' })).toEqual({ type: 'video', savedUrls: [], originalUrl: 'x', video_url: undefined })
     expect(parseOutputResult({ type: 'processing', taskId: 't1' })).toEqual({ type: 'processing', taskId: 't1', status: undefined })
   })
+
+  // ── SubtitleOutputResult ──
+
+  it('parses subtitle output with sentences', () => {
+    const sentences = [
+      { id: 's1', text: '你好世界', beginTime: 0, endTime: 2000 },
+      { id: 's2', text: '欢迎来到这里', beginTime: 2000, endTime: 5000, speakerId: 1 },
+    ]
+    const result = parseOutputResult({ type: 'subtitle', sentences })
+    expect(result).toEqual({
+      type: 'subtitle',
+      sentences,
+      transcriptionUrl: undefined,
+    })
+    expect(isSubtitleOutput(result)).toBe(true)
+  })
+
+  it('parses subtitle output with transcriptionUrl', () => {
+    const sentences = [{ id: 's1', text: '测试', beginTime: 100, endTime: 500 }]
+    const result = parseOutputResult({
+      type: 'subtitle',
+      sentences,
+      transcriptionUrl: 'https://cdn/transcript.json',
+    })
+    expect(result).toEqual({
+      type: 'subtitle',
+      sentences,
+      transcriptionUrl: 'https://cdn/transcript.json',
+    })
+    expect(isSubtitleOutput(result)).toBe(true)
+  })
+
+  it('defaults sentences to empty array when not provided', () => {
+    const result = parseOutputResult({ type: 'subtitle' })
+    expect(result).toEqual({ type: 'subtitle', sentences: [], transcriptionUrl: undefined })
+    expect(isSubtitleOutput(result)).toBe(true)
+  })
+
+  it('defaults transcriptionUrl to undefined when not a string', () => {
+    const sentences = [{ id: 's1', text: 'a', beginTime: 0, endTime: 100 }]
+    const result = parseOutputResult({ type: 'subtitle', sentences, transcriptionUrl: null })
+    expect(result?.transcriptionUrl).toBeUndefined()
+  })
 })
 
 // ===== parseCostDetail =====
@@ -303,6 +347,54 @@ describe('parseCostDetail', () => {
     expect(result?.resolution).toBeUndefined()
     expect(result?.estimated).toBeUndefined()
   })
+
+  // ── audio 计费 ──
+
+  it('parses audio cost with duration and unitPrice', () => {
+    const result = parseCostDetail({
+      unit: 'audio',
+      totalPriceCents: 0.48,
+      totalPrice: 0.0048,
+      duration: 60,
+      unitPriceCents: 0.008,
+      unitPrice: 0.00008,
+    })
+    expect(result).toEqual({
+      unit: 'audio',
+      totalPriceCents: 0.48,
+      totalPrice: 0.0048,
+      quantity: undefined,
+      unitPriceCents: 0.008,
+      unitPrice: 0.00008,
+      inputTokens: undefined,
+      outputTokens: undefined,
+      inputUnitPriceCents: undefined,
+      inputUnitPrice: undefined,
+      outputUnitPriceCents: undefined,
+      outputUnitPrice: undefined,
+      inputCostCents: undefined,
+      inputCost: undefined,
+      outputCostCents: undefined,
+      outputCost: undefined,
+      resolution: undefined,
+      duration: 60,
+      estimated: undefined,
+    })
+  })
+
+  it('parses audio cost with estimated flag', () => {
+    const result = parseCostDetail({
+      unit: 'audio',
+      totalPriceCents: 0.48,
+      duration: 60,
+      unitPriceCents: 0.008,
+      estimated: true,
+    })
+    expect(result?.unit).toBe('audio')
+    expect(result?.duration).toBe(60)
+    expect(result?.estimated).toBe(true)
+    expect(result?.totalPrice).toBe(0.0048)
+  })
 })
 
 // ===== Type guards =====
@@ -333,5 +425,15 @@ describe('OutputResult type guards', () => {
     expect(isProcessingOutput({ type: 'processing', taskId: 't1' })).toBe(true)
     expect(isProcessingOutput({ type: 'image', savedUrls: ['url'], taskId: 't1' })).toBe(false) // not processing
     expect(isProcessingOutput(null)).toBe(false)
+  })
+
+  it('isSubtitleOutput', () => {
+    const sentences = [{ id: 's1', text: '你好', beginTime: 0, endTime: 2000 }]
+    expect(isSubtitleOutput({ type: 'subtitle', sentences })).toBe(true)
+    expect(isSubtitleOutput({ type: 'subtitle', sentences, transcriptionUrl: 'url' })).toBe(true)
+    expect(isSubtitleOutput({ type: 'text', text: '你好' })).toBe(false) // text, not subtitle
+    expect(isSubtitleOutput({ type: 'image', savedUrls: ['url'] })).toBe(false) // image, not subtitle
+    expect(isSubtitleOutput(null)).toBe(false)
+    expect(isSubtitleOutput(undefined)).toBe(false)
   })
 })

@@ -1,5 +1,6 @@
 import type { ProjectDTO } from '@excuse/shared'
 import type { Edge, Node, NodeTypes } from '@xyflow/react'
+import type { RunningPhaseInfo } from './PipelineController'
 import dagre from '@dagrejs/dagre'
 import {
   Background,
@@ -73,17 +74,17 @@ function computeLayout(nodes: Node[], edges: Edge[]): Node[] {
   })
 }
 
-export function buildNodesAndEdges(project: ProjectDTO, runningPhase: string | null = null): { nodes: Node[], edges: Edge[] } {
+export function buildNodesAndEdges(project: ProjectDTO, runningPhase: RunningPhaseInfo | null = null): { nodes: Node[], edges: Edge[] } {
   const nodes: Node[] = []
   const edges: Edge[] = []
-  const runningNodeType = runningPhase ? PHASE_NODE_TYPE[runningPhase] : null
+  const runningNodeType = runningPhase ? PHASE_NODE_TYPE[runningPhase.key] : null
   const isRunning = (type: string) => runningNodeType === type
 
   nodes.push({
     id: 'story',
     type: 'storyInput',
     position: { x: 0, y: 0 },
-    data: { project, isRunning: false },
+    data: { project, isRunning: false, runningPhaseInfo: null },
   })
 
   if (project.analysis) {
@@ -91,7 +92,7 @@ export function buildNodesAndEdges(project: ProjectDTO, runningPhase: string | n
       id: 'analysis',
       type: 'analysis',
       position: { x: 0, y: 0 },
-      data: { project, isRunning: isRunning('analysis') },
+      data: { project, isRunning: isRunning('analysis'), runningPhaseInfo: isRunning('analysis') ? runningPhase : null },
     })
     edges.push({ id: 'e-story-analysis', source: 'story', target: 'analysis' })
   }
@@ -102,7 +103,7 @@ export function buildNodesAndEdges(project: ProjectDTO, runningPhase: string | n
       id: nodeId,
       type: 'character',
       position: { x: 0, y: 0 },
-      data: { character: char, project, isRunning: isRunning('character') },
+      data: { character: char, project, isRunning: isRunning('character'), runningPhaseInfo: isRunning('character') ? runningPhase : null },
     })
     if (project.analysis) {
       edges.push({ id: `e-analysis-${nodeId}`, source: 'analysis', target: nodeId })
@@ -115,7 +116,7 @@ export function buildNodesAndEdges(project: ProjectDTO, runningPhase: string | n
       id: nodeId,
       type: 'location',
       position: { x: 0, y: 0 },
-      data: { location: loc, project, isRunning: isRunning('location') },
+      data: { location: loc, project, isRunning: isRunning('location'), runningPhaseInfo: isRunning('location') ? runningPhase : null },
     })
     if (project.analysis) {
       edges.push({ id: `e-analysis-${nodeId}`, source: 'analysis', target: nodeId })
@@ -128,7 +129,7 @@ export function buildNodesAndEdges(project: ProjectDTO, runningPhase: string | n
       id: nodeId,
       type: 'shot',
       position: { x: 0, y: 0 },
-      data: { shot, project, isRunning: isRunning('shot') },
+      data: { shot, project, isRunning: isRunning('shot'), runningPhaseInfo: isRunning('shot') ? runningPhase : null },
     })
     for (const charId of shot.characterIds) {
       edges.push({ id: `e-char-${charId}-${shot.id}`, source: `char-${charId}`, target: nodeId })
@@ -143,7 +144,7 @@ export function buildNodesAndEdges(project: ProjectDTO, runningPhase: string | n
       id: 'continuity',
       type: 'continuityCheck',
       position: { x: 0, y: 0 },
-      data: { project, isRunning: isRunning('continuityCheck') },
+      data: { project, isRunning: isRunning('continuityCheck'), runningPhaseInfo: isRunning('continuityCheck') ? runningPhase : null },
     })
     for (const shot of project.shots) {
       edges.push({ id: `e-shot-${shot.id}-cont`, source: `shot-${shot.id}`, target: 'continuity' })
@@ -155,7 +156,7 @@ export function buildNodesAndEdges(project: ProjectDTO, runningPhase: string | n
 
 function CanvasFlowInner(props: {
   project: ProjectDTO
-  runningPhase: string | null
+  runningPhase: RunningPhaseInfo | null
   onNodeClick?: (nodeId: string, nodeType: string) => void
 }) {
   const { project, runningPhase, onNodeClick } = props
@@ -287,7 +288,7 @@ function CanvasFlowInner(props: {
 
 export default function CanvasFlow(props: {
   project: ProjectDTO
-  runningPhase: string | null
+  runningPhase: RunningPhaseInfo | null
   onNodeClick?: (nodeId: string, nodeType: string) => void
 }) {
   return (

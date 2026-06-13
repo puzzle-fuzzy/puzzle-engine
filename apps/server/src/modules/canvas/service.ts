@@ -11,6 +11,7 @@ export { generateCharacters } from './characters'
 export { checkContinuity, rebuildShotPrompts } from './continuity-rebuild'
 export { generateLocations } from './locations'
 export { generateCharacterRefs, generateLocationRefs } from './references'
+export { regenerateCharacter, regenerateLocation, regenerateShotVideo } from './regenerate'
 export {
   createProject,
   deleteCharacter,

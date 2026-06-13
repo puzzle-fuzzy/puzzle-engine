@@ -1,20 +1,24 @@
 import type { ContinuityIssue, ProjectDTO } from '@excuse/shared'
 import type { NodeProps } from '@xyflow/react'
+import type { RunningPhaseInfo } from '../PipelineController'
 import { Handle, Position } from '@xyflow/react'
+import { RunningBadge, runningBorder, RunningOverlay } from '../RunningOverlay'
 
 export default function ContinuityCheckNode({ data }: NodeProps) {
-  const project = (data as { project: ProjectDTO }).project
+  const { project, isRunning, runningPhaseInfo } = data as { project: ProjectDTO, isRunning?: boolean, runningPhaseInfo?: RunningPhaseInfo | null }
   const issues = project.continuityIssues
 
   const errors = issues.filter(i => i.severity === 'error')
   const warnings = issues.filter(i => i.severity === 'warning')
 
   return (
-    <div className="rounded-lg border-2 border-rose-400 bg-rose-50 shadow-md w-85">
+    <div className={`rounded-lg border-2 bg-rose-50 shadow-md w-85 relative ${runningBorder(isRunning, 'border-rose-400')}`}>
       <Handle type="target" position={Position.Top} className="bg-rose-400!" />
-      <div className="bg-rose-400 text-white px-3 py-2 font-semibold text-sm">
-        连续性检查
+      <div className="bg-rose-400 text-white px-3 py-2 font-semibold text-sm flex items-center justify-between">
+        <span>连续性检查</span>
+        {isRunning && <RunningBadge label={runningPhaseInfo?.label} />}
       </div>
+      {isRunning && <RunningOverlay runningPhaseInfo={runningPhaseInfo} />}
       <div className="p-3 space-y-2 text-sm">
         {/* 统计 */}
         <div className="flex gap-2 text-xs">

@@ -48,7 +48,7 @@ export async function generateStoryboard(projectId: string, config: { dashscopeA
 
     const rawParams: Record<string, unknown> = {
       prompt: `${system}\n\n${userPrompt}`,
-      max_tokens: 8192,
+      max_tokens: 8000,
       temperature: 0.7,
     }
     const validationResult = validateAndMerge(modelConfig, rawParams)
@@ -92,7 +92,6 @@ export async function generateStoryboard(projectId: string, config: { dashscopeA
     return getProjectDetail(projectId)
   }
   catch (error) {
-    await updateCanvasProject(projectId, { status: 'failed' })
     notifyNode(accountId, projectId, 'storyboard', projectId, 'failed', undefined, (error as Error).message, runId)
     if (runId)
       await markPipelineRunFailed(runId, (error as Error).message)

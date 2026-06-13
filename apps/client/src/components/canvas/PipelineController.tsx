@@ -4,6 +4,7 @@ import { toast } from 'sonner'
 import {
   analyzeCanvasProject,
   checkCanvasContinuity,
+  fetchCanvasPipelineRuns,
   fetchModels,
   generateCanvasCharacterRefs,
   generateCanvasCharacters,
@@ -16,24 +17,57 @@ import {
   updateCanvasModelPreferences,
 } from '../../api/client'
 
+// ── RunningPhaseInfo: 管线阶段运行时的丰富信息 ──────────
+
+export interface RunningPhaseInfo {
+  key: string // 'analyze', 'characters', ...
+  label: string // '分析故事', '生成角色', ...
+  modelCategory: 'text' | 'image' | 'video' | null
+  modelName: string | null // 解析后的中文显示名，如 '千问 3.7 Plus'
+}
+
+// ── 默认模型 ID（与后端 service-helpers.ts 对齐）──────────
+
+const DEFAULT_MODEL_IDS: Record<string, string> = {
+  text: 'qwen3.7-plus',
+  image: 'qwen-image-2.0-pro',
+  video: 'happyhorse-1.0',
+}
+
+function resolveModelDisplayName(
+  category: 'text' | 'image' | 'video' | null,
+  prefs: CanvasModelPreferences,
+  models: ModelConfig[],
+): string | null {
+  if (!category)
+    return null // continuity 阶段无模型
+  const prefKey = `${category}Model` as keyof CanvasModelPreferences
+  const modelId = prefs[prefKey] || DEFAULT_MODEL_IDS[category]
+  const config = models.find(m => m.id === modelId)
+  return config?.name || modelId // 兜底显示原始 ID
+}
+
+// ── PHASES 元数据 ──────────────────────────────────────
+
 interface PipelinePhase {
   key: string
   label: string
   status: CanvasProjectStatus | null
   run: (projectId: string) => Promise<unknown>
   pauseBefore?: boolean
+  modelCategory: 'text' | 'image' | 'video' | null
 }
 
 const PHASES: PipelinePhase[] = [
-  { key: 'analyze', label: '分析故事', status: 'analyzed', run: id => analyzeCanvasProject(id) },
-  { key: 'characters', label: '生成角色', status: 'characters_ready', run: id => generateCanvasCharacters(id) },
-  { key: 'locations', label: '生成场景', status: 'locations_ready', run: id => generateCanvasLocations(id) },
-  { key: 'characterRefs', label: '角色参考图', status: 'refs_ready', run: id => generateCanvasCharacterRefs(id) },
-  { key: 'locationRefs', label: '场景参考图', status: null, run: id => generateCanvasLocationRefs(id) },
-  { key: 'storyboard', label: '生成分镜', status: 'storyboard_ready', run: id => generateCanvasStoryboard(id), pauseBefore: true },
-  { key: 'continuity', label: '连续性检查', status: 'continuity_checked', run: id => checkCanvasContinuity(id) },
-  { key: 'rebuild', label: '重建 Prompt', status: 'prompts_ready', run: id => rebuildCanvasPrompts(id) },
-  { key: 'videos', label: '生成视频', status: 'generating', run: id => generateCanvasVideos(id), pauseBefore: true },
+  { key: 'analyze', label: '分析故事', status: 'analyzed', run: id => analyzeCanvasProject(id), modelCategory: 'text' },
+  { key: 'characters', label: '生成角色', status: 'characters_ready', run: id => generateCanvasCharacters(id), modelCategory: 'text' },
+  { key: 'locations', label: '生成场景', status: 'locations_ready', run: id => generateCanvasLocations(id), modelCategory: 'text' },
+  { key: 'characterRefs', label: '角色参考图', status: 'refs_ready', run: id => generateCanvasCharacterRefs(id), modelCategory: 'image' },
+  { key: 'locationRefs', label: '场景参考图', status: null, run: id => generateCanvasLocationRefs(id), modelCategory: 'image' },
+  { key: 'storyboard', label: '生成分镜', status: 'storyboard_ready', run: id => generateCanvasStoryboard(id), modelCategory: 'text', pauseBefore: true },
+  { key: 'continuity', label: '连续性检查', status: 'continuity_checked', run: id => checkCanvasContinuity(id), modelCategory: null },
+  { key: 'rebuild', label: '重建 Prompt', status: 'prompts_ready', run: id => rebuildCanvasPrompts(id), modelCategory: 'text' },
+  { key: 'videos', label: '生成视频', status: 'generating', run: id => generateCanvasVideos(id), modelCategory: 'video', pauseBefore: true },
 ]
 
 function getPhaseIndex(status: CanvasProjectStatus): number {
@@ -56,6 +90,7 @@ function getPhaseIndex(status: CanvasProjectStatus): number {
 }
 
 interface PhaseDoneEvent {
+  projectId: string
   key: string
   status: 'completed' | 'failed'
   error?: string
@@ -66,7 +101,7 @@ interface Props {
   project: ProjectDTO
   modelPreferences: CanvasModelPreferences | null
   onPhaseComplete: (project?: ProjectDTO) => void
-  onPhaseChange?: (phaseKey: string | null) => void
+  onPhaseChange?: (info: RunningPhaseInfo | null) => void
   phaseDone: PhaseDoneEvent | null
   onPhaseDoneConsumed: () => void
 }
@@ -84,11 +119,15 @@ export default function PipelineController({
   const [autoMode, setAutoMode] = useState(false)
   const [running, setRunning] = useState(false)
   const [currentPhase, setCurrentPhase] = useState(-1)
+  const [failedPhaseIdx, setFailedPhaseIdx] = useState(-1)
   const [countdown, setCountdown] = useState(0)
   const [error, setError] = useState<string | null>(null)
   const [models, setModels] = useState<ModelConfig[]>([])
   const [prefs, setPrefs] = useState<CanvasModelPreferences>(modelPreferences ?? {})
+  const [elapsed, setElapsed] = useState(0)
+  const phaseStartedAtRef = useRef<number>(0)
   const autoRef = useRef(autoMode)
+  const activeRunIdRef = useRef<string | null>(null)
   autoRef.current = autoMode
 
   // Sync prefs from parent when project reloads
@@ -102,6 +141,73 @@ export default function PipelineController({
       .then(res => setModels(res.models))
       .catch(() => { toast.error('加载模型列表失败') })
   }, [])
+
+  // Restore running state from active pipeline runs on mount + project reload
+  // This handles the case where the user refreshes the page while a phase is running
+  const restoredRef = useRef(false)
+  useEffect(() => {
+    if (running || models.length === 0)
+      return // already running or models not loaded yet
+
+    fetchCanvasPipelineRuns(projectId)
+      .then((runs) => {
+        const activeRun = runs.find(r => r.status === 'pending' || r.status === 'running')
+        if (!activeRun) {
+          // No active run — ensure state is clean
+          if (restoredRef.current) {
+            // Previously restored but now no active run — might have completed during our absence
+            setRunning(false)
+            setCurrentPhase(-1)
+            activeRunIdRef.current = null
+            setElapsed(0)
+            phaseStartedAtRef.current = 0
+            onPhaseChange?.(null)
+          }
+          return
+        }
+
+        // Find the PHASES index matching the active run's phase
+        const phaseIdx = PHASES.findIndex(p => p.key === activeRun.phase)
+        if (phaseIdx < 0)
+          return
+
+        // Check if project status has already advanced past this phase
+        // (e.g., phase completed while page was closed, but SSE event was missed)
+        const currentStartIdx = getPhaseIndex(projectStatus)
+        if (phaseIdx < currentStartIdx) {
+          // Phase already completed — project status advanced past it
+          setRunning(false)
+          setCurrentPhase(-1)
+          activeRunIdRef.current = null
+          onPhaseChange?.(null)
+          return
+        }
+
+        // Restore running state without calling the phase API
+        setCurrentPhase(phaseIdx)
+        setRunning(true)
+        setError(null)
+        restoredRef.current = true
+        activeRunIdRef.current = activeRun.id
+
+        // Compute elapsed from run's startedAt
+        if (activeRun.startedAt) {
+          const startedAtMs = new Date(activeRun.startedAt).getTime()
+          phaseStartedAtRef.current = startedAtMs
+          setElapsed(Math.floor((Date.now() - startedAtMs) / 1000))
+        }
+
+        const phase = PHASES[phaseIdx]
+        const info: RunningPhaseInfo = {
+          key: phase.key,
+          label: phase.label,
+          modelCategory: phase.modelCategory,
+          modelName: resolveModelDisplayName(phase.modelCategory, prefs, models),
+        }
+        onPhaseChange?.(info)
+      })
+      .catch(() => { /* silently ignore — not critical */ })
+  }, [projectId, projectStatus, models, running, prefs, onPhaseChange])
 
   const textModels = useMemo(() => models.filter(m => m.category === 'text'), [models])
   const imageModels = useMemo(() => models.filter(m => m.category === 'image'), [models])
@@ -130,10 +236,20 @@ export default function PipelineController({
     setCurrentPhase(idx)
     setRunning(true)
     setError(null)
-    onPhaseChange?.(phase.key)
+    setFailedPhaseIdx(-1)
+    setElapsed(0)
+    phaseStartedAtRef.current = Date.now()
+    const info: RunningPhaseInfo = {
+      key: phase.key,
+      label: phase.label,
+      modelCategory: phase.modelCategory,
+      modelName: resolveModelDisplayName(phase.modelCategory, prefs, models),
+    }
+    onPhaseChange?.(info)
 
     try {
-      await phase.run(projectId)
+      const accepted = await phase.run(projectId) as { runId?: string }
+      activeRunIdRef.current = accepted.runId ?? null
       // API acknowledged (fire-and-forget: returns immediately)
       // Actual completion is tracked via phaseDone SSE events
     }
@@ -142,9 +258,13 @@ export default function PipelineController({
       setError(`${phase.label} 触发失败: ${msg}`)
       setRunning(false)
       setCurrentPhase(-1)
+      activeRunIdRef.current = null
+      setFailedPhaseIdx(idx)
+      setElapsed(0)
+      phaseStartedAtRef.current = 0
       onPhaseChange?.(null)
     }
-  }, [projectId, onPhaseChange])
+  }, [projectId, onPhaseChange, prefs, models])
 
   // Advance to next phase after current phase completes
   const advanceAfterPhase = useCallback((completedIdx: number) => {
@@ -152,6 +272,9 @@ export default function PipelineController({
     if (nextIdx >= PHASES.length) {
       setRunning(false)
       setCurrentPhase(-1)
+      activeRunIdRef.current = null
+      setElapsed(0)
+      phaseStartedAtRef.current = 0
       onPhaseChange?.(null)
       return
     }
@@ -160,6 +283,9 @@ export default function PipelineController({
     if (nextPhase.pauseBefore) {
       setRunning(false)
       setCurrentPhase(-1)
+      activeRunIdRef.current = null
+      setElapsed(0)
+      phaseStartedAtRef.current = 0
       onPhaseChange?.(null)
       if (autoRef.current) {
         setCountdown(3)
@@ -171,20 +297,32 @@ export default function PipelineController({
     else {
       setRunning(false)
       setCurrentPhase(-1)
+      activeRunIdRef.current = null
+      setElapsed(0)
+      phaseStartedAtRef.current = 0
       onPhaseChange?.(null)
     }
   }, [onPhaseChange, triggerPhase])
 
   // Handle phase completion from SSE events
   useEffect(() => {
-    if (!phaseDone || !running || currentPhase < 0)
+    if (!phaseDone)
       return
+    if (phaseDone.projectId !== projectId)
+      return
+    if (!running || currentPhase < 0) {
+      onPhaseDoneConsumed()
+      return
+    }
 
     const phase = PHASES[currentPhase]
-    if (!phase || phase.key !== phaseDone.key)
+    if (!phase || phase.key !== phaseDone.key) {
+      onPhaseDoneConsumed()
       return
+    }
 
     onPhaseDoneConsumed()
+    activeRunIdRef.current = null
 
     // Reload project data before advancing
     onPhaseComplete()
@@ -193,13 +331,68 @@ export default function PipelineController({
       setError(`${phase.label} 失败: ${phaseDone.error || '未知错误'}`)
       setRunning(false)
       setCurrentPhase(-1)
+      activeRunIdRef.current = null
+      setFailedPhaseIdx(currentPhase)
+      setElapsed(0)
+      phaseStartedAtRef.current = 0
       onPhaseChange?.(null)
       return
     }
 
+    // Phase completed successfully, clear failed state and advance
+    setFailedPhaseIdx(-1)
+
     // Phase completed successfully, advance
     advanceAfterPhase(currentPhase)
-  }, [phaseDone, running, currentPhase, onPhaseDoneConsumed, onPhaseComplete, advanceAfterPhase, onPhaseChange])
+  }, [phaseDone, projectId, running, currentPhase, onPhaseDoneConsumed, onPhaseComplete, advanceAfterPhase, onPhaseChange])
+
+  // SSE 是主路径；polling 用作兜底，避免断线或漏事件时自动执行卡在 running。
+  useEffect(() => {
+    if (!running || currentPhase < 0)
+      return
+
+    let cancelled = false
+    const timer = window.setInterval(async () => {
+      try {
+        const runs = await fetchCanvasPipelineRuns(projectId)
+        const runId = activeRunIdRef.current
+        const phase = PHASES[currentPhase]
+        const run = runId
+          ? runs.find(r => r.id === runId)
+          : runs.find(r => r.phase === phase?.key && (r.status === 'succeeded' || r.status === 'failed'))
+
+        if (cancelled || !phase || !run)
+          return
+
+        if (run.status === 'succeeded' || run.status === 'failed') {
+          activeRunIdRef.current = null
+          onPhaseComplete()
+
+          if (run.status === 'failed') {
+            setError(`${phase.label} 失败: ${run.errorMessage || '未知错误'}`)
+            setRunning(false)
+            setCurrentPhase(-1)
+            setFailedPhaseIdx(currentPhase)
+            setElapsed(0)
+            phaseStartedAtRef.current = 0
+            onPhaseChange?.(null)
+            return
+          }
+
+          setFailedPhaseIdx(-1)
+          advanceAfterPhase(currentPhase)
+        }
+      }
+      catch {
+        // 静默兜底：下一轮或 SSE 事件会继续接管状态。
+      }
+    }, 3000)
+
+    return () => {
+      cancelled = true
+      clearInterval(timer)
+    }
+  }, [running, currentPhase, projectId, onPhaseComplete, onPhaseChange, advanceAfterPhase])
 
   // Countdown timer for auto mode pauses
   useEffect(() => {
@@ -215,6 +408,16 @@ export default function PipelineController({
     }, 1000)
     return () => clearTimeout(timer)
   }, [countdown, projectStatus, triggerPhase])
+
+  // Elapsed time timer — 每秒更新已耗时
+  useEffect(() => {
+    if (!running || phaseStartedAtRef.current === 0)
+      return
+    const timer = setInterval(() => {
+      setElapsed(Math.floor((Date.now() - phaseStartedAtRef.current) / 1000))
+    }, 1000)
+    return () => clearInterval(timer)
+  }, [running])
 
   function handleRunFrom(idx: number) {
     if (running)
@@ -248,7 +451,14 @@ export default function PipelineController({
     setAutoMode(false)
   }
 
-  const currentPhaseLabel = currentPhase >= 0 ? PHASES[currentPhase].label : null
+  const currentPhaseInfo = currentPhase >= 0
+    ? {
+        key: PHASES[currentPhase].key,
+        label: PHASES[currentPhase].label,
+        modelCategory: PHASES[currentPhase].modelCategory,
+        modelName: resolveModelDisplayName(PHASES[currentPhase].modelCategory, prefs, models),
+      }
+    : null
 
   const shots = project.shots
   const shotStats = useMemo(() => {
@@ -334,7 +544,8 @@ export default function PipelineController({
         {PHASES.map((phase, idx) => {
           const isCompleted = idx < startIdx
           const isCurrent = idx === currentPhase
-          const isPending = idx >= startIdx && !isCurrent
+          const isFailed = idx === failedPhaseIdx && failedPhaseIdx >= 0
+          const isPending = idx >= startIdx && !isCurrent && !isFailed
 
           return (
             <div
@@ -343,6 +554,7 @@ export default function PipelineController({
                 flex-1 h-2 rounded-full transition-colors
                 ${isCompleted ? 'bg-green-400' : ''}
                 ${isCurrent ? 'bg-blue-400 animate-pulse' : ''}
+                ${isFailed ? 'bg-red-400 animate-pulse' : ''}
                 ${isPending ? 'bg-gray-200' : ''}
               `}
               title={phase.label}
@@ -357,7 +569,8 @@ export default function PipelineController({
           {PHASES.map((phase, idx) => {
             const isCompleted = idx < startIdx
             const isCurrent = idx === currentPhase
-            const canRun = idx === startIdx || isCurrent
+            const isFailed = idx === failedPhaseIdx && failedPhaseIdx >= 0
+            const canRun = idx === startIdx || isCurrent || isFailed
 
             return (
               <button
@@ -368,7 +581,8 @@ export default function PipelineController({
                   text-xs px-2 py-1 rounded border transition-colors
                   ${isCompleted ? 'bg-green-50 border-green-300 text-green-700' : ''}
                   ${isCurrent ? 'bg-blue-50 border-blue-300 text-blue-700 font-medium' : ''}
-                  ${!isCompleted && !isCurrent ? 'bg-gray-50 border-gray-200 text-gray-400' : ''}
+                  ${isFailed ? 'bg-red-50 border-red-300 text-red-700 font-medium' : ''}
+                  ${!isCompleted && !isCurrent && !isFailed ? 'bg-gray-50 border-gray-200 text-gray-400' : ''}
                   ${canRun && !running ? 'hover:bg-blue-100 cursor-pointer' : ''}
                 `}
               >
@@ -396,14 +610,23 @@ export default function PipelineController({
             </div>
           )}
 
-          {running && currentPhaseLabel && (
+          {running && currentPhaseInfo && (
             <span className="text-xs text-blue-600 font-medium animate-pulse">
               正在
-              {currentPhaseLabel}
+              {currentPhaseInfo.label}
+              {currentPhaseInfo.modelName && ` · ${currentPhaseInfo.modelName}`}
               ...
             </span>
           )}
-          {running && !currentPhaseLabel && (
+          {running && currentPhaseInfo && elapsed > 0 && (
+            <span className="text-xs text-muted-foreground">
+              已耗时
+              {' '}
+              {elapsed}
+              s
+            </span>
+          )}
+          {running && !currentPhaseInfo && (
             <span className="text-xs text-muted-foreground">
               执行中...
             </span>
@@ -415,7 +638,7 @@ export default function PipelineController({
                 {error}
               </span>
               <button
-                onClick={() => handleRunFrom(startIdx)}
+                onClick={() => handleRunFrom(failedPhaseIdx >= 0 ? failedPhaseIdx : startIdx)}
                 className="text-xs px-2 py-1 rounded border border-orange-300 text-orange-700 hover:bg-orange-50"
               >
                 重试

@@ -287,6 +287,8 @@ export interface GenerationNotifyPayload {
   canvasMeta?: {
     projectId: string
     shotId: string
+    /** 当本次 shot 更新让视频阶段进入终态时携带最新项目状态 */
+    projectStatus?: 'completed' | 'partial_failed'
   }
 }
 

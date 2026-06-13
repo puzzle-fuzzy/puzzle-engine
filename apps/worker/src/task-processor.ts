@@ -102,6 +102,12 @@ export function createTaskProcessor(config: WorkerConfig, deps?: Partial<TaskPro
     if (elapsed > config.staleTimeoutMs) {
       await fail(record.id, 'Task timed out (>4h)')
       await refundReservedCredit(record, refund, '视频任务超时退款')
+      const projectStatus = canvasMeta
+        ? await updateCanvasShotAndProject(canvasMeta.projectId, canvasMeta.shotId, {
+            status: 'failed',
+            errorMessage: 'Task timed out (>4h)',
+          })
+        : undefined
       await notify({
         accountId: record.accountId,
         recordId: record.id,
@@ -111,6 +117,7 @@ export function createTaskProcessor(config: WorkerConfig, deps?: Partial<TaskPro
         taskId,
         traceId: record.traceId ?? undefined,
         errorMessage: 'Task timed out (>4h)',
+        ...(canvasMeta && { canvasMeta: { ...canvasMeta, ...(projectStatus && { projectStatus }) } }),
       })
       return { action: 'completed', taskId }
     }
@@ -157,6 +164,13 @@ export function createTaskProcessor(config: WorkerConfig, deps?: Partial<TaskPro
           })
         }
 
+        const projectStatus = canvasMeta
+          ? await updateCanvasShotAndProject(canvasMeta.projectId, canvasMeta.shotId, {
+              status: 'completed',
+              videoUrl: savedUrls[0] || undefined,
+            })
+          : undefined
+
         await notify({
           accountId: record.accountId,
           recordId: record.id,
@@ -167,19 +181,8 @@ export function createTaskProcessor(config: WorkerConfig, deps?: Partial<TaskPro
           traceId: record.traceId ?? undefined,
           outputResult: output,
           cost: actualCost ?? undefined,
-          canvasMeta,
+          ...(canvasMeta && { canvasMeta: { ...canvasMeta, ...(projectStatus && { projectStatus }) } }),
         })
-
-        // Update canvas shot status + videoUrl
-        if (canvasMeta) {
-          await updateCanvasShot(canvasMeta.shotId, {
-            status: 'completed',
-            videoUrl: savedUrls[0] || undefined,
-          }).catch(err => logger.error({ err, shotId: canvasMeta.shotId }, 'Failed to update canvas shot'))
-          await checkProjectCompletion(canvasMeta.projectId).catch(err =>
-            logger.error({ err, projectId: canvasMeta.projectId }, 'Failed to check project completion'),
-          )
-        }
 
         return { action: 'completed', taskId }
       }
@@ -189,6 +192,13 @@ export function createTaskProcessor(config: WorkerConfig, deps?: Partial<TaskPro
         const errMsg = taskStatus.errorMessage || 'DashScope task failed'
         await fail(record.id, errMsg)
         await refundReservedCredit(record, refund, `视频生成失败退款：${record.model}`)
+        const projectStatus = canvasMeta
+          ? await updateCanvasShotAndProject(canvasMeta.projectId, canvasMeta.shotId, {
+              status: 'failed',
+              errorMessage: errMsg,
+            })
+          : undefined
+
         await notify({
           accountId: record.accountId,
           recordId: record.id,
@@ -198,19 +208,8 @@ export function createTaskProcessor(config: WorkerConfig, deps?: Partial<TaskPro
           taskId,
           traceId: record.traceId ?? undefined,
           errorMessage: errMsg,
-          canvasMeta,
+          ...(canvasMeta && { canvasMeta: { ...canvasMeta, ...(projectStatus && { projectStatus }) } }),
         })
-
-        // Update canvas shot status
-        if (canvasMeta) {
-          await updateCanvasShot(canvasMeta.shotId, {
-            status: 'failed',
-            errorMessage: errMsg,
-          }).catch(err => logger.error({ err, shotId: canvasMeta.shotId }, 'Failed to update canvas shot'))
-          await checkProjectCompletion(canvasMeta.projectId).catch(err =>
-            logger.error({ err, projectId: canvasMeta.projectId }, 'Failed to check project completion'),
-          )
-        }
 
         return { action: 'completed', taskId }
       }
@@ -241,6 +240,20 @@ async function refundReservedCredit(
     accountId: record.accountId,
     generationRecordId: record.id,
     description,
+  })
+}
+
+async function updateCanvasShotAndProject(
+  projectId: string,
+  shotId: string,
+  patch: Parameters<typeof updateCanvasShot>[1],
+): Promise<'completed' | 'partial_failed' | undefined> {
+  await updateCanvasShot(shotId, patch).catch(err =>
+    logger.error({ err, shotId }, 'Failed to update canvas shot'),
+  )
+  return checkProjectCompletion(projectId).catch((err) => {
+    logger.error({ err, projectId }, 'Failed to check project completion')
+    return undefined
   })
 }
 
@@ -275,10 +288,14 @@ export function extractVideoDuration(output: DashScopeTaskOutput | undefined): n
  * Check if all canvas shots for a project have finished (no 'generating' shots left).
  * If so, update the project status to 'completed'.
  */
-async function checkProjectCompletion(projectId: string) {
+async function checkProjectCompletion(projectId: string): Promise<'completed' | 'partial_failed' | undefined> {
   const shots = await listCanvasShotsByProject(projectId)
   const stillGenerating = shots.some(s => s.status === 'generating')
   if (!stillGenerating && shots.length > 0) {
-    await updateCanvasProject(projectId, { status: 'completed' })
+    const allSucceeded = shots.every(s => s.status === 'completed')
+    const projectStatus = allSucceeded ? 'completed' : 'partial_failed'
+    await updateCanvasProject(projectId, { status: projectStatus })
+    return projectStatus
   }
+  return undefined
 }

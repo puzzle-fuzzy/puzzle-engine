@@ -1,6 +1,7 @@
 import type { GenerationRecord } from '@/api/client'
-import { isTextOutput } from '@excuse/shared'
+import { isSubtitleOutput, isTextOutput, isVideoOutput } from '@excuse/shared'
 import {
+  AudioLines,
   Download,
   FileText,
   FolderOpen,
@@ -17,12 +18,20 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { formatCents, getAssetUrls } from '@/lib/generation-utils'
 
-type FilterType = 'all' | 'image' | 'video' | 'text'
+type FilterType = 'all' | 'image' | 'video' | 'text' | 'subtitle'
 
 const TYPE_ICONS = {
   image: ImageIcon,
   video: Video,
   text: FileText,
+  subtitle: AudioLines,
+}
+
+const TYPE_LABELS: Record<string, string> = {
+  image: '图片',
+  video: '视频',
+  text: '文本',
+  subtitle: '字幕',
 }
 
 export default function Assets() {
@@ -51,6 +60,7 @@ export default function Assets() {
     image: records.filter(r => r.category === 'image').length,
     video: records.filter(r => r.category === 'video').length,
     text: records.filter(r => r.category === 'text').length,
+    subtitle: records.filter(r => r.category === 'subtitle').length,
   }
 
   return (
@@ -62,12 +72,13 @@ export default function Assets() {
       </div>
 
       {/* 统计卡片 */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
         {[
           { label: '全部', count: stats.total, value: 'all' as FilterType, icon: Layers },
           { label: '图片', count: stats.image, value: 'image' as FilterType, icon: ImageIcon },
           { label: '视频', count: stats.video, value: 'video' as FilterType, icon: Video },
           { label: '文本', count: stats.text, value: 'text' as FilterType, icon: FileText },
+          { label: '字幕', count: stats.subtitle, value: 'subtitle' as FilterType, icon: AudioLines },
         ].map(({ label, count, value, icon: Icon }) => (
           <Card
             key={value}
@@ -85,16 +96,16 @@ export default function Assets() {
         ))}
       </div>
 
-      {/* 筛选栏 */}
+      {/* 篩选栏 */}
       <div className="flex gap-2">
-        {(['all', 'image', 'video', 'text'] as FilterType[]).map(type => (
+        {(['all', 'image', 'video', 'text', 'subtitle'] as FilterType[]).map(type => (
           <Button
             key={type}
             variant={filter === type ? 'default' : 'outline'}
             size="sm"
             onClick={() => setFilter(type)}
           >
-            {type === 'all' ? '全部' : type === 'image' ? '图片' : type === 'video' ? '视频' : '文本'}
+            {type === 'all' ? '全部' : TYPE_LABELS[type] || type}
           </Button>
         ))}
       </div>
@@ -111,7 +122,9 @@ export default function Assets() {
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
               {filtered.map((record) => {
                 const Icon = TYPE_ICONS[record.category as keyof typeof TYPE_ICONS] || FileText
-                const urls = getAssetUrls(record)
+                // ✅ 传入 outputResult（而非整条记录），与 RecordCard 保持一致
+                const urls = getAssetUrls(record.outputResult)
+                const isSubVideo = record.category === 'subtitle' && isVideoOutput(record.outputResult)
 
                 return (
                   <Card
@@ -123,12 +136,17 @@ export default function Assets() {
                       {record.category === 'image' && urls[0] && (
                         <img src={urls[0]} alt="" className="size-full object-cover" />
                       )}
-                      {record.category === 'video' && urls[0] && (
+                      {(record.category === 'video' || isSubVideo) && urls[0] && (
                         <div className="relative size-full">
                           <video src={urls[0]} className="size-full object-cover" />
                           <div className="absolute inset-0 flex items-center justify-center bg-black/20">
                             <Video className="size-6 text-white" />
                           </div>
+                        </div>
+                      )}
+                      {record.category === 'subtitle' && !isSubVideo && (
+                        <div className="flex size-full items-center justify-center">
+                          <AudioLines className="size-8 text-muted-foreground" />
                         </div>
                       )}
                       {record.category === 'text' && (
@@ -138,7 +156,7 @@ export default function Assets() {
                       )}
                       <Badge variant="secondary" className="absolute left-1.5 top-1.5 text-[10px]">
                         <Icon className="mr-1 size-3" />
-                        {record.category === 'image' ? '图片' : record.category === 'video' ? '视频' : '文本'}
+                        {TYPE_LABELS[record.category] || '文本'}
                       </Badge>
                     </div>
                     <CardContent className="p-2">
@@ -165,16 +183,17 @@ export default function Assets() {
             </button>
 
             {/* 媒体内容 */}
-            {previewRecord.category === 'image' && getAssetUrls(previewRecord)[0] && (
+            {/* ✅ 传入 outputResult（而非整条记录） */}
+            {previewRecord.category === 'image' && getAssetUrls(previewRecord.outputResult)[0] && (
               <img
-                src={getAssetUrls(previewRecord)[0]}
+                src={getAssetUrls(previewRecord.outputResult)[0]}
                 alt=""
                 className="max-h-[70vh] rounded-lg object-contain"
               />
             )}
-            {previewRecord.category === 'video' && getAssetUrls(previewRecord)[0] && (
+            {(previewRecord.category === 'video' || (previewRecord.category === 'subtitle' && isVideoOutput(previewRecord.outputResult))) && getAssetUrls(previewRecord.outputResult)[0] && (
               <video
-                src={getAssetUrls(previewRecord)[0]}
+                src={getAssetUrls(previewRecord.outputResult)[0]}
                 controls
                 loop
                 className="max-h-[70vh] rounded-lg"
@@ -183,6 +202,32 @@ export default function Assets() {
             {previewRecord.category === 'text' && isTextOutput(previewRecord.outputResult) && (
               <div className="max-h-[70vh] overflow-auto rounded-lg bg-muted p-4">
                 <p className="text-sm whitespace-pre-wrap">{previewRecord.outputResult.text}</p>
+              </div>
+            )}
+            {previewRecord.category === 'subtitle' && isSubtitleOutput(previewRecord.outputResult) && (
+              <div className="max-h-[70vh] overflow-auto rounded-lg bg-muted p-4">
+                <p className="text-sm font-medium text-muted-foreground">
+                  转录句子 (
+                  {previewRecord.outputResult.sentences.length}
+                  {' '}
+                  条)
+                </p>
+                <div className="space-y-1 mt-2">
+                  {previewRecord.outputResult.sentences.map(s => (
+                    <div key={s.id} className="flex gap-2 text-xs">
+                      <span className="text-muted-foreground shrink-0">
+                        {Math.floor(s.beginTime / 60000)}
+                        :
+                        {String(Math.floor((s.beginTime % 60000) / 1000)).padStart(2, '0')}
+                        →
+                        {Math.floor(s.endTime / 60000)}
+                        :
+                        {String(Math.floor((s.endTime % 60000) / 1000)).padStart(2, '0')}
+                      </span>
+                      <span className="flex-1">{s.text}</span>
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
 
@@ -203,8 +248,8 @@ export default function Assets() {
             </div>
 
             {/* 下载 */}
-            {getAssetUrls(previewRecord)[0] && (
-              <a href={getAssetUrls(previewRecord)[0]} download className="inline-flex">
+            {getAssetUrls(previewRecord.outputResult)[0] && (
+              <a href={getAssetUrls(previewRecord.outputResult)[0]} download className="inline-flex">
                 <Button variant="outline" size="sm">
                   <Download className="size-3" />
                   下载

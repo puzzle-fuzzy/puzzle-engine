@@ -40,6 +40,18 @@ const videoModel: ModelConfig = {
   parameters: [],
 }
 
+const audioModel: ModelConfig = {
+  id: 'paraformer-v2',
+  name: 'Paraformer-v2 ASR',
+  category: 'subtitle',
+  type: 'generation',
+  description: '',
+  endpoint: '',
+  async: true,
+  pricing: { inputPriceCents: 0.008, unit: 'audio' },
+  parameters: [],
+}
+
 const videoModelNo1080: ModelConfig = {
   id: 'test-video-no1080',
   name: '测试视频模型(无1080P价格)',
@@ -269,6 +281,59 @@ describe('calculateCost', () => {
     })
   })
 
+  // ── 音频模型 (audio 计费) ──
+
+  describe('audio 计费', () => {
+    it('按时长计算音频费用', () => {
+      const result = calculateCost(audioModel, { duration: 60 })
+
+      // 0.008 分/秒 × 60 秒 = 0.48 分 → totalPrice = 0.0048 元
+      // centsToYuan(0.008) = Math.round(0.8) / 10000 = 0.0001（2位精度）
+      expect(result).toEqual({
+        unit: 'audio',
+        duration: 60,
+        unitPriceCents: 0.008,
+        unitPrice: 0.0001,
+        totalPriceCents: 0.48,
+        totalPrice: 0.0048,
+      })
+    })
+
+    it('时长为 0 时费用为 0', () => {
+      const result = calculateCost(audioModel, { duration: 0 })
+
+      expect(result.duration).toBe(0)
+      expect(result.totalPriceCents).toBe(0)
+      expect(result.totalPrice).toBe(0)
+    })
+
+    it('不传 duration 时默认为 0', () => {
+      const result = calculateCost(audioModel, {})
+
+      expect(result.duration).toBe(0)
+      expect(result.totalPriceCents).toBe(0)
+    })
+
+    it('currency.js 保证精度 — 极短音频', () => {
+      // 0.008 分/秒 × 0.5 秒 = 0.004 分
+      // centsToYuan(0.004) = Math.round(0.4) / 10000 = 0 → round 到 0
+      const result = calculateCost(audioModel, { duration: 0.5 })
+
+      expect(result.duration).toBe(0.5)
+      expect(result.totalPriceCents).toBe(0.004)
+      expect(result.totalPrice).toBe(0)
+    })
+
+    it('长音频费用计算', () => {
+      // 0.008 分/秒 × 3600 秒（1 小时） = 28.8 分 → totalPrice = 0.288 元
+      const result = calculateCost(audioModel, { duration: 3600 })
+
+      expect(result.duration).toBe(3600)
+      expect(result.totalPriceCents).toBe(28.8)
+      expect(result.totalPrice).toBe(0.288)
+    })
+  })
+
   // ── 未知计费类型 ──
 
   describe('未知计费类型', () => {
@@ -318,6 +383,28 @@ describe('estimateCost', () => {
     expect(result.unitPriceCents).toBe(100)
     expect(result.totalPriceCents).toBe(1000)
     expect(result.totalPrice).toBe(10)
+    expect(result.estimated).toBe(true)
+  })
+
+  it('音频预估使用 params 中的 duration', () => {
+    const result = estimateCost(audioModel, { duration: 120 })
+
+    expect(result.unit).toBe('audio')
+    expect(result.duration).toBe(120)
+    expect(result.unitPriceCents).toBe(0.008)
+    // centsToYuan(0.008) = Math.round(0.8) / 10000 = 0.0001
+    expect(result.unitPrice).toBe(0.0001)
+    expect(result.totalPriceCents).toBe(0.96)
+    expect(result.totalPrice).toBe(0.0096)
+    expect(result.estimated).toBe(true)
+  })
+
+  it('音频预估无 duration 时费用为 0', () => {
+    const result = estimateCost(audioModel, {})
+
+    expect(result.unit).toBe('audio')
+    expect(result.duration).toBe(0)
+    expect(result.totalPriceCents).toBe(0)
     expect(result.estimated).toBe(true)
   })
 })

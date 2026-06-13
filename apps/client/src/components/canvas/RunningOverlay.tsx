@@ -1,12 +1,19 @@
+import type { RunningPhaseInfo } from './PipelineController'
+
 interface RunningOverlayProps {
   label?: string
+  runningPhaseInfo?: RunningPhaseInfo | null
 }
 
-export function RunningOverlay({ label = '正在生成...' }: RunningOverlayProps) {
+export function RunningOverlay({ label, runningPhaseInfo }: RunningOverlayProps) {
+  const displayLabel = label
+    || (runningPhaseInfo
+      ? `正在${runningPhaseInfo.label}${runningPhaseInfo.modelName ? ` · ${runningPhaseInfo.modelName}` : ''}...`
+      : '正在生成...')
   return (
     <div className="absolute inset-0 bg-white/30 flex items-center justify-center rounded-lg pointer-events-none">
       <div className="bg-yellow-100 text-yellow-700 text-xs font-medium px-3 py-1.5 rounded-full shadow animate-pulse">
-        {label}
+        {displayLabel}
       </div>
     </div>
   )
@@ -18,8 +25,8 @@ export function runningBorder(isRunning: boolean | undefined, defaultBorder: str
 }
 
 /** 运行中的标签 badge */
-export function RunningBadge() {
+export function RunningBadge({ label }: { label?: string } = {}) {
   return (
-    <span className="text-[10px] bg-yellow-100 text-yellow-700 rounded-full px-1.5 animate-pulse">生成中</span>
+    <span className="text-[10px] bg-yellow-100 text-yellow-700 rounded-full px-1.5 animate-pulse">{label || '生成中'}</span>
   )
 }

@@ -74,7 +74,6 @@ export async function checkContinuity(projectId: string, runId?: string) {
     return getProjectDetail(projectId)
   }
   catch (error) {
-    await updateCanvasProject(projectId, { status: 'failed' })
     notifyNode(accountId, projectId, 'continuity', projectId, 'failed', undefined, (error as Error).message, runId)
     if (runId)
       await markPipelineRunFailed(runId, (error as Error).message)
@@ -151,7 +150,6 @@ export async function rebuildShotPrompts(projectId: string, runId?: string) {
     return getProjectDetail(projectId)
   }
   catch (error) {
-    await updateCanvasProject(projectId, { status: 'failed' })
     notifyNode(accountId, projectId, 'rebuild', projectId, 'failed', undefined, (error as Error).message, runId)
     if (runId)
       await markPipelineRunFailed(runId, (error as Error).message)

@@ -5,6 +5,7 @@ import { useGenerationStore } from './generation'
 import { useSubtitleStore } from './subtitle'
 
 interface PhaseDoneEvent {
+  projectId: string
   key: string
   status: 'completed' | 'failed'
   error?: string
@@ -85,9 +86,10 @@ function handlePipelineNodeUpdate(
   })
 
   // Pipeline 阶段完成信号 — 传递给 PipelineController
-  if (event.nodeType === 'phase') {
+  if (event.nodeType === 'phase' && (event.status === 'completed' || event.status === 'failed')) {
     set({
       phaseDone: {
+        projectId: event.projectId,
         key: event.nodeId,
         status: event.status === 'completed' ? 'completed' : 'failed',
         error: event.error,

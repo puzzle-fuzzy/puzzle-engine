@@ -1,4 +1,4 @@
-import type { AcceptedResponse, AuthCurrentUserResponse, AuthResponse, BillingStatisticsResponse, CanvasCharacterResponse, CanvasLocationResponse, CanvasMutationOkResponse, CanvasProjectListResponse, CanvasProjectResponse, CanvasShotResponse, DeleteGenerationRecordResponse, GenerateResponse, GenerationRecord, GenerationRecordListResponse, GenerationRecordResponse, ModelConfig, MutationOkResponse, SubtitleMutationOkResponse, SubtitleProjectDTO, SubtitleProjectListResponse, SubtitleProjectResponse, SubtitleSentence, SubtitleStyleConfig, UploadResponse } from '@excuse/shared'
+import type { AcceptedResponse, AuthCurrentUserResponse, AuthResponse, BillingStatisticsResponse, CanvasCharacterResponse, CanvasLocationResponse, CanvasMutationOkResponse, CanvasPipelineRunDTO, CanvasPipelineRunListResponse, CanvasProjectListResponse, CanvasProjectResponse, CanvasShotResponse, DeleteGenerationRecordResponse, GenerateResponse, GenerationRecord, GenerationRecordListResponse, GenerationRecordResponse, ModelConfig, MutationOkResponse, SubtitleMutationOkResponse, SubtitleProjectDTO, SubtitleProjectListResponse, SubtitleProjectResponse, SubtitleSentence, SubtitleStyleConfig, UploadResponse } from '@excuse/shared'
 import type { App } from '../../../server/src/index'
 import { treaty } from '@elysia/eden'
 import { sseClient } from './sse'
@@ -389,6 +389,37 @@ export async function retryCanvasShot(shotId: string): Promise<AcceptedResponse>
 export async function retryFailedCanvasShots(projectId: string): Promise<AcceptedResponse> {
   return unwrapEden<AcceptedResponse>(
     await api.api.canvas.projects({ projectId })['retry-failed-shots'].post(),
+  )
+}
+
+export async function fetchCanvasPipelineRuns(projectId: string): Promise<CanvasPipelineRunDTO[]> {
+  const res = await unwrapEden<CanvasPipelineRunListResponse>(
+    await api.api.canvas.projects({ projectId }).runs.get(),
+  )
+  return res.items
+}
+
+export function getActivePipelineRun(runs: CanvasPipelineRunDTO[]): CanvasPipelineRunDTO | null {
+  return runs.find(r => r.status === 'pending' || r.status === 'running') ?? null
+}
+
+// ── 单个实体重新生成 ──────────────────────────────────
+
+export async function regenerateCanvasCharacter(characterId: string): Promise<AcceptedResponse> {
+  return unwrapEden<AcceptedResponse>(
+    await api.api.canvas.characters({ characterId }).regenerate.post(),
+  )
+}
+
+export async function regenerateCanvasLocation(locationId: string): Promise<AcceptedResponse> {
+  return unwrapEden<AcceptedResponse>(
+    await api.api.canvas.locations({ locationId }).regenerate.post(),
+  )
+}
+
+export async function regenerateCanvasShot(shotId: string): Promise<AcceptedResponse> {
+  return unwrapEden<AcceptedResponse>(
+    await api.api.canvas.shots({ shotId }).regenerate.post(),
   )
 }
 
