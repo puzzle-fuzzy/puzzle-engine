@@ -1,9 +1,15 @@
-import type { GenerationInputParams } from '@excuse/db'
-import type { DashScopeClient, ValidatedModelParameters } from '@excuse/provider'
+import type { CanvasAssetOutput, GenerationInputParams } from '@excuse/db'
+import type { AssetStorage, DashScopeClient, ValidatedModelParameters } from '@excuse/provider'
+import type { ModelConfig } from '@excuse/shared'
 import { calculateCost } from '@excuse/billing'
 import {
   bindCanvasAssetTaskId,
+  createCanvasAsset,
   createGenerationRecord,
+  markCanvasAssetFailed,
+  markCanvasAssetRunning,
+  markCanvasAssetSucceeded,
+  setCanvasAssetActive,
   updateCanvasShot,
 } from '@excuse/db'
 import {
@@ -12,7 +18,32 @@ import {
 } from '@excuse/provider'
 import { extractBillingParams } from '@excuse/shared'
 
+type CreateCanvasAssetInput = Parameters<typeof createCanvasAsset>[0]
 type CanvasVideoResolution = '720P' | '1080P'
+
+export interface RunCanvasAssetStepInput<T> {
+  asset: CreateCanvasAssetInput
+  execute: (assetId: string) => Promise<{ result: T, output: CanvasAssetOutput }>
+  setActive?: boolean
+}
+
+export interface GenerateCanvasImageAssetInput {
+  assetId: string
+  imageModel: string
+  imageModelConfig: ModelConfig
+  prompt: string
+  subDir: string
+  prefix: string
+  errorMessage: string
+  client: DashScopeClient
+  storage: AssetStorage
+}
+
+export interface GeneratedCanvasImageAsset {
+  publicUrl: string
+  savedUrls: string[]
+  providerUrls: string[]
+}
 
 export interface CanvasVideoSubmitInput {
   accountId: string
@@ -48,6 +79,59 @@ export interface PrepareCanvasVideoParamDeps {
 const providerParamDeps: PrepareCanvasVideoParamDeps = {
   getModelById: getProviderModelById,
   validateAndMerge: validateProviderAndMerge,
+}
+
+export async function runCanvasAssetStep<T>(args: RunCanvasAssetStepInput<T>): Promise<T> {
+  const asset = await createCanvasAsset(args.asset)
+
+  try {
+    await markCanvasAssetRunning(asset.id)
+    const { result, output } = await args.execute(asset.id)
+    await markCanvasAssetSucceeded(asset.id, output)
+    if (args.setActive ?? true)
+      await setCanvasAssetActive(asset.id)
+    return result
+  }
+  catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error)
+    await markCanvasAssetFailed(asset.id, errorMessage).catch(() => {})
+    throw error
+  }
+}
+
+export async function generateCanvasImageAsset(
+  input: GenerateCanvasImageAssetInput,
+): Promise<GeneratedCanvasImageAsset | null> {
+  const validation = validateProviderAndMerge(input.imageModelConfig, {
+    prompt: input.prompt,
+    size: '2048*2048',
+    n: 1,
+  })
+  if (!validation.ok) {
+    const detail = validation.errors.map(error => `${error.field}: ${error.message}`).join('; ')
+    throw new Error(`参数校验失败：${detail}`)
+  }
+
+  const result = await input.client.generateImage(input.imageModel, validation.params)
+  if (result.type === 'failed')
+    throw new Error(result.error || input.errorMessage)
+
+  const urls = result.output.urls
+  if (!Array.isArray(urls) || urls.length === 0)
+    return null
+
+  const providerUrls = urls as string[]
+  const savedUrls = await input.storage.downloadAndMap(providerUrls, input.subDir, input.prefix)
+  const publicUrl = savedUrls[0] || providerUrls[0]!
+  const outputJson: CanvasAssetOutput = { type: 'image', urls: savedUrls.length > 0 ? savedUrls : urls }
+  await markCanvasAssetSucceeded(input.assetId, outputJson, publicUrl, savedUrls[0] ?? undefined, providerUrls[0], undefined)
+  await setCanvasAssetActive(input.assetId)
+
+  return {
+    publicUrl,
+    savedUrls,
+    providerUrls,
+  }
 }
 
 export function getCanvasVideoModel(

@@ -1,6 +1,7 @@
 import type { CanvasAssetOutput } from '@excuse/db'
 import type { ShotDraft } from '@excuse/shared'
 import type { WorkerConfig } from './config'
+import { runCanvasAssetStep } from '@excuse/canvas-runtime'
 import {
   batchCreateCanvasShots,
   deleteCanvasShotsByProject,
@@ -18,7 +19,6 @@ import {
   createDashScopeClient,
   getTextModel,
   loadRunnableCanvasProject,
-  runCanvasAssetStep,
 } from './canvas-execution'
 
 export interface CanvasStoryboardResult extends Record<string, unknown> {

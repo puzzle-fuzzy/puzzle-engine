@@ -1,6 +1,7 @@
 import type { CanvasAssetOutput } from '@excuse/db'
 import type { CharacterProfile } from '@excuse/shared'
 import type { WorkerConfig } from './config'
+import { runCanvasAssetStep } from '@excuse/canvas-runtime'
 import {
   createCanvasCharacter,
   deleteCanvasCharactersByProject,
@@ -20,7 +21,6 @@ import {
   assertCanvasProjectNotGenerating,
   createDashScopeClient,
   getTextModel,
-  runCanvasAssetStep,
 } from './canvas-execution'
 
 export interface CanvasCharactersResult extends Record<string, unknown> {

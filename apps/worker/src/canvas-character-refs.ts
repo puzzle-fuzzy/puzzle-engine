@@ -1,4 +1,5 @@
 import type { WorkerConfig } from './config'
+import { generateCanvasImageAsset } from '@excuse/canvas-runtime'
 import {
   createCanvasAsset,
   markCanvasAssetFailed,
@@ -15,7 +16,6 @@ import {
   getImageModel,
   loadRunnableCanvasProject,
 } from './canvas-execution'
-import { generateCanvasImageAsset } from './canvas-image-assets'
 
 interface CharacterRefSpec {
   assetId: string

@@ -1,12 +1,12 @@
 import type { CanvasAssetOutput } from '@excuse/db'
 import { validateShotContinuity } from '@excuse/canvas-engine'
+import { runCanvasAssetStep } from '@excuse/canvas-runtime'
 import {
   createContinuityReport,
   updateCanvasProject,
 } from '@excuse/db'
 import {
   loadRunnableCanvasProject,
-  runCanvasAssetStep,
   toNormalizedCharacter,
   toNormalizedLocation,
   toNormalizedShot,

@@ -1,6 +1,7 @@
 import type { CanvasAssetOutput } from '@excuse/db'
 import type { LocationProfile } from '@excuse/shared'
 import type { WorkerConfig } from './config'
+import { runCanvasAssetStep } from '@excuse/canvas-runtime'
 import {
   createCanvasLocation,
   deleteCanvasLocationsByProject,
@@ -20,7 +21,6 @@ import {
   assertCanvasProjectNotGenerating,
   createDashScopeClient,
   getTextModel,
-  runCanvasAssetStep,
 } from './canvas-execution'
 
 export interface CanvasLocationsResult extends Record<string, unknown> {

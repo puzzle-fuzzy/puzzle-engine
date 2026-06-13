@@ -1,6 +1,7 @@
 import type { CanvasAssetOutput } from '@excuse/db'
 import type { NovelAnalysis } from '@excuse/shared'
 import type { WorkerConfig } from './config'
+import { runCanvasAssetStep } from '@excuse/canvas-runtime'
 import {
   deleteCanvasCharactersByProject,
   deleteCanvasLocationsByProject,
@@ -19,7 +20,6 @@ import {
 import {
   createDashScopeClient,
   getTextModel,
-  runCanvasAssetStep,
 } from './canvas-execution'
 
 export interface CanvasAnalysisResult extends Record<string, unknown> {

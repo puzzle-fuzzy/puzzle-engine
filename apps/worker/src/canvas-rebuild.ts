@@ -1,4 +1,5 @@
 import type { CanvasAssetOutput } from '@excuse/db'
+import { runCanvasAssetStep } from '@excuse/canvas-runtime'
 import {
   updateCanvasProject,
   updateCanvasShot,
@@ -6,7 +7,6 @@ import {
 import { buildShotVideoPrompt } from '@excuse/prompt-engine'
 import {
   loadRunnableCanvasProject,
-  runCanvasAssetStep,
   toNormalizedCharacter,
   toNormalizedLocation,
   toNormalizedShot,

@@ -657,7 +657,7 @@
 - 将 task definition、retry policy、task dispatch contract、claim/retry/cancel 状态机抽为 `packages/task-engine`。基础 retry policy、failure action decision 和 handler registry 已完成，剩余 DB claim/cancel adapter 继续推进。
 - 将 workflow step definition、advance logic、batch partial success、pause/cancel/resume 抽为 `packages/workflow-engine`。基础 Canvas phase/advance decision 已完成，剩余 batch partial success、pause/cancel/resume 与 handler registry 继续推进。
 - worker 只注册 handler 并运行 engine。基础 handler registry 已完成，worker task dispatch 已从 switch 改为 registry。
-- Canvas phase 的纯业务逻辑从 server modules 拆到 package 或 domain service，worker 不再动态 import server 文件。`canvas.analyze`、`canvas.characters`、`canvas.locations`、`canvas.characterRefs`、`canvas.locationRefs`、`canvas.storyboard`、`canvas.continuity`、`canvas.rebuild`、`canvas.videos` 已完成 worker 去 server service；Canvas 视频提交 runtime 已完成 server/worker 复用。剩余工作从“去 server 动态 import”转为继续抽 Canvas domain service、资产编排 facade、task/run DB adapter。
+- Canvas phase 的纯业务逻辑从 server modules 拆到 package 或 domain service，worker 不再动态 import server 文件。`canvas.analyze`、`canvas.characters`、`canvas.locations`、`canvas.characterRefs`、`canvas.locationRefs`、`canvas.storyboard`、`canvas.continuity`、`canvas.rebuild`、`canvas.videos` 已完成 worker 去 server service；Canvas 视频提交 runtime 已完成 server/worker 复用；worker 的资产生命周期 facade（`runCanvasAssetStep`、`generateCanvasImageAsset`）已下沉到 `packages/canvas-runtime`。剩余工作从“去 server 动态 import”转为继续抽 Canvas domain service、server 侧资产编排 facade、task/run DB adapter。
 
 验收：
 
