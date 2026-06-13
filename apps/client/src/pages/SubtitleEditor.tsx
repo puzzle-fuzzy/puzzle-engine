@@ -56,27 +56,26 @@ export default function SubtitleEditor() {
     }
   }, [id, selectProject])
 
-  // 仅在首次加载或 ASR 完成后（句子数量变化）同步 editingSentences
-  // 避免 SSE 刷新覆盖用户正在编辑的内容
+  // 同步 editingSentences — 首次加载或句子数量变化时同步服务器数据
+  // SSE 更新仅同步句数变化（如 ASR 完成），不覆盖用户正在编辑的文字
   useEffect(() => {
     if (!currentProject?.sentences)
       return
     if (!sentencesLoaded) {
-      // 首次加载 — 同步服务器数据
       setEditingSentences(currentProject.sentences)
       setSentencesLoaded(true)
     }
-    else {
-      // SSE 更新 — 仅在句子数量发生变化时同步（如 ASR 完成）
-      // 用户主动修改（文字/时间）不会改变句子数量，不会被覆盖
-      if (editingSentences.length !== currentProject.sentences.length) {
-        setEditingSentences(currentProject.sentences)
-      }
+    else if (editingSentences.length !== currentProject.sentences.length) {
+      setEditingSentences(currentProject.sentences)
     }
+  }, [currentProject?.sentences, editingSentences.length, sentencesLoaded])
+
+  // 同步字幕样式预设选择
+  useEffect(() => {
     if (currentProject?.styleConfig) {
       setSelectedPreset(currentProject.styleConfig.templateId)
     }
-  }, [currentProject?.sentences?.length, currentProject?.sentences, currentProject?.styleConfig?.templateId])
+  }, [currentProject?.styleConfig])
 
   const canEdit = currentProject?.status === 'subtitle_editing'
   const canExport = currentProject?.status === 'subtitle_editing' || currentProject?.status === 'completed'

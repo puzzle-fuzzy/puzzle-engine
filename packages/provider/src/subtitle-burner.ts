@@ -61,7 +61,9 @@ export async function burnSubtitlesToVideo(
   const exitCode = await proc.exited
   if (exitCode !== 0) {
     const stderr = await new Response(proc.stderr).text()
-    try { await Bun.file(assPath).delete() }
+    try {
+      await Bun.file(assPath).delete()
+    }
     catch {}
     throw new Error(`FFmpeg 字幕烧录失败 (exit=${exitCode}): ${stderr.slice(-2000)}`)
   }
@@ -71,7 +73,9 @@ export async function burnSubtitlesToVideo(
   const fileSize = file.size
 
   // 4. 清理临时 ASS 文件
-  try { await Bun.file(assPath).delete() }
+  try {
+    await Bun.file(assPath).delete()
+  }
   catch {}
 
   return { outputPath, fileSize }

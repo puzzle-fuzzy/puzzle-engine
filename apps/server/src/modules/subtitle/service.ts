@@ -245,7 +245,9 @@ export async function retryProject(
       'audio/wav',
     )
 
-    try { await Bun.file(audioPath).delete() }
+    try {
+      await Bun.file(audioPath).delete()
+    }
     catch {}
 
     await updateSubtitleProjectStatus(project.id, 'asr_processing', {
