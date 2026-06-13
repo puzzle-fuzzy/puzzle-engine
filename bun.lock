@@ -82,6 +82,7 @@
         "@excuse/auth": "workspace:*",
         "@excuse/billing": "workspace:*",
         "@excuse/db": "workspace:*",
+        "@excuse/metrics": "workspace:*",
         "@excuse/provider": "workspace:*",
         "@excuse/rate-limit": "workspace:*",
         "@excuse/shared": "workspace:*",
@@ -135,6 +136,10 @@
     },
     "packages/ffmpeg": {
       "name": "@excuse/ffmpeg",
+      "version": "0.0.1",
+    },
+    "packages/metrics": {
+      "name": "@excuse/metrics",
       "version": "0.0.1",
     },
     "packages/provider": {
@@ -405,6 +410,8 @@
     "@excuse/db": ["@excuse/db@workspace:packages/db"],
 
     "@excuse/ffmpeg": ["@excuse/ffmpeg@workspace:packages/ffmpeg"],
+
+    "@excuse/metrics": ["@excuse/metrics@workspace:packages/metrics"],
 
     "@excuse/provider": ["@excuse/provider@workspace:packages/provider"],
 

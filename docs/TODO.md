@@ -558,6 +558,8 @@
 
 ### 8. 新增 `packages/metrics` 或 `packages/observability`
 
+状态：已完成，commit：本次提交
+
 当前迹象：
 
 - `apps/server/src/services/metrics.ts` 是内存指标收集器，只在 server 内可用。

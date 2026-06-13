@@ -19,6 +19,7 @@
     "@excuse/auth": "workspace:*",
     "@excuse/billing": "workspace:*",
     "@excuse/db": "workspace:*",
+    "@excuse/metrics": "workspace:*",
     "@excuse/provider": "workspace:*",
     "@excuse/rate-limit": "workspace:*",
     "@excuse/shared": "workspace:*",
