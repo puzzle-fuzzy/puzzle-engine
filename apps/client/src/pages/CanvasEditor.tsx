@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useParams } from 'react-router'
 import { getCanvasProject } from '../api/client'
 import CanvasFlow from '../components/canvas/CanvasFlow'
+import CanvasStatusBar from '../components/canvas/CanvasStatusBar'
 import NodeDetailPanel from '../components/canvas/NodeDetailPanel'
 import PipelineController from '../components/canvas/PipelineController'
 import { useCanvasAssetsPolling } from '../hooks/use-canvas-assets-polling'
@@ -89,46 +90,14 @@ export default function CanvasEditor() {
 
   return (
     <div className="flex flex-col h-[calc(100vh-56px)]">
-      {/* Top toolbar */}
-      <div className="flex items-center gap-3 px-4 py-2 border-b bg-background/80 backdrop-blur-sm">
-        <h1 className="font-semibold text-sm truncate">
-          {project.title || '未命名项目'}
-        </h1>
-        <span className="text-xs px-2 py-0.5 rounded-full bg-muted">
-          {project.status}
-        </span>
-        {runningPhase && (
-          <span className="text-xs px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 animate-pulse">
-            正在
-            {runningPhase.label}
-            {runningPhase.modelName && ` · ${runningPhase.modelName}`}
-          </span>
-        )}
-        {/* PAUSE_BEFORE 待确认提示 */}
-        {!runningPhase && (project.status === 'refs_all_ready' || project.status === 'prompts_ready') && (
-          <span className="text-xs px-2 py-0.5 rounded-full bg-yellow-100 text-yellow-700">
-            ⏸ 待确认：
-            {project.status === 'refs_all_ready' ? '分镜' : '生成视频'}
-          </span>
-        )}
-        {/* 连接状态指示器 */}
-        {connectionMode === 'sse' && (
-          <span className="text-xs text-green-600 flex items-center gap-1">
-            <span className="w-1.5 h-1.5 rounded-full bg-green-500" />
-            实时同步
-          </span>
-        )}
-        {connectionMode === 'polling' && isPolling && (
-          <span className="text-xs px-2 py-0.5 rounded-full bg-yellow-100 text-yellow-700 animate-pulse">
-            轮询同步中...
-          </span>
-        )}
-        {connectionMode === 'disconnected' && (
-          <span className="text-xs px-2 py-0.5 rounded-full bg-red-100 text-red-700">
-            连接断开
-          </span>
-        )}
-      </div>
+      {/* Status bar */}
+      <CanvasStatusBar
+        project={project}
+        runningPhase={runningPhase}
+        pollData={pollData}
+        connectionMode={connectionMode}
+        isPolling={isPolling}
+      />
 
       {/* Canvas area */}
       <div className="flex-1 relative">

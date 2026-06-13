@@ -1,0 +1,161 @@
+import type { CanvasAssetsPoll, ProjectDTO } from '@excuse/shared'
+import type { RunningPhaseInfo } from './PipelineController'
+import { useMemo } from 'react'
+
+const STATUS_LABELS: Record<string, string> = {
+  draft: '草稿',
+  analyzed: '已分析',
+  characters_ready: '角色已生成',
+  locations_ready: '场景已生成',
+  refs_ready: '参考图生成中',
+  refs_all_ready: '参考图已就绪',
+  storyboard_ready: '分镜已生成',
+  continuity_checked: '连续性已检查',
+  prompts_ready: 'Prompt 已重建',
+  generating: '视频生成中',
+  partial_failed: '部分失败',
+  completed: '已完成',
+  failed: '失败',
+}
+
+const STATUS_COLORS: Record<string, string> = {
+  draft: 'bg-gray-100 text-gray-700',
+  analyzed: 'bg-blue-100 text-blue-700',
+  characters_ready: 'bg-blue-100 text-blue-700',
+  locations_ready: 'bg-blue-100 text-blue-700',
+  refs_ready: 'bg-yellow-100 text-yellow-700',
+  refs_all_ready: 'bg-green-100 text-green-700',
+  storyboard_ready: 'bg-green-100 text-green-700',
+  continuity_checked: 'bg-green-100 text-green-700',
+  prompts_ready: 'bg-green-100 text-green-700',
+  generating: 'bg-blue-100 text-blue-700 animate-pulse',
+  partial_failed: 'bg-orange-100 text-orange-700',
+  completed: 'bg-green-200 text-green-800',
+  failed: 'bg-red-100 text-red-700',
+}
+
+interface CanvasStatusBarProps {
+  project: ProjectDTO
+  runningPhase: RunningPhaseInfo | null
+  pollData: CanvasAssetsPoll | null
+  connectionMode: 'sse' | 'polling' | 'disconnected'
+  isPolling: boolean
+}
+
+export default function CanvasStatusBar({
+  project,
+  runningPhase,
+  pollData,
+  connectionMode,
+  isPolling,
+}: CanvasStatusBarProps) {
+  // 阶段进度统计
+  const phaseStats = useMemo(() => {
+    const phases = ['analyzed', 'characters_ready', 'locations_ready', 'refs_all_ready', 'storyboard_ready', 'continuity_checked', 'prompts_ready', 'generating']
+    const statusOrder = ['draft', 'analyzed', 'characters_ready', 'locations_ready', 'refs_ready', 'refs_all_ready', 'storyboard_ready', 'continuity_checked', 'prompts_ready', 'generating', 'completed']
+    const currentIndex = statusOrder.indexOf(project.status)
+    if (currentIndex < 0)
+      return { completed: 0, total: phases.length }
+    // 已完成的阶段数（draft 不算，所以从 analyzed 开始）
+    const completed = currentIndex === 0 ? 0 : currentIndex
+    return { completed, total: phases.length }
+  }, [project.status])
+
+  // 活跃任务统计
+  const taskStats = useMemo(() => {
+    if (!pollData?.activeTasks)
+      return { total: 0, text: 0, image: 0, video: 0 }
+    const tasks = pollData.activeTasks
+    return {
+      total: tasks.length,
+      text: tasks.filter(t => t.category === 'text').length,
+      image: tasks.filter(t => t.category === 'image').length,
+      video: tasks.filter(t => t.category === 'video').length,
+    }
+  }, [pollData])
+
+  const isPauseBefore = !runningPhase && (project.status === 'refs_all_ready' || project.status === 'prompts_ready')
+
+  const statusLabel = STATUS_LABELS[project.status] || project.status
+  const statusColor = STATUS_COLORS[project.status] || 'bg-gray-100 text-gray-700'
+
+  return (
+    <div className="flex items-center gap-3 px-4 py-2 border-b bg-background/80 backdrop-blur-sm flex-wrap">
+      {/* 项目标题 */}
+      <h1 className="font-semibold text-sm truncate max-w-40">
+        {project.title || '未命名项目'}
+      </h1>
+
+      {/* 项目状态 */}
+      <span className={`text-xs px-2 py-0.5 rounded-full ${statusColor}`}>
+        {statusLabel}
+      </span>
+
+      {/* 正在运行阶段 */}
+      {runningPhase && (
+        <span className="text-xs px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 animate-pulse">
+          正在
+          {runningPhase.label}
+          {runningPhase.modelName && ` · ${runningPhase.modelName}`}
+        </span>
+      )}
+
+      {/* PAUSE_BEFORE 待确认 */}
+      {isPauseBefore && (
+        <span className="text-xs px-2 py-0.5 rounded-full bg-yellow-100 text-yellow-700">
+          ⏸ 待确认：
+          {project.status === 'refs_all_ready' ? '分镜' : '生成视频'}
+        </span>
+      )}
+
+      {/* 阶段进度 */}
+      <span className="text-xs text-muted-foreground">
+        阶段
+        {phaseStats.completed}
+        /
+        {phaseStats.total}
+      </span>
+
+      {/* 活跃任务统计 */}
+      {taskStats.total > 0 && (
+        <span className="text-xs text-muted-foreground">
+          任务
+          {taskStats.total}
+          （文本
+          {taskStats.text}
+          · 图片
+          {taskStats.image}
+          · 视频
+          {taskStats.video}
+          ）
+        </span>
+      )}
+
+      {/* 连接状态 */}
+      {connectionMode === 'sse' && (
+        <span className="text-xs text-green-600 flex items-center gap-1">
+          <span className="w-1.5 h-1.5 rounded-full bg-green-500" />
+          实时同步
+        </span>
+      )}
+      {connectionMode === 'polling' && isPolling && (
+        <span className="text-xs px-2 py-0.5 rounded-full bg-yellow-100 text-yellow-700 animate-pulse">
+          轮询同步中...
+        </span>
+      )}
+      {connectionMode === 'disconnected' && (
+        <span className="text-xs px-2 py-0.5 rounded-full bg-red-100 text-red-700">
+          连接断开
+        </span>
+      )}
+
+      {/* 最后更新时间 */}
+      {pollData?.generatedAt && (
+        <span className="text-xs text-muted-foreground">
+          更新于
+          {new Date(pollData.generatedAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}
+        </span>
+      )}
+    </div>
+  )
+}
