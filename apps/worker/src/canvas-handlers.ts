@@ -1,12 +1,8 @@
 /**
  * Canvas pipeline phase handlers — Worker 端执行
  *
- * 通过 Bun runtime 动态加载 server 端 canvas service 函数。
- * TypeScript 无法检查跨 app import，所以用类型声明 + 运行时加载。
- *
- * Service 函数内部 `notifyNode` → `dispatchToUser`
- * 在 Worker 进程中无 SSE 连接，静默丢弃。
- * Worker handler 入口和出口通过 PostgreSQL NOTIFY 发通知。
+ * Worker 本地执行 Canvas phase，不再动态加载 server modules。
+ * Handler 入口和出口通过 PostgreSQL NOTIFY 发通知。
  */
 
 import type { TaskRow } from '@excuse/db'
@@ -18,7 +14,6 @@ import {
   markPipelineRunSucceeded,
   pgClient,
 } from '@excuse/db'
-import { createLogger } from '@excuse/shared'
 import { executeCanvasAnalysis } from './canvas-analysis'
 import { executeCanvasCharacterRefs } from './canvas-character-refs'
 import { executeCanvasCharacters } from './canvas-characters'
@@ -27,47 +22,7 @@ import { executeCanvasLocationRefs } from './canvas-location-refs'
 import { executeCanvasLocations } from './canvas-locations'
 import { executeCanvasRebuild } from './canvas-rebuild'
 import { executeCanvasStoryboard } from './canvas-storyboard'
-
-const logger = createLogger('canvas-handler')
-
-// ── Provider config 构建 ──────────────────────────────────
-
-function providerConfig(workerConfig: WorkerConfig) {
-  return {
-    dashscopeApiKey: workerConfig.dashscopeApiKey,
-    dashscopeBaseUrl: workerConfig.dashscopeBaseUrl,
-  }
-}
-
-function storageConfig(workerConfig: WorkerConfig) {
-  return {
-    dashscopeApiKey: workerConfig.dashscopeApiKey,
-    dashscopeBaseUrl: workerConfig.dashscopeBaseUrl,
-    storageRoot: workerConfig.storageRoot,
-    oss: workerConfig.oss,
-  }
-}
-
-// ── Server canvas service function types ────────────────────
-// Types match actual server function signatures for safe dynamic loading.
-
-interface CanvasServiceModule {
-  generateVideos: (projectId: string, config: { dashscopeApiKey: string, dashscopeBaseUrl?: string }, runId?: string) => Promise<void>
-}
-
-/**
- * 加载 server 端 canvas service 函数
- *
- * Bun runtime 支持跨 monorepo app 的相对路径 import。
- * 使用 require() + 统一类型接口避免 TypeScript rootDir 检查失败。
- */
-function loadCanvasServices(): CanvasServiceModule {
-  // Bun runtime resolves cross-app relative paths correctly at runtime.
-  // TypeScript cannot check these imports — we use a typed interface instead.
-  // eslint-disable-next-line ts/no-require-imports
-  const serviceMod: CanvasServiceModule = require('../../server/src/modules/canvas/service.ts') as CanvasServiceModule
-  return serviceMod
-}
+import { executeCanvasVideos } from './canvas-videos'
 
 // ── PostgreSQL NOTIFY helper ──────────────────────────────
 
@@ -138,17 +93,6 @@ export async function markRunFailedAndNotify(task: TaskRow, errorMessage: string
 }
 
 // ── Canvas phase handlers ──────────────────────────────────
-// Lazy-load service module on first canvas handler call
-
-let svc: CanvasServiceModule | null = null
-
-function getService(): CanvasServiceModule {
-  if (!svc) {
-    svc = loadCanvasServices()
-    logger.info('Canvas service module loaded from server')
-  }
-  return svc
-}
 
 export async function handleCanvasAnalyze(task: TaskRow, workerConfig: WorkerConfig): Promise<Record<string, unknown>> {
   const projectId = task.projectId!
@@ -217,7 +161,7 @@ export async function handleCanvasRebuild(task: TaskRow, _workerConfig: WorkerCo
 export async function handleCanvasVideos(task: TaskRow, workerConfig: WorkerConfig): Promise<Record<string, unknown>> {
   const projectId = task.projectId!
   const runId = await markRunRunningAndNotify(task)
-  await getService().generateVideos(projectId, providerConfig(workerConfig), runId ?? undefined)
-  await markRunSucceededAndNotify(task)
-  return { phase: 'videos', projectId }
+  const result = await executeCanvasVideos(projectId, workerConfig, runId ?? undefined)
+  await markRunSucceededAndNotify(task, result)
+  return result
 }

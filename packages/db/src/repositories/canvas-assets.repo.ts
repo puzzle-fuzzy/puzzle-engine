@@ -230,6 +230,16 @@ export async function markCanvasAssetSucceededByTaskId(
   return markCanvasAssetSucceeded(asset.id, outputJson, publicUrl, storagePath, providerUrl, cost)
 }
 
+/** 将 provider taskId 绑定到 Canvas asset，用于异步 worker 回填结果 */
+export async function bindCanvasAssetTaskId(id: string, taskId: string) {
+  const [updated] = await getDb()
+    .update(canvasAssets)
+    .set({ taskId, updatedAt: new Date() })
+    .where(eq(canvasAssets.id, id))
+    .returning()
+  return updated ?? null
+}
+
 /**
  * 通过 taskId 查找 canvas_asset 并标记为 failed
  * — 用于 Worker 在视频生成失败时更新对应的 shotVideo 资产
