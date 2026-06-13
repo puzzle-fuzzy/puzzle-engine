@@ -1,22 +1,12 @@
 import type { CanvasAssetOutput } from '@excuse/db'
 import type { WorkerConfig } from './config'
-import { validateLocationProfile } from '@excuse/canvas-engine'
-import { runCanvasAssetStep } from '@excuse/canvas-runtime'
+import { generateLocationEntity, runCanvasAssetStep } from '@excuse/canvas-runtime'
 import {
-  createCanvasLocation,
   deleteCanvasLocationsByProject,
   deleteCanvasShotsByProject,
   getCanvasProjectById,
   updateCanvasProject,
 } from '@excuse/db'
-import {
-  buildLocationPrompt,
-  parseLLMJson,
-} from '@excuse/prompt-engine'
-import {
-  getModelById,
-  validateAndMerge,
-} from '@excuse/provider'
 import {
   assertCanvasProjectNotGenerating,
   createDashScopeClient,
@@ -63,37 +53,8 @@ export async function executeCanvasLocations(
           model: textModel,
         },
         execute: async () => {
-          const { system, prompt: userPrompt } = buildLocationPrompt(project.storyText, analysis, name)
-          const modelConfig = getModelById(textModel)
-          if (!modelConfig)
-            throw new Error(`未知文本模型：${textModel}`)
-
-          const rawParams: Record<string, unknown> = {
-            prompt: `${system}\n\n${userPrompt}`,
-            max_tokens: 4096,
-            temperature: 0.7,
-          }
-          const validationResult = validateAndMerge(modelConfig, rawParams)
-          if (!validationResult.ok) {
-            const detail = validationResult.errors.map(error => `${error.field}: ${error.message}`).join('; ')
-            throw new Error(`参数校验失败：${detail}`)
-          }
-
-          const result = await client.chatCompletion(textModel, validationResult.params)
-          if (result.type === 'failed')
-            throw new Error(result.error || '场景档案生成失败')
-
-          const profile = validateLocationProfile(parseLLMJson(result.output.text as string))
-          await createCanvasLocation({
-            projectId,
-            name: profile.name || name,
-            type: profile.type,
-            profileJson: profile,
-            scenePrompt: profile.scenePrompt,
-            negativePrompt: profile.negativePrompt,
-          })
-
-          const output: CanvasAssetOutput = { type: 'json', data: { ...profile } }
+          const result = await generateLocationEntity({ projectId, storyText: project.storyText, analysis, name, client, textModel })
+          const output: CanvasAssetOutput = { type: 'json', data: { ...result.profile } }
           return {
             result: undefined,
             output,

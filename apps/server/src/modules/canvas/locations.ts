@@ -1,9 +1,6 @@
 import type { CanvasAssetOutput } from '@excuse/db'
-import type { LocationProfile } from '@excuse/shared'
-import { validateLocationProfile } from '@excuse/canvas-engine'
-import { runCanvasAssetStep } from '@excuse/canvas-runtime'
+import { generateLocationEntity, runCanvasAssetStep } from '@excuse/canvas-runtime'
 import {
-  createCanvasLocation,
   deleteCanvasLocationsByProject,
   deleteCanvasShotsByProject,
   getCanvasProjectById,
@@ -11,11 +8,6 @@ import {
   markPipelineRunSucceeded,
   updateCanvasProject,
 } from '@excuse/db'
-import {
-  buildLocationPrompt,
-  parseLLMJson,
-} from '@excuse/prompt-engine'
-import { getModelById, validateAndMerge } from '@excuse/provider'
 import { getProjectDetail } from './service-crud'
 import { assertNotGenerating, createClient, getTextModel, notifyNode } from './service-helpers'
 
@@ -41,7 +33,7 @@ export async function generateLocations(projectId: string, config: { dashscopeAp
     notifyNode(accountId, projectId, 'location', name, 'running', undefined, undefined, runId)
 
     try {
-      const profile = await runCanvasAssetStep<LocationProfile>({
+      const { location, profile } = await runCanvasAssetStep({
         asset: {
           accountId,
           projectId,
@@ -52,42 +44,13 @@ export async function generateLocations(projectId: string, config: { dashscopeAp
           model: textModel,
         },
         execute: async () => {
-          const { system, prompt: userPrompt } = buildLocationPrompt(project.storyText, analysis, name)
-          const modelConfig = getModelById(textModel)
-          if (!modelConfig)
-            throw new Error(`未知文本模型：${textModel}`)
-
-          const rawParams: Record<string, unknown> = {
-            prompt: `${system}\n\n${userPrompt}`,
-            max_tokens: 4096,
-            temperature: 0.7,
-          }
-          const validationResult = validateAndMerge(modelConfig, rawParams)
-          if (!validationResult.ok) {
-            const detail = validationResult.errors.map(e => `${e.field}: ${e.message}`).join('; ')
-            throw new Error(`参数校验失败：${detail}`)
-          }
-
-          const result = await client.chatCompletion(textModel, validationResult.params)
-          if (result.type === 'failed')
-            throw new Error(result.error || '场景档案生成失败')
-
-          const profile = validateLocationProfile(parseLLMJson(result.output.text as string))
-          await createCanvasLocation({
-            projectId,
-            name: profile.name || name,
-            type: profile.type,
-            profileJson: profile,
-            scenePrompt: profile.scenePrompt,
-            negativePrompt: profile.negativePrompt,
-          })
-
-          const output: CanvasAssetOutput = { type: 'json', data: { ...profile } }
-          return { result: profile, output }
+          const result = await generateLocationEntity({ projectId, storyText: project.storyText, analysis, name, client, textModel })
+          const output: CanvasAssetOutput = { type: 'json', data: { ...result.profile } }
+          return { result, output }
         },
       })
 
-      notifyNode(accountId, projectId, 'location', name, 'completed', { name: profile.name, profile }, undefined, runId)
+      notifyNode(accountId, projectId, 'location', location.id, 'completed', { name: profile.name, profile }, undefined, runId)
     }
     catch (error) {
       const errorMessage = (error as Error).message
