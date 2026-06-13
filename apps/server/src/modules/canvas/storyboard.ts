@@ -1,17 +1,13 @@
 import type { CanvasAssetOutput } from '@excuse/db'
 import type { ShotDraft } from '@excuse/shared'
+import { runCanvasAssetStep } from '@excuse/canvas-runtime'
 import {
   batchCreateCanvasShots,
-  createCanvasAsset,
   deleteCanvasShotsByProject,
   getCanvasProjectDetail,
-  markCanvasAssetFailed,
-  markCanvasAssetRunning,
-  markCanvasAssetSucceeded,
   markPipelineRunFailed,
   markPipelineRunRunning,
   markPipelineRunSucceeded,
-  setCanvasAssetActive,
   updateCanvasProject,
 } from '@excuse/db'
 import {
@@ -41,77 +37,69 @@ export async function generateStoryboard(projectId: string, config: { dashscopeA
   if (runId)
     await markPipelineRunRunning(runId)
 
-  // ── 为分镜脚本创建 canvas_asset ──────────────────
-  const storyboardAsset = await createCanvasAsset({
-    accountId,
-    projectId,
-    category: 'storyboard',
-    targetEntityType: 'project',
-    targetEntityId: projectId,
-    pipelineRunId: runId ?? undefined,
-    model: textModel,
-  })
-
   try {
-    // ── 标记资产为运行状态 ──────────────────────────
-    await markCanvasAssetRunning(storyboardAsset.id)
+    const created = await runCanvasAssetStep({
+      asset: {
+        accountId,
+        projectId,
+        category: 'storyboard',
+        targetEntityType: 'project',
+        targetEntityId: projectId,
+        pipelineRunId: runId ?? undefined,
+        model: textModel,
+      },
+      execute: async () => {
+        const client = createClient(config)
+        const { system, prompt: userPrompt } = buildStoryboardPrompt(
+          project.storyText,
+          analysis,
+          detail.characters.map(c => ({ id: c.id, name: c.name, identityPrompt: c.identityPrompt || '' })),
+          detail.locations.map(l => ({ id: l.id, name: l.name, scenePrompt: l.scenePrompt || '' })),
+        )
 
-    const client = createClient(config)
-    const { system, prompt: userPrompt } = buildStoryboardPrompt(
-      project.storyText,
-      analysis,
-      detail.characters.map(c => ({ id: c.id, name: c.name, identityPrompt: c.identityPrompt || '' })),
-      detail.locations.map(l => ({ id: l.id, name: l.name, scenePrompt: l.scenePrompt || '' })),
-    )
+        const modelConfig = getModelById(textModel)
+        if (!modelConfig)
+          throw new Error(`未知文本模型：${textModel}`)
 
-    const modelConfig = getModelById(textModel)
-    if (!modelConfig)
-      throw new Error(`未知文本模型：${textModel}`)
+        const rawParams: Record<string, unknown> = {
+          prompt: `${system}\n\n${userPrompt}`,
+          max_tokens: 8000,
+          temperature: 0.7,
+        }
+        const validationResult = validateAndMerge(modelConfig, rawParams)
+        if (!validationResult.ok) {
+          const detail = validationResult.errors.map(e => `${e.field}: ${e.message}`).join('; ')
+          throw new Error(`参数校验失败：${detail}`)
+        }
 
-    const rawParams: Record<string, unknown> = {
-      prompt: `${system}\n\n${userPrompt}`,
-      max_tokens: 8000,
-      temperature: 0.7,
-    }
-    const validationResult = validateAndMerge(modelConfig, rawParams)
-    if (!validationResult.ok) {
-      const detail = validationResult.errors.map(e => `${e.field}: ${e.message}`).join('; ')
-      throw new Error(`参数校验失败：${detail}`)
-    }
+        const result = await client.chatCompletion(textModel, validationResult.params)
+        if (result.type === 'failed')
+          throw new Error(result.error || '分镜生成失败')
 
-    const result = await client.chatCompletion(textModel, validationResult.params)
+        const shots = parseLLMJson<ShotDraft[]>(result.output.text as string)
+        await deleteCanvasShotsByProject(projectId)
 
-    if (result.type === 'failed') {
-      throw new Error(result.error || '分镜生成失败')
-    }
+        const shotInserts = shots.map(shot => ({
+          projectId,
+          shotIndex: shot.shotIndex,
+          duration: shot.duration,
+          locationId: shot.locationId,
+          characterIdsJson: shot.characterIds,
+          narrative: shot.narrative,
+          cameraJson: shot.camera,
+          continuityJson: shot.continuity,
+          timelineJson: shot.timeline ?? null,
+          environmentJson: shot.environment ?? null,
+        }))
 
-    const shots = parseLLMJson<ShotDraft[]>(result.output.text as string)
+        const created = await batchCreateCanvasShots(shotInserts)
+        const output: CanvasAssetOutput = { type: 'json', data: { shotsCount: created.length, shots } }
+        return { result: created, output }
+      },
+    })
 
-    await deleteCanvasShotsByProject(projectId)
-
-    const shotInserts = shots.map(shot => ({
-      projectId,
-      shotIndex: shot.shotIndex,
-      duration: shot.duration,
-      locationId: shot.locationId,
-      characterIdsJson: shot.characterIds,
-      narrative: shot.narrative,
-      cameraJson: shot.camera,
-      continuityJson: shot.continuity,
-      timelineJson: shot.timeline ?? null,
-      environmentJson: shot.environment ?? null,
-    }))
-
-    const created = await batchCreateCanvasShots(shotInserts)
-
-    for (const shot of created) {
+    for (const shot of created)
       notifyNode(accountId, projectId, 'shot', shot.id, 'completed', undefined, undefined, runId)
-    }
-
-    // ── 标记分镜资产成功 + 设为活跃 ──────────────────
-    const outputJson: CanvasAssetOutput = { type: 'json', data: { shotsCount: created.length, shots } }
-    await markCanvasAssetSucceeded(storyboardAsset.id, outputJson)
-    await setCanvasAssetActive(storyboardAsset.id)
 
     await updateCanvasProject(projectId, { status: 'storyboard_ready' })
     if (runId)
@@ -120,8 +108,6 @@ export async function generateStoryboard(projectId: string, config: { dashscopeA
   }
   catch (error) {
     const errorMessage = (error as Error).message
-    // ── 标记分镜资产失败 ──────────────────────────────
-    await markCanvasAssetFailed(storyboardAsset.id, errorMessage).catch(() => {})
     notifyNode(accountId, projectId, 'storyboard', projectId, 'failed', undefined, errorMessage, runId)
     if (runId)
       await markPipelineRunFailed(runId, errorMessage)
