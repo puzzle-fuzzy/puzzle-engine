@@ -1,7 +1,6 @@
 import { index, jsonb, pgEnum, pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core'
 import { accounts } from './accounts'
 import { canvasProjects } from './canvas-projects'
-
 /**
  * 流水线阶段枚举 — 9 个阶段按固定顺序执行
  *
@@ -65,8 +64,11 @@ export const canvasPipelineRuns = pgTable('canvas_pipeline_runs', {
   inputSnapshotJson: jsonb('input_snapshot_json').$type<Record<string, unknown>>(),
   /** 输出摘要 — 管道审计数据：执行结果统计信息，不参与业务逻辑 */
   outputSummaryJson: jsonb('output_summary_json').$type<Record<string, unknown>>(),
+  /** 关联的统一执行任务 — 外键 → tasks.id，pipeline run 与 task 双向关联 */
+  taskId: uuid('task_id'),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 }, table => [
   index('idx_pipeline_runs_project_phase_status').on(table.projectId, table.phase, table.status),
   index('idx_pipeline_runs_project_created').on(table.projectId, table.createdAt),
+  index('idx_pipeline_runs_task').on(table.taskId),
 ])

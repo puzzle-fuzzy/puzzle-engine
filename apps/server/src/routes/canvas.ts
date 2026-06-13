@@ -66,6 +66,7 @@ function serializePipelineRun(row: {
   projectId: string
   phase: CanvasPipelineRunDTO['phase']
   status: CanvasPipelineRunDTO['status']
+  taskId: string | null
   startedAt: Date | null
   finishedAt: Date | null
   errorMessage: string | null

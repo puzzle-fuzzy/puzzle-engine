@@ -134,6 +134,13 @@
       "when": 1781276118646,
       "tag": "0018_talented_marauders",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1781348709763,
+      "tag": "0019_gifted_the_professor",
+      "breakpoints": true
     }
   ]
 }

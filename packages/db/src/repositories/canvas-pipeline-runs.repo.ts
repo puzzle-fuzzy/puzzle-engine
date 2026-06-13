@@ -96,3 +96,13 @@ export async function markPipelineRunCancelled(id: string) {
     .returning()
   return updated ?? null
 }
+
+/** 关联 pipeline run 到统一执行任务 — 更新 taskId 字段 */
+export async function linkPipelineRunToTask(runId: string, taskId: string) {
+  const [updated] = await getDb()
+    .update(canvasPipelineRuns)
+    .set({ taskId })
+    .where(eq(canvasPipelineRuns.id, runId))
+    .returning()
+  return updated ?? null
+}

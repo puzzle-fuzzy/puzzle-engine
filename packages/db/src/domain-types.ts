@@ -45,6 +45,32 @@ export interface CanvasModelPreferences {
   videoModel?: string
 }
 
+// ===== Task Domain Types =====
+
+/** 任务输入参数 — 结构随 task type 定义 */
+export interface TaskInput {
+  [key: string]: unknown
+}
+
+/** 任务输出结果 — 结构随 task type 定义 */
+export interface TaskOutput {
+  [key: string]: unknown
+}
+
+/** 任务错误信息 — 区分 retriable vs permanent */
+export interface TaskErrorInfo {
+  /** 错误分类（provider_error / timeout / validation / system） */
+  category: string
+  /** 是否可重试 */
+  retriable: boolean
+  /** 原始错误码（如 provider error code） */
+  code?: string
+  /** 错误详情 */
+  message: string
+  /** 重试延迟建议（ms） */
+  retryDelayMs?: number
+}
+
 // ===== Workflow Domain Types =====
 
 /**

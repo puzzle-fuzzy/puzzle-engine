@@ -1,5 +1,5 @@
 import type { InferInsertModel, InferSelectModel } from 'drizzle-orm'
-import type { accounts, canvasCharacters, canvasContinuityReports, canvasLocations, canvasPipelinePhaseEnum, canvasPipelineRuns, canvasPipelineRunStatusEnum, canvasProjects, canvasProjectStatusEnum, canvasShots, canvasShotStatusEnum, creditAccounts, creditTransactions, generationCategoryEnum, generationRecords, generationStatusEnum, notifications, subtitleProjects, subtitleProjectStatusEnum, uploadedFiles, usageEvents, workflows, workflowSteps } from './schema'
+import type { accounts, canvasCharacters, canvasContinuityReports, canvasLocations, canvasPipelinePhaseEnum, canvasPipelineRuns, canvasPipelineRunStatusEnum, canvasProjects, canvasProjectStatusEnum, canvasShots, canvasShotStatusEnum, creditAccounts, creditTransactions, generationCategoryEnum, generationRecords, generationStatusEnum, notifications, subtitleProjects, subtitleProjectStatusEnum, taskDomainEnum, tasks, taskStatusEnum, uploadedFiles, usageEvents, workflows, workflowSteps } from './schema'
 
 // ===== Drizzle 行类型（从 schema 自动推导） =====
 
@@ -93,6 +93,12 @@ export type WorkflowStepRow = InferSelectModel<typeof workflowSteps>
 /** workflow_steps 表 — 插入参数类型 */
 export type WorkflowStepInsert = InferInsertModel<typeof workflowSteps>
 
+/** tasks 表 — 查询结果行类型 */
+export type TaskRow = InferSelectModel<typeof tasks>
+
+/** tasks 表 — 插入参数类型 */
+export type TaskInsert = InferInsertModel<typeof tasks>
+
 /** subtitle_projects 表 — 查询结果行类型 */
 export type SubtitleProjectRow = InferSelectModel<typeof subtitleProjects>
 
@@ -121,6 +127,12 @@ export type CanvasPipelineRunStatus = typeof canvasPipelineRunStatusEnum.enumVal
 
 /** 字幕项目状态：从 pgEnum 定义推断 */
 export type SubtitleProjectStatus = typeof subtitleProjectStatusEnum.enumValues extends (infer T)[] ? T : never
+
+/** 任务状态：从 pgEnum 定义推断 */
+export type TaskStatus = typeof taskStatusEnum.enumValues extends (infer T)[] ? T : never
+
+/** 任务域：从 pgEnum 定义推断 */
+export type TaskDomain = typeof taskDomainEnum.enumValues extends (infer T)[] ? T : never
 
 // ===== 序列化工具类型 =====
 
