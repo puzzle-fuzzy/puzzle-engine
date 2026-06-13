@@ -106,6 +106,7 @@
         "@excuse/billing": "workspace:*",
         "@excuse/canvas-engine": "workspace:*",
         "@excuse/db": "workspace:*",
+        "@excuse/prompt-engine": "workspace:*",
         "@excuse/provider": "workspace:*",
         "@excuse/shared": "workspace:*",
         "@excuse/subtitle-engine": "workspace:*",

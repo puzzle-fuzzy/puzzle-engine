@@ -20,6 +20,7 @@ import {
 } from '@excuse/db'
 import { createLogger } from '@excuse/shared'
 import { executeCanvasContinuity } from './canvas-continuity'
+import { executeCanvasRebuild } from './canvas-rebuild'
 
 const logger = createLogger('canvas-handler')
 
@@ -51,7 +52,6 @@ interface CanvasServiceModule {
   generateCharacterRefs: (projectId: string, config: { dashscopeApiKey: string, dashscopeBaseUrl?: string, storageRoot: string, oss: any }, runId?: string) => Promise<void>
   generateLocationRefs: (projectId: string, config: { dashscopeApiKey: string, dashscopeBaseUrl?: string, storageRoot: string, oss: any }, runId?: string) => Promise<void>
   generateStoryboard: (projectId: string, config: { dashscopeApiKey: string, dashscopeBaseUrl?: string }, runId?: string) => Promise<void>
-  rebuildShotPrompts: (projectId: string, runId?: string) => Promise<void>
   generateVideos: (projectId: string, config: { dashscopeApiKey: string, dashscopeBaseUrl?: string }, runId?: string) => Promise<void>
 }
 
@@ -209,9 +209,9 @@ export async function handleCanvasContinuity(task: TaskRow, _workerConfig: Worke
 export async function handleCanvasRebuild(task: TaskRow, _workerConfig: WorkerConfig): Promise<Record<string, unknown>> {
   const projectId = task.projectId!
   const runId = await markRunRunningAndNotify(task)
-  await getService().rebuildShotPrompts(projectId, runId ?? undefined)
-  await markRunSucceededAndNotify(task)
-  return { phase: 'rebuild', projectId }
+  const result = await executeCanvasRebuild(projectId, runId ?? undefined)
+  await markRunSucceededAndNotify(task, result)
+  return result
 }
 
 export async function handleCanvasVideos(task: TaskRow, workerConfig: WorkerConfig): Promise<Record<string, unknown>> {
