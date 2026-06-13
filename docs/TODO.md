@@ -516,6 +516,8 @@
 
 ### 6. 新增 `packages/auth` 或强化认证安全包
 
+状态：已完成，commit：本次提交
+
 当前迹象：
 
 - `apps/server/src/utils/crypto.ts` 中有 API Key hash。

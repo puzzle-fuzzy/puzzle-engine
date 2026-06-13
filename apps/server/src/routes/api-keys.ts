@@ -1,10 +1,10 @@
 import type { ApiKeyCreateResponse, ApiKeyDTO, ApiKeyListResponse, MutationOkResponse } from '@excuse/shared'
 import type { ServerConfig } from '../config'
+import { createApiKeySecret, hashApiKey } from '@excuse/auth'
 import { createApiKey, listApiKeysByAccount, revokeApiKey } from '@excuse/db'
 import { Elysia, t } from 'elysia'
 import { createRequireAuthPlugin } from '../plugins/auth'
 import { audit } from '../services/audit'
-import { hashApiKey } from '../utils/crypto'
 import { notFound } from '../utils/errors'
 
 function serializeApiKey(row: {
@@ -34,8 +34,7 @@ export function createApiKeyRoutes(config: ServerConfig) {
   return new Elysia({ prefix: '/api/keys' })
     .use(createRequireAuthPlugin(config))
     .post('/', async ({ userId, body }) => {
-      const rawKey = `exc_${crypto.randomUUID().replace(/-/g, '')}`
-      const prefix = rawKey.slice(0, 8)
+      const { key: rawKey, prefix } = createApiKeySecret()
       const keyHash = await hashApiKey(rawKey)
 
       const key = await createApiKey({

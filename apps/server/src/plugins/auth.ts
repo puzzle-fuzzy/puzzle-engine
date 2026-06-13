@@ -4,15 +4,12 @@ import type { ServerConfig } from '../config'
 import { bearer } from '@elysia/bearer'
 import { jwt } from '@elysia/jwt'
 import { cookie } from '@elysiajs/cookie'
+import { hashApiKey, isApiKeySecret } from '@excuse/auth'
 import { findApiKeyByHash, touchApiKeyLastUsed } from '@excuse/db'
 import { status, t } from 'elysia'
-import { hashApiKey } from '../utils/crypto'
 
 /** httpOnly cookie 名称 */
 export const AUTH_COOKIE_NAME = 'auth_token'
-
-/** API Key 前缀标识 */
-const API_KEY_PREFIX = 'exc_'
 
 /**
  * 认证插件 — JWT + API Key 双通道
@@ -58,7 +55,7 @@ export function createAuthPlugin(config: ServerConfig) {
         }
 
         // 2. Bearer exc_ → API Key 认证
-        if (bearer.startsWith(API_KEY_PREFIX)) {
+        if (isApiKeySecret(bearer)) {
           const keyHash = await hashApiKey(bearer)
           const apiKey = await findApiKeyByHash(keyHash)
           if (apiKey) {
