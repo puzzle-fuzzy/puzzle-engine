@@ -159,3 +159,67 @@ export type CanvasLocationResponse = EntityResponse<LocationDTO>
 export type CanvasShotResponse = EntityResponse<ShotDTO>
 
 export type CanvasMutationOkResponse = MutationOkResponse
+
+// ===== 资产轮询类型 =====
+
+/** Canvas 资产轮询响应 — 项目资产和任务状态的一次性快照 */
+export interface CanvasAssetsPoll {
+  scope: 'canvas'
+  projectId: string
+  projectStatus: CanvasProjectStatus
+
+  /** 角色 — 当前参考图和活跃生成任务 */
+  characters: Array<{
+    characterId: string
+    name: string
+    referenceImageUrl: string | null
+    turnaroundSheetUrl: string | null
+    /** 当前活跃的图片生成任务 ID（暂为空数组，P3 资产表后补齐） */
+    activeImageTaskIds: string[]
+  }>
+
+  /** 场景 — 当前参考图和活跃生成任务 */
+  locations: Array<{
+    locationId: string
+    name: string
+    referenceImageUrl: string | null
+    /** 当前活跃的图片生成任务 ID（暂为空数组，P3 资产表后补齐） */
+    activeImageTaskIds: string[]
+  }>
+
+  /** 镜头 — 当前视频 URL 和活跃生成任务 */
+  shots: Array<{
+    shotId: string
+    shotIndex: number
+    status: CanvasShotStatus
+    videoUrl: string | null
+    /** 当前活跃的视频生成任务 ID（从 generation_records 中 status 非终态匹配 shotId） */
+    activeVideoTaskIds: string[]
+  }>
+
+  /** 项目下所有活跃（非终态）的生成任务 */
+  activeTasks: Array<{
+    id: string
+    category: 'image' | 'video'
+    status: string
+    /** 任务目标实体 ID（目前只有 shotId） */
+    targetId: string
+    /** 任务目标实体类型（目前只有 shot） */
+    targetType: 'character' | 'location' | 'shot'
+  }>
+
+  /** 项目下所有生成记录的成本快照 */
+  costs: Array<{
+    recordId: string
+    category: 'image' | 'video'
+    /** cost state: active(进行中) | completed(已成功) | failed(已失败/取消) */
+    state: 'active' | 'completed' | 'failed'
+    estimatedCostCents: number | null
+    finalCostCents: number | null
+  }>
+
+  /** 服务器生成此快照的时间戳（epoch ms），前端判断数据新鲜度 */
+  generatedAt: number
+}
+
+export type CanvasAssetsPollResponse = EntityResponse<CanvasAssetsPoll>

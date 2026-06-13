@@ -218,3 +218,31 @@ export async function getCostRecords(accountId: string, dateRange?: { from: Date
 
   return records.filter(r => r.cost && (typeof r.cost.totalPriceCents === 'number' || typeof r.cost.totalPrice === 'number'))
 }
+
+/**
+ * 查询 Canvas 项目关联的所有生成记录 — 用于资产轮询接口
+ *
+ * 通过 JSONB path 提取 inputParams 中的 source/projectId/shotId 字段，
+ * 避免在 generation_records 表上增加 canvas 专用列。
+ *
+ * 注意：character/location 参考图生成不走 generation_records，
+ * 所以 shotId 是唯一可提取的 targetId。
+ */
+export async function listCanvasGenerationRecordsByProject(projectId: string) {
+  return getDb()
+    .select({
+      id: generationRecords.id,
+      category: generationRecords.category,
+      status: generationRecords.status,
+      totalPriceCents: generationRecords.totalPriceCents,
+      cost: generationRecords.cost,
+      shotId: sql<string | null>`input_params->>'shotId'`,
+    })
+    .from(generationRecords)
+    .where(
+      and(
+        sql`input_params->>'source' = 'canvas'`,
+        sql`input_params->>'projectId' = ${projectId}`,
+      ),
+    )
+}

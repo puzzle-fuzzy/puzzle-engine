@@ -43,6 +43,13 @@ class SSEClient {
   /** 用户主动调用 disconnect() 时为 true，此时不触发自动重连 */
   private intentionallyClosed = false
   private openCallbacks = new Set<() => void>()
+  /** 连接断开（重连耗尽后）回调 — 上层切换到 polling mode */
+  private closeCallbacks = new Set<() => void>()
+
+  /** 指数退避重连参数 */
+  private reconnectAttempts = 0
+  private maxReconnectAttempts = 5
+  private reconnectBaseDelay = 3000
 
   /**
    * 建立 SSE 连接
@@ -99,8 +106,26 @@ class SSEClient {
         if (err instanceof FatalError)
           throw err
 
-        // RetriableError / 网络错误：返回重试间隔（ms）
-        return 3000
+        // RetriableError / 网络错误：返回指数退避延迟（ms）给 fetch-event-source
+        // fetch-event-source 内部重连机制与我们的 scheduleReconnect 互补：
+        //   - onerror 返回 delay → fetch-event-source 自动重连
+        //   - onclose 或 catch → 我们手动 scheduleReconnect（也用指数退避）
+        const delay = Math.min(this.reconnectBaseDelay * 2 ** this.reconnectAttempts, 30000)
+        this.reconnectAttempts++
+        if (this.reconnectAttempts > this.maxReconnectAttempts) {
+          // 超限后通知上层切换 polling，并让 fetch-event-source 停止重连
+          this.reconnectAttempts = 0
+          for (const cb of this.closeCallbacks) {
+            try {
+              cb()
+            }
+            catch (e) {
+              console.error('[SSE] onClose callback error:', e)
+            }
+          }
+          throw new FatalError('Max SSE reconnect attempts reached')
+        }
+        return delay
       },
       onclose: () => {
         this.cleanupConnection()
@@ -111,7 +136,7 @@ class SSEClient {
       openWhenHidden: true, // 保持后台 tab 连接不断开，确保 Canvas 页面切走后仍能收到 pipeline 更新
     }).catch((err) => {
       this.cleanupConnection()
-      if (!this.intentionallyClosed && !(err instanceof UnauthorizedError)) {
+      if (!this.intentionallyClosed && !(err instanceof UnauthorizedError) && !(err instanceof FatalError && err.message === 'Max SSE reconnect attempts reached')) {
         console.warn('[SSE] Connection closed:', err)
         this.scheduleReconnect()
       }
@@ -137,7 +162,25 @@ class SSEClient {
     }
   }
 
+  /**
+   * 注册连接断开回调 — 重连耗尽后触发，上层切换到 polling mode。
+   * 正常 disconnect() 不触发此回调。
+   */
+  onClose(callback: () => void): () => void {
+    this.closeCallbacks.add(callback)
+    return () => {
+      this.closeCallbacks.delete(callback)
+    }
+  }
+
+  /** 查询当前是否处于连接状态 */
+  isConnected(): boolean {
+    return this.abortController !== null && !this.intentionallyClosed
+  }
+
   private notifyOpen() {
+    // 重连成功时重置计数器
+    this.reconnectAttempts = 0
     for (const cb of this.openCallbacks) {
       try {
         cb()
@@ -244,10 +287,31 @@ class SSEClient {
 
   private scheduleReconnect() {
     this.cancelReconnect()
+
+    // 超过最大重连次数 → 通知上层切换到 polling mode
+    if (this.reconnectAttempts >= this.maxReconnectAttempts) {
+      console.warn(`[SSE] Max reconnect attempts (${this.maxReconnectAttempts}) reached, switching to polling mode`)
+      this.reconnectAttempts = 0
+      for (const cb of this.closeCallbacks) {
+        try {
+          cb()
+        }
+        catch (err) {
+          console.error('[SSE] onClose callback error:', err)
+        }
+      }
+      return
+    }
+
+    // 指数退避：base * 2^attempts，上限 30s
+    const delay = Math.min(this.reconnectBaseDelay * 2 ** this.reconnectAttempts, 30000)
+    this.reconnectAttempts++
+    console.info(`[SSE] Reconnecting in ${Math.round(delay / 1000)}s (attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts})`)
+
     this.reconnectTimer = setTimeout(() => {
       this.reconnectTimer = null
       this.connect()
-    }, 3000)
+    }, delay)
   }
 
   private cancelReconnect() {

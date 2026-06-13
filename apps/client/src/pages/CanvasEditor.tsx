@@ -1,11 +1,12 @@
 import type { ProjectDTO } from '@excuse/shared'
 import type { RunningPhaseInfo } from '../components/canvas/PipelineController'
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useParams } from 'react-router'
 import { getCanvasProject } from '../api/client'
 import CanvasFlow from '../components/canvas/CanvasFlow'
 import NodeDetailPanel from '../components/canvas/NodeDetailPanel'
 import PipelineController from '../components/canvas/PipelineController'
+import { useCanvasAssetsPolling } from '../hooks/use-canvas-assets-polling'
 import { useRealtimeSync } from '../stores/realtime-sync'
 
 export default function CanvasEditor() {
@@ -20,6 +21,10 @@ export default function CanvasEditor() {
   const projectVersion = useRealtimeSync(s => projectId ? s.projectVersions[projectId] : 0)
   const phaseDone = useRealtimeSync(s => s.phaseDone)
   const consumePhaseDone = useRealtimeSync(s => s.consumePhaseDone)
+
+  // 资产轮询 — SSE 降级时的补充性数据通道 + 状态差异检测
+  const { pollData, connectionMode, isPolling } = useCanvasAssetsPolling(projectId)
+  const lastReloadRef = useRef(0)
 
   const loadProject = useCallback(async () => {
     if (!projectId)
@@ -49,6 +54,27 @@ export default function CanvasEditor() {
     }
   }, [projectVersion, loadProject])
 
+  // 脉冲数据与项目状态差异检测 — SSE 降级时仍能发现状态变化
+  // 防止频繁重载：5 秒内只允许一次差异触发的 reload
+  useEffect(() => {
+    if (!pollData || !project)
+      return
+    const now = Date.now()
+    if (now - lastReloadRef.current < 5000)
+      return
+
+    const needsReload = pollData.projectStatus !== project.status
+      || pollData.shots.some((ps) => {
+        const projectShot = project.shots.find(s => s.id === ps.shotId)
+        return projectShot?.status !== ps.status
+      })
+
+    if (needsReload) {
+      lastReloadRef.current = now
+      loadProject()
+    }
+  }, [pollData, project, loadProject])
+
   if (loading) {
     return <div className="flex items-center justify-center h-screen text-muted-foreground">加载项目...</div>
   }
@@ -76,6 +102,23 @@ export default function CanvasEditor() {
             正在
             {runningPhase.label}
             {runningPhase.modelName && ` · ${runningPhase.modelName}`}
+          </span>
+        )}
+        {/* 连接状态指示器 */}
+        {connectionMode === 'sse' && (
+          <span className="text-xs text-green-600 flex items-center gap-1">
+            <span className="w-1.5 h-1.5 rounded-full bg-green-500" />
+            实时同步
+          </span>
+        )}
+        {connectionMode === 'polling' && isPolling && (
+          <span className="text-xs px-2 py-0.5 rounded-full bg-yellow-100 text-yellow-700 animate-pulse">
+            轮询同步中...
+          </span>
+        )}
+        {connectionMode === 'disconnected' && (
+          <span className="text-xs px-2 py-0.5 rounded-full bg-red-100 text-red-700">
+            连接断开
           </span>
         )}
       </div>

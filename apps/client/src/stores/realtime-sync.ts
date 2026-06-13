@@ -11,6 +11,9 @@ interface PhaseDoneEvent {
   error?: string
 }
 
+/** SSE/轮询连接模式三态 */
+export type ConnectionMode = 'sse' | 'polling' | 'disconnected'
+
 interface RealtimeSyncState {
   /** Pipeline 阶段完成信号 — 由 PipelineController 消费 */
   phaseDone: PhaseDoneEvent | null
@@ -22,6 +25,15 @@ interface RealtimeSyncState {
    */
   projectVersions: Record<string, number>
 
+  /** SSE/轮询连接模式 — SSE 正常 | polling 降级 | 断开 */
+  connectionMode: ConnectionMode
+
+  /** 最近一次 SSE 事件或成功轮询的时间戳（epoch ms） */
+  lastEventAt: number | null
+
+  /** 更新连接模式 — 由 SSEClient 回调和 polling hook 驱动 */
+  setConnectionMode: (mode: ConnectionMode) => void
+
   /**
    * 注册 SSE 事件订阅 — 在 App.tsx 中调用一次
    * @returns 取消订阅函数
@@ -32,6 +44,12 @@ interface RealtimeSyncState {
 export const useRealtimeSync = create<RealtimeSyncState>((set, get) => ({
   phaseDone: null,
   projectVersions: {},
+  connectionMode: 'sse', // 初始假设 SSE 连接即将建立
+  lastEventAt: null,
+
+  setConnectionMode: (mode: ConnectionMode) => {
+    set({ connectionMode: mode })
+  },
 
   consumePhaseDone: () => {
     set({ phaseDone: null })
@@ -40,9 +58,12 @@ export const useRealtimeSync = create<RealtimeSyncState>((set, get) => ({
   initialize: () => {
     const unsubPipeline = sseClient.on('pipeline_node_update', (event: SSEPipelineNodeEvent) => {
       handlePipelineNodeUpdate(event, set, get)
+      // 收到 SSE 事件 → 更新 lastEventAt
+      set({ lastEventAt: Date.now() })
     })
 
     const unsubGeneration = sseClient.on('generation_status', (event: SSEGenerationStatusEvent) => {
+      set({ lastEventAt: Date.now() })
       if (event.category === 'subtitle') {
         // 字幕任务的状态变更 — 刷新当前项目详情
         const currentProject = useSubtitleStore.getState().currentProject
@@ -58,14 +79,22 @@ export const useRealtimeSync = create<RealtimeSyncState>((set, get) => ({
     })
 
     const unsubOpen = sseClient.onOpen(() => {
+      // SSE 连接成功 → 恢复 sse 模式
+      set({ connectionMode: 'sse' })
       // 重连后刷新数据，补偿断连期间丢失的事件
       useGenerationStore.getState().fetchRecords()
+    })
+
+    const unsubClose = sseClient.onClose(() => {
+      // SSE 重连耗尽 → 切换到 polling 降级模式
+      set({ connectionMode: 'polling' })
     })
 
     return () => {
       unsubPipeline()
       unsubGeneration()
       unsubOpen()
+      unsubClose()
     }
   },
 }))

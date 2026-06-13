@@ -7,6 +7,8 @@
 
 export { analyzeProject } from './analysis'
 
+export { getCanvasAssetsPoll } from './asset-poll'
+
 export { generateCharacters } from './characters'
 export { checkContinuity, rebuildShotPrompts } from './continuity-rebuild'
 export { generateLocations } from './locations'

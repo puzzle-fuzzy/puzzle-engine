@@ -1,0 +1,354 @@
+/**
+ * Canvas 资产轮询端点测试
+ *
+ * 测试 /api/canvas/projects/:projectId/assets/poll 的：
+ *   - 权限校验（404 非存在、无权访问）
+ *   - draft 项目返回空数据
+ *   - generating 项目返回活跃任务和成本映射
+ *   - generatedAt 时间戳合理性
+ */
+import type { CanvasProjectRow, CanvasProjectStatus } from '@excuse/db'
+import { treaty } from '@elysia/eden'
+import { jwt } from '@elysia/jwt'
+import { beforeAll, beforeEach, describe, expect, it, mock } from 'bun:test'
+import { Elysia } from 'elysia'
+import { extractEdenError, makeTestConfig } from './helpers/test-factory'
+
+// ===== Mock 设置（必须在 route import 之前） =====
+
+const mockGetCanvasProjectByIdForAccount = mock<(id: string, accountId: string) => Promise<CanvasProjectRow | null>>(() => Promise.resolve(null))
+const mockGetCanvasProjectById = mock<(id: string) => Promise<CanvasProjectRow | null>>(() => Promise.resolve(null))
+const mockGetCanvasProjectDetail = mock<() => Promise<{
+  project: CanvasProjectRow
+  characters: any[]
+  locations: any[]
+  shots: any[]
+  latestContinuity: any | null
+} | null>>(() => Promise.resolve(null))
+const mockListCanvasGenerationRecordsByProject = mock<() => Promise<any[]>>(() => Promise.resolve([]))
+
+// 其他 canvas route 依赖的 DB 函数（inline stub，无需精细控制）
+const stubDBFunctions = {
+  createPipelineRun: async () => ({ id: 'run-001' }),
+  findActiveRunForPhase: async () => null,
+  getPipelineRunById: async () => null,
+  listPipelineRunsByProject: async () => [],
+  updateCanvasProject: async () => null,
+  getCanvasCharacterForAccount: async () => null,
+  getCanvasLocationForAccount: async () => null,
+  getCanvasShotForAccount: async () => null,
+  pgClient: { listen: async () => {} },
+}
+
+mock.module('@excuse/db', () => ({
+  ...stubDBFunctions,
+  getCanvasProjectByIdForAccount: mockGetCanvasProjectByIdForAccount,
+  getCanvasProjectById: mockGetCanvasProjectById,
+  getCanvasProjectDetail: mockGetCanvasProjectDetail,
+  listCanvasGenerationRecordsByProject: mockListCanvasGenerationRecordsByProject,
+}))
+
+mock.module('@excuse/provider', () => ({
+  DashScopeClient: class { chatCompletion = async () => ({ success: true, output: { text: 'mock' } }) },
+  AssetStorage: class { downloadAndMap = async (urls: string[]) => urls },
+  validateAndMerge: (_mc: any, params: any) => ({ ok: true, params }),
+  getModelById: async () => null,
+}))
+
+mock.module('@excuse/billing', () => ({
+  calculateCost: () => ({ unit: 'token', totalPriceCents: 1, totalPrice: 0.01 }),
+}))
+
+mock.module('../src/modules/canvas/service', () => ({
+  listProjects: async () => [],
+  createProject: async () => null,
+  getProjectDetail: async () => null,
+  softDeleteProject: async () => {},
+  updateProjectProperties: async () => null,
+  updateModelPreferences: async () => null,
+  saveCanvasLayout: async () => null,
+  updateCharacterData: async () => null,
+  updateLocationData: async () => null,
+  updateShotData: async () => null,
+  deleteCharacter: async () => {},
+  deleteLocation: async () => {},
+  deleteShot: async () => {},
+  analyzeProject: async () => null,
+  generateCharacters: async () => null,
+  generateLocations: async () => null,
+  generateCharacterRefs: async () => null,
+  generateLocationRefs: async () => null,
+  generateStoryboard: async () => null,
+  checkContinuity: async () => null,
+  rebuildShotPrompts: async () => null,
+  generateVideos: async () => null,
+  retryShotVideo: async () => null,
+  retryFailedShots: async () => null,
+  regenerateCharacter: async () => null,
+  regenerateLocation: async () => null,
+  regenerateShotVideo: async () => null,
+}))
+
+mock.module('../src/services/sse-manager', () => ({
+  dispatchToUser: () => {},
+}))
+
+mock.module('../src/plugins/auth', () => ({
+  createAuthPlugin: () => new Elysia(),
+  createRequireAuthPlugin: (_config: any) => new Elysia().derive(({ headers }: any) => ({
+    userId: headers?.authorization?.replace('Bearer ', '') ?? '',
+  })),
+}))
+
+// eslint-disable-next-line import/first
+import { createCanvasRoutes } from '../src/routes/canvas'
+
+// ===== 测试基础设施 =====
+
+const testConfig = makeTestConfig({ jwtSecret: 'test-canvas-poll-secret' })
+let client: ReturnType<typeof treaty>
+let token: string
+
+function makeProjectRow(overrides: Partial<CanvasProjectRow> = {}): CanvasProjectRow {
+  return {
+    id: 'proj-001',
+    accountId: 'acc-001',
+    title: null,
+    storyText: '一段超过十个字的故事文本内容',
+    status: 'draft' as CanvasProjectStatus,
+    analysisJson: null,
+    modelPreferencesJson: null,
+    canvasLayout: null,
+    isDeleted: false,
+    createdAt: new Date('2024-01-01'),
+    updatedAt: new Date('2024-01-01'),
+    ...overrides,
+  }
+}
+
+async function getAuthToken(accountId: string = 'acc-001'): Promise<string> {
+  const jwtApp = new Elysia()
+    .use(jwt({ name: 'jwt', secret: testConfig.jwtSecret, exp: '1h' }))
+    .get('/sign', async ({ jwt }) => jwt.sign({ sub: accountId }))
+
+  const jwtClient = treaty(jwtApp)
+  const { data } = await jwtClient.sign.get()
+  return data as unknown as string
+}
+
+beforeAll(async () => {
+  token = await getAuthToken()
+})
+
+beforeEach(() => {
+  for (const m of [mockGetCanvasProjectByIdForAccount, mockGetCanvasProjectById, mockGetCanvasProjectDetail, mockListCanvasGenerationRecordsByProject]) {
+    m.mockClear()
+  }
+
+  const app = createCanvasRoutes(testConfig)
+  client = treaty(app)
+})
+
+// ===== 测试 =====
+
+describe('Canvas 资产轮询端点', () => {
+  const headers = { headers: { Authorization: `Bearer ${token}` } }
+
+  it('返回 404 当项目不存在', async () => {
+    mockGetCanvasProjectByIdForAccount.mockResolvedValue(null)
+
+    const res = await client.api.canvas.projects({ projectId: 'nonexistent' }).assets.poll.get(headers)
+    const err = extractEdenError(res)
+    expect(err).toBeTruthy()
+    expect(err!.error).toContain('不存在')
+  })
+
+  it('返回 404 当项目不属于当前用户', async () => {
+    // 项目存在但属于其他用户 → getCanvasProjectByIdForAccount 返回 null
+    const otherUserToken = await getAuthToken('acc-other')
+    mockGetCanvasProjectByIdForAccount.mockResolvedValue(null)
+
+    const res = await client.api.canvas.projects({ projectId: 'proj-001' }).assets.poll.get({
+      headers: { Authorization: `Bearer ${otherUserToken}` },
+    })
+    const err = extractEdenError(res)
+    expect(err).toBeTruthy()
+  })
+
+  it('draft 项目返回空 activeTasks 和 costs', async () => {
+    const projectRow = makeProjectRow({ status: 'draft' })
+    mockGetCanvasProjectByIdForAccount.mockResolvedValue(projectRow)
+    mockGetCanvasProjectById.mockResolvedValue(projectRow)
+    mockGetCanvasProjectDetail.mockResolvedValue({
+      project: projectRow,
+      characters: [],
+      locations: [],
+      shots: [],
+      latestContinuity: null,
+    })
+    mockListCanvasGenerationRecordsByProject.mockResolvedValue([])
+
+    const res = await client.api.canvas.projects({ projectId: 'proj-001' }).assets.poll.get(headers)
+
+    // Eden 返回结构
+    const data = (res as any).data ?? res
+    expect(data.success).toBe(true)
+    expect(data.data.scope).toBe('canvas')
+    expect(data.data.projectId).toBe('proj-001')
+    expect(data.data.projectStatus).toBe('draft')
+    expect(data.data.activeTasks).toEqual([])
+    expect(data.data.costs).toEqual([])
+    expect(data.data.characters).toEqual([])
+    expect(data.data.locations).toEqual([])
+    expect(data.data.shots).toEqual([])
+    expect(data.data.generatedAt).toBeGreaterThan(0)
+  })
+
+  it('generating 项目返回活跃视频任务和成本', async () => {
+    const projectRow = makeProjectRow({ status: 'generating' })
+    const shotRow = { id: 'shot-001', shotIndex: 0, status: 'generating', videoUrl: null }
+
+    mockGetCanvasProjectByIdForAccount.mockResolvedValue(projectRow)
+    mockGetCanvasProjectById.mockResolvedValue(projectRow)
+    mockGetCanvasProjectDetail.mockResolvedValue({
+      project: projectRow,
+      characters: [],
+      locations: [],
+      shots: [shotRow],
+      latestContinuity: null,
+    })
+    mockListCanvasGenerationRecordsByProject.mockResolvedValue([
+      {
+        id: 'gen-001',
+        category: 'video',
+        status: 'processing',
+        totalPriceCents: 100,
+        cost: null,
+        shotId: 'shot-001',
+      },
+    ])
+
+    const res = await client.api.canvas.projects({ projectId: 'proj-001' }).assets.poll.get(headers)
+
+    const data = (res as any).data ?? res
+    expect(data.success).toBe(true)
+
+    const poll = data.data
+    expect(poll.projectStatus).toBe('generating')
+    expect(poll.shots).toHaveLength(1)
+    expect(poll.shots[0].shotId).toBe('shot-001')
+    expect(poll.shots[0].activeVideoTaskIds).toEqual(['gen-001'])
+    expect(poll.shots[0].status).toBe('generating')
+
+    expect(poll.activeTasks).toHaveLength(1)
+    expect(poll.activeTasks[0].id).toBe('gen-001')
+    expect(poll.activeTasks[0].category).toBe('video')
+    expect(poll.activeTasks[0].targetId).toBe('shot-001')
+    expect(poll.activeTasks[0].targetType).toBe('shot')
+
+    expect(poll.costs).toHaveLength(1)
+    expect(poll.costs[0].recordId).toBe('gen-001')
+    expect(poll.costs[0].category).toBe('video')
+    expect(poll.costs[0].state).toBe('active')
+    expect(poll.costs[0].estimatedCostCents).toBe(100)
+    expect(poll.costs[0].finalCostCents).toBeNull()
+  })
+
+  it('终态记录映射为 completed/failed cost state', async () => {
+    const projectRow = makeProjectRow({ status: 'completed' })
+    const shotRow = { id: 'shot-001', shotIndex: 0, status: 'completed', videoUrl: 'https://video.url' }
+
+    mockGetCanvasProjectByIdForAccount.mockResolvedValue(projectRow)
+    mockGetCanvasProjectById.mockResolvedValue(projectRow)
+    mockGetCanvasProjectDetail.mockResolvedValue({
+      project: projectRow,
+      characters: [],
+      locations: [],
+      shots: [shotRow],
+      latestContinuity: null,
+    })
+    mockListCanvasGenerationRecordsByProject.mockResolvedValue([
+      {
+        id: 'gen-suc',
+        category: 'video',
+        status: 'succeeded',
+        totalPriceCents: 200,
+        cost: null,
+        shotId: 'shot-001',
+      },
+      {
+        id: 'gen-fail',
+        category: 'image',
+        status: 'failed',
+        totalPriceCents: 50,
+        cost: null,
+        shotId: null,
+      },
+    ])
+
+    const res = await client.api.canvas.projects({ projectId: 'proj-001' }).assets.poll.get(headers)
+
+    const data = (res as any).data ?? res
+    expect(data.success).toBe(true)
+
+    const costs = data.data.costs
+    // succeeded → state: completed
+    expect(costs.find((c: any) => c.recordId === 'gen-suc')?.state).toBe('completed')
+    expect(costs.find((c: any) => c.recordId === 'gen-suc')?.finalCostCents).toBe(200)
+    expect(costs.find((c: any) => c.recordId === 'gen-suc')?.estimatedCostCents).toBeNull()
+
+    // failed → state: failed
+    expect(costs.find((c: any) => c.recordId === 'gen-fail')?.state).toBe('failed')
+    expect(costs.find((c: any) => c.recordId === 'gen-fail')?.finalCostCents).toBe(50)
+    expect(costs.find((c: any) => c.recordId === 'gen-fail')?.estimatedCostCents).toBeNull()
+  })
+
+  it('cancelled 记录映射为 failed cost state', async () => {
+    const projectRow = makeProjectRow({ status: 'draft' })
+    mockGetCanvasProjectByIdForAccount.mockResolvedValue(projectRow)
+    mockGetCanvasProjectById.mockResolvedValue(projectRow)
+    mockGetCanvasProjectDetail.mockResolvedValue({
+      project: projectRow,
+      characters: [],
+      locations: [],
+      shots: [],
+      latestContinuity: null,
+    })
+    mockListCanvasGenerationRecordsByProject.mockResolvedValue([
+      {
+        id: 'gen-cancel',
+        category: 'video',
+        status: 'cancelled',
+        totalPriceCents: 30,
+        cost: null,
+        shotId: null,
+      },
+    ])
+
+    const res = await client.api.canvas.projects({ projectId: 'proj-001' }).assets.poll.get(headers)
+    const data = (res as any).data ?? res
+    expect(data.data.costs[0].state).toBe('failed')
+  })
+
+  it('generatedAt 是近期时间戳', async () => {
+    const projectRow = makeProjectRow()
+    mockGetCanvasProjectByIdForAccount.mockResolvedValue(projectRow)
+    mockGetCanvasProjectById.mockResolvedValue(projectRow)
+    mockGetCanvasProjectDetail.mockResolvedValue({
+      project: projectRow,
+      characters: [],
+      locations: [],
+      shots: [],
+      latestContinuity: null,
+    })
+    mockListCanvasGenerationRecordsByProject.mockResolvedValue([])
+
+    const before = Date.now()
+    const res = await client.api.canvas.projects({ projectId: 'proj-001' }).assets.poll.get(headers)
+    const after = Date.now()
+
+    const data = (res as any).data ?? res
+    expect(data.data.generatedAt).toBeGreaterThanOrEqual(before)
+    expect(data.data.generatedAt).toBeLessThanOrEqual(after)
+  })
+})

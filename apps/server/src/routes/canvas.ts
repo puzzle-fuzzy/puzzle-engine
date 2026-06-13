@@ -35,7 +35,7 @@
  *   - 归属校验：所有操作先通过 getXxxForAccount 确认资源属于当前用户
  */
 import type { CanvasPipelinePhase } from '@excuse/db'
-import type { AcceptedResponse, CanvasCharacterResponse, CanvasLocationResponse, CanvasMutationOkResponse, CanvasPipelineRunDTO, CanvasPipelineRunListResponse, CanvasPipelineRunResponse, CanvasProjectListResponse, CanvasProjectResponse, CanvasShotResponse } from '@excuse/shared'
+import type { AcceptedResponse, CanvasAssetsPollResponse, CanvasCharacterResponse, CanvasLocationResponse, CanvasMutationOkResponse, CanvasPipelineRunDTO, CanvasPipelineRunListResponse, CanvasPipelineRunResponse, CanvasProjectListResponse, CanvasProjectResponse, CanvasShotResponse } from '@excuse/shared'
 import type { ServerConfig } from '../config'
 import {
   createPipelineRun,
@@ -154,6 +154,17 @@ export function createCanvasRoutes(config: ServerConfig) {
       if (!project)
         return notFound(set, '项目不存在')
       return { success: true, data: project } satisfies CanvasProjectResponse
+    })
+
+    // 资产轮询 — SSE 断线或漏事件时的数据 fallback
+    .get('/projects/:projectId/assets/poll', async ({ params: { projectId }, userId, set }) => {
+      const owned = await getCanvasProjectByIdForAccount(projectId, userId)
+      if (!owned)
+        return notFound(set, '项目不存在或无权访问')
+      const poll = await svc.getCanvasAssetsPoll(projectId)
+      if (!poll)
+        return notFound(set, '项目不存在')
+      return { success: true, data: poll } satisfies CanvasAssetsPollResponse
     })
 
     .delete('/projects/:projectId', async ({ params: { projectId }, userId, set }) => {

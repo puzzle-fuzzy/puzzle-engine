@@ -1,4 +1,4 @@
-import type { AcceptedResponse, AuthCurrentUserResponse, AuthResponse, BillingStatisticsResponse, CanvasCharacterResponse, CanvasLocationResponse, CanvasMutationOkResponse, CanvasPipelineRunDTO, CanvasPipelineRunListResponse, CanvasProjectListResponse, CanvasProjectResponse, CanvasShotResponse, DeleteGenerationRecordResponse, GenerateResponse, GenerationRecord, GenerationRecordListResponse, GenerationRecordResponse, ModelConfig, MutationOkResponse, SubtitleMutationOkResponse, SubtitleProjectDTO, SubtitleProjectListResponse, SubtitleProjectResponse, SubtitleSentence, SubtitleStyleConfig, UploadResponse } from '@excuse/shared'
+import type { AcceptedResponse, AuthCurrentUserResponse, AuthResponse, BillingStatisticsResponse, CanvasAssetsPoll, CanvasCharacterResponse, CanvasLocationResponse, CanvasMutationOkResponse, CanvasPipelineRunDTO, CanvasPipelineRunListResponse, CanvasProjectListResponse, CanvasProjectResponse, CanvasShotResponse, DeleteGenerationRecordResponse, GenerateResponse, GenerationRecord, GenerationRecordListResponse, GenerationRecordResponse, ModelConfig, MutationOkResponse, SubtitleMutationOkResponse, SubtitleProjectDTO, SubtitleProjectListResponse, SubtitleProjectResponse, SubtitleSentence, SubtitleStyleConfig, UploadResponse } from '@excuse/shared'
 import type { App } from '../../../server/src/index'
 import { treaty } from '@elysia/eden'
 import { sseClient } from './sse'
@@ -236,6 +236,13 @@ export async function listCanvasProjects(): Promise<CanvasProjectListResponse> {
 export async function getCanvasProject(projectId: string): Promise<CanvasProjectResponse> {
   return unwrapEden<CanvasProjectResponse>(
     await api.api.canvas.projects({ projectId }).get(),
+  )
+}
+
+/** 轮询 Canvas 项目资产快照 — SSE 降级或补充性数据通道 */
+export async function pollCanvasAssets(projectId: string): Promise<CanvasAssetsPoll> {
+  return unwrapEden<CanvasAssetsPoll>(
+    await api.api.canvas.projects({ projectId }).assets.poll.get(),
   )
 }
 
