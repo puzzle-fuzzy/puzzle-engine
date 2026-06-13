@@ -6,7 +6,7 @@
  * 镜头视频重新生成: 复制镜头数据创建新镜头行，提交视频任务
  */
 import type { CanvasAssetOutput } from '@excuse/db'
-import type { CharacterProfile, LocationProfile } from '@excuse/shared'
+import { validateCharacterProfile, validateLocationProfile } from '@excuse/canvas-engine'
 import { runCanvasAssetStep, submitCanvasShotVideo } from '@excuse/canvas-runtime'
 import {
   createCanvasAsset,
@@ -80,7 +80,7 @@ export async function regenerateCharacter(characterId: string, config: { dashsco
         if (result.type === 'failed')
           throw new Error(result.error || '角色重新生成失败')
 
-        const profile = parseLLMJson<CharacterProfile>(result.output.text as string)
+        const profile = validateCharacterProfile(parseLLMJson(result.output.text as string))
         const newCharacter = await createCanvasCharacter({
           projectId: character.projectId,
           name: profile.name || name,
@@ -157,7 +157,7 @@ export async function regenerateLocation(locationId: string, config: { dashscope
         if (result.type === 'failed')
           throw new Error(result.error || '场景重新生成失败')
 
-        const profile = parseLLMJson<LocationProfile>(result.output.text as string)
+        const profile = validateLocationProfile(parseLLMJson(result.output.text as string))
         const newLocation = await createCanvasLocation({
           projectId: location.projectId,
           name: profile.name || name,

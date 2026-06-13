@@ -1,5 +1,5 @@
 import type { CanvasAssetOutput } from '@excuse/db'
-import type { CharacterProfile } from '@excuse/shared'
+import { validateCharacterProfile } from '@excuse/canvas-engine'
 import { runCanvasAssetStep } from '@excuse/canvas-runtime'
 import {
   createCanvasCharacter,
@@ -71,7 +71,7 @@ export async function generateCharacters(projectId: string, config: { dashscopeA
           if (result.type === 'failed')
             throw new Error(result.error || '角色档案生成失败')
 
-          const profile = parseLLMJson<CharacterProfile>(result.output.text as string)
+          const profile = validateCharacterProfile(parseLLMJson(result.output.text as string))
           const character = await createCanvasCharacter({
             projectId,
             name: profile.name || name,

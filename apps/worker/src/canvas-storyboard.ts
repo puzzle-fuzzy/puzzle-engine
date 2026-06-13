@@ -1,6 +1,6 @@
 import type { CanvasAssetOutput } from '@excuse/db'
-import type { ShotDraft } from '@excuse/shared'
 import type { WorkerConfig } from './config'
+import { validateShotDrafts } from '@excuse/canvas-engine'
 import { runCanvasAssetStep } from '@excuse/canvas-runtime'
 import {
   batchCreateCanvasShots,
@@ -86,7 +86,7 @@ export async function executeCanvasStoryboard(
       if (result.type === 'failed')
         throw new Error(result.error || '分镜生成失败')
 
-      const shots = parseLLMJson<ShotDraft[]>(result.output.text as string)
+      const shots = validateShotDrafts(parseLLMJson(result.output.text as string))
 
       await deleteCanvasShotsByProject(projectId)
       const created = await batchCreateCanvasShots(shots.map(shot => ({

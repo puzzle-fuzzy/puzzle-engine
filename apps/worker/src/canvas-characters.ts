@@ -1,6 +1,6 @@
 import type { CanvasAssetOutput } from '@excuse/db'
-import type { CharacterProfile } from '@excuse/shared'
 import type { WorkerConfig } from './config'
+import { validateCharacterProfile } from '@excuse/canvas-engine'
 import { runCanvasAssetStep } from '@excuse/canvas-runtime'
 import {
   createCanvasCharacter,
@@ -83,7 +83,7 @@ export async function executeCanvasCharacters(
           if (result.type === 'failed')
             throw new Error(result.error || '角色档案生成失败')
 
-          const profile = parseLLMJson<CharacterProfile>(result.output.text as string)
+          const profile = validateCharacterProfile(parseLLMJson(result.output.text as string))
           await createCanvasCharacter({
             projectId,
             name: profile.name || name,

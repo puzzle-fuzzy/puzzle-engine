@@ -1,5 +1,6 @@
 import type { CanvasAssetOutput } from '@excuse/db'
 import type { NovelAnalysis } from '@excuse/shared'
+import { validateNovelAnalysis } from '@excuse/canvas-engine'
 import { runCanvasAssetStep } from '@excuse/canvas-runtime'
 import {
   deleteCanvasCharactersByProject,
@@ -70,7 +71,7 @@ export async function analyzeProject(projectId: string, config: { dashscopeApiKe
         if (result.type === 'failed')
           throw new Error(result.error || '分析失败')
 
-        const analysis = parseLLMJson<NovelAnalysis>(result.output.text as string)
+        const analysis = validateNovelAnalysis(parseLLMJson(result.output.text as string))
 
         await updateCanvasProject(projectId, {
           status: 'analyzed',

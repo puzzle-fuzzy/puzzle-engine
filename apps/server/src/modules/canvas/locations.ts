@@ -1,5 +1,6 @@
 import type { CanvasAssetOutput } from '@excuse/db'
 import type { LocationProfile } from '@excuse/shared'
+import { validateLocationProfile } from '@excuse/canvas-engine'
 import { runCanvasAssetStep } from '@excuse/canvas-runtime'
 import {
   createCanvasLocation,
@@ -71,7 +72,7 @@ export async function generateLocations(projectId: string, config: { dashscopeAp
           if (result.type === 'failed')
             throw new Error(result.error || '场景档案生成失败')
 
-          const profile = parseLLMJson<LocationProfile>(result.output.text as string)
+          const profile = validateLocationProfile(parseLLMJson(result.output.text as string))
           await createCanvasLocation({
             projectId,
             name: profile.name || name,

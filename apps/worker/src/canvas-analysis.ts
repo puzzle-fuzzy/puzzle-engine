@@ -1,6 +1,7 @@
 import type { CanvasAssetOutput } from '@excuse/db'
 import type { NovelAnalysis } from '@excuse/shared'
 import type { WorkerConfig } from './config'
+import { validateNovelAnalysis } from '@excuse/canvas-engine'
 import { runCanvasAssetStep } from '@excuse/canvas-runtime'
 import {
   deleteCanvasCharactersByProject,
@@ -78,7 +79,7 @@ export async function executeCanvasAnalysis(
       if (result.type === 'failed')
         throw new Error(result.error || '分析失败')
 
-      const analysis = parseLLMJson<NovelAnalysis>(result.output.text as string)
+      const analysis = validateNovelAnalysis(parseLLMJson(result.output.text as string))
 
       await updateCanvasProject(projectId, {
         status: 'analyzed',
