@@ -1,15 +1,16 @@
 import type { CanvasAssetOutput } from '@excuse/db'
 import {
-  createCanvasAsset,
-  getCanvasProjectDetail,
-  markCanvasAssetFailed,
-  markCanvasAssetRunning,
-  markCanvasAssetSucceeded,
-  setCanvasAssetActive,
   updateCanvasProject,
   updateCanvasShot,
 } from '@excuse/db'
 import { buildShotVideoPrompt } from '@excuse/prompt-engine'
+import {
+  loadRunnableCanvasProject,
+  runCanvasAssetStep,
+  toNormalizedCharacter,
+  toNormalizedLocation,
+  toNormalizedShot,
+} from './canvas-execution'
 
 export interface CanvasRebuildResult extends Record<string, unknown> {
   phase: 'rebuild'
@@ -18,11 +19,7 @@ export interface CanvasRebuildResult extends Record<string, unknown> {
 }
 
 export async function executeCanvasRebuild(projectId: string, runId?: string): Promise<CanvasRebuildResult> {
-  const detail = await getCanvasProjectDetail(projectId)
-  if (!detail)
-    throw new Error('项目不存在')
-  if (detail.project.status === 'generating')
-    throw new Error('项目正在生成中，请等待完成后再操作')
+  const detail = await loadRunnableCanvasProject(projectId)
 
   const accountId = detail.project.accountId
   const characterMap = new Map(detail.characters.map(character => [character.id, character]))
@@ -38,64 +35,35 @@ export async function executeCanvasRebuild(projectId: string, runId?: string): P
     if (!shotLocation)
       continue
 
-    const promptAsset = await createCanvasAsset({
-      accountId,
-      projectId,
-      category: 'videoPrompt',
-      targetEntityType: 'shot',
-      targetEntityId: shot.id,
-      pipelineRunId: runId ?? undefined,
-    })
-
-    try {
-      await markCanvasAssetRunning(promptAsset.id)
-
-      const { videoPrompt, negativePrompt } = buildShotVideoPrompt({
-        shot: {
-          id: shot.id,
-          shotIndex: shot.shotIndex,
-          locationId: shot.locationId,
-          characterIds: shot.characterIdsJson,
-          narrative: shot.narrative,
-          camera: shot.cameraJson,
-          continuity: shot.continuityJson,
+    await runCanvasAssetStep({
+      asset: {
+        accountId,
+        projectId,
+        category: 'videoPrompt',
+        targetEntityType: 'shot',
+        targetEntityId: shot.id,
+        pipelineRunId: runId ?? undefined,
+      },
+      execute: async () => {
+        const { videoPrompt, negativePrompt } = buildShotVideoPrompt({
+          shot: toNormalizedShot(shot),
+          characters: shotCharacters.map(toNormalizedCharacter),
+          location: toNormalizedLocation(shotLocation),
           timeline: shot.timelineJson ?? undefined,
           environment: shot.environmentJson ?? undefined,
-          duration: shot.duration,
-        },
-        characters: shotCharacters.map(character => ({
-          id: character.id,
-          name: character.name,
-          identityPrompt: character.identityPrompt ?? '',
-          negativePrompt: character.negativePrompt ?? '',
-        })),
-        location: {
-          id: shotLocation.id,
-          name: shotLocation.name,
-          scenePrompt: shotLocation.scenePrompt ?? '',
-          negativePrompt: shotLocation.negativePrompt ?? '',
-          cameraRules: shotLocation.profileJson?.cameraRules ?? { axisDirection: '', allowedAngles: [], forbiddenAngles: [] },
-        },
-        timeline: shot.timelineJson ?? undefined,
-        environment: shot.environmentJson ?? undefined,
-      })
+        })
 
-      await updateCanvasShot(shot.id, {
-        videoPrompt,
-        negativePrompt,
-        status: 'ready',
-      })
+        await updateCanvasShot(shot.id, {
+          videoPrompt,
+          negativePrompt,
+          status: 'ready',
+        })
 
-      const outputJson: CanvasAssetOutput = { type: 'text', text: videoPrompt }
-      await markCanvasAssetSucceeded(promptAsset.id, outputJson)
-      await setCanvasAssetActive(promptAsset.id)
-      promptsBuilt += 1
-    }
-    catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error)
-      await markCanvasAssetFailed(promptAsset.id, errorMessage).catch(() => {})
-      throw error
-    }
+        const outputJson: CanvasAssetOutput = { type: 'text', text: videoPrompt }
+        promptsBuilt += 1
+        return { result: undefined, output: outputJson }
+      },
+    })
   }
 
   await updateCanvasProject(projectId, { status: 'prompts_ready' })
