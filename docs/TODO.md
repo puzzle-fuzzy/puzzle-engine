@@ -31,6 +31,9 @@
 - 生成过程要产品化为可见、可恢复、可重试的生产流程。
 - 生成结果要沉淀为资产，而不是临时 task output。
 - API Key、Gateway、Billing 等商业化能力要有独立产品边界，不应半开放。
+- FFmpeg、视频合成、字幕烧录等媒体处理能力应下沉到 `packages`，server 只负责 API 编排，不直接持有媒体处理实现。
+- OSS、本地存储、上传、下载、签名 URL、public URL / provider URL 解析等存储能力应下沉到 `packages`，server/worker 不直接散落 OSS SDK 调用。
+- 与业务编排无关的通用能力都应优先沉淀为 package：auth、安全、限流、metrics、event bus、workflow engine、task engine、prompt engine、subtitle engine、gateway adapter 等。
 
 ## 当前总判断
 
@@ -93,12 +96,18 @@
 
 ### 1. 自动执行体验
 
+已完成：
+
+- `tasks` 表 + Worker claim 机制 + lock heartbeat + orphan sweep 已实现，commit：`a2b4c9f`
+- Worker `task-handler.ts` 已支持 canvas phase handlers dispatch，commit：`e3d6277`
+- `canvas_pipeline_runs` 表和状态追踪已存在。
+
 待办：
 
-- 将“自动执行全部”从前端连续调用接口，逐步迁移为后端/worker 驱动的 pipeline run。
-- 前端点击自动执行后，只创建或启动一次 run。
-- 每个阶段都有明确状态：等待中、生成中、已完成、失败、已取消。
-- 页面刷新后能继续看到真实 run 状态。
+- 将”自动执行全部”从前端连续调用接口，迁移为后端/worker 驱动的 pipeline run + task 创建。
+- 前端点击自动执行后，只创建或启动一次 run + 第一个 phase task。
+- Worker 完成当前 phase task 后，如果 `autoProgress=true`，自动创建下一个 phase task。
+- 暂停阶段（storyboard、videos）不自动推进，需要用户确认。
 - 支持暂停、继续、终止、重试失败阶段。
 
 验收：
@@ -109,13 +118,18 @@
 
 ### 2. 图片和视频实时回显
 
+已完成：
+
+- 统一资产轮询接口 `/api/canvas/projects/:projectId/assets/poll` 已实现，commit：`633672c`
+- 接口返回 `assets`、`bindings`、`activeTasks`、`costs`、`projectStatus`、`generatedAt`。
+- 前端 SSE 收到事件后调用轮询接口刷新真实数据。
+- SSE 断开或漏事件时，前端自动进入 polling fallback（连接模式：sse | polling | disconnected）。
+- 画布和镜头列表以资产绑定结果为准。
+
 待办：
 
-- 为 Canvas 增加统一资产轮询接口，例如 `/api/canvas/projects/:projectId/assets/poll`。
-- 接口返回 `assets`、`bindings`、`activeTasks`、`costs`、`projectStatus`、`generatedAt`。
-- 前端收到 SSE 后调用轮询接口刷新真实数据。
-- SSE 断开或漏事件时，前端自动进入 polling fallback。
-- 画布和镜头列表都以资产绑定结果为准，不直接依赖 task output。
+- 资产轮询接口的 `activeImageTaskIds` 当前为空数组，需要从 `canvas_assets` 表填充（P0-3 Step 3）。
+- Worker 完成视频任务时需要同步标记对应的 `shotVideo` canvas_asset 为 succeeded。
 
 验收：
 
@@ -126,13 +140,26 @@
 
 ### 3. Canvas 产物资产化
 
+已完成：
+
+- `canvas_assets` 表创建（10 类 category、5 状态 lifecycle、目标实体绑定、isActive/locked），commit：`ae0fb92`
+- `canvas-assets.repo.ts` 完整仓库（create/running/succeeded/failed/cancelled/setActive/succeededByTaskId 等），commit：`ae0fb92`
+- 所有 6 个非视频 canvas 服务模块 + regenerate 模块在生成前后创建并更新 canvas_asset 记录，commit：`195ebac`
+  - analysis → `analysis` asset
+  - characters → `characterProfile` asset per character
+  - locations → `locationProfile` asset per location
+  - references → `characterPortrait` + `characterTurnaround` per character, `locationRef` per location
+  - storyboard → `storyboard` asset
+  - continuity-rebuild → `continuityReport` + `videoPrompt` per shot
+  - videos → `shotVideo` per shot（保持 running 直到 Worker 完成）
+  - regenerate → 按实体类型创建对应 asset
+
 待办：
 
-- 角色参考图、场景参考图、镜头图、镜头视频、最终视频都应进入统一资产模型。
-- shot、character、location 保存当前选中 asset 或 URL 快照。
-- 同一镜头多次生成时保留历史资产。
-- 用户可以选择、替换、锁定满意资产。
-- 资产记录区分 provider 临时 URL、前端可访问 URL、provider 可复用 URL。
+- asset polling 接口需要从 `canvas_assets` 表填充 `activeImageTaskIds`（当前为空数组）。
+- Worker 完成视频任务时需标记对应 `shotVideo` canvas_asset 为 succeeded。
+- 前端支持用户查看同一镜头的历史图片和历史视频。
+- 前端支持用户锁定满意角色图或场景图，后续生成不自动覆盖。
 
 验收：
 
@@ -402,6 +429,259 @@
 - 出现用户问题时，运营能定位任务、资产、扣费、错误原因。
 - 可以按模型、用户、项目维度查看成本。
 
+## P4：基础设施和通用能力 package 治理
+
+目标：将 FFmpeg、视频合成、字幕烧录、OSS、本地文件存储、auth、安全、限流、metrics、event bus、workflow、task、prompt、subtitle 等与具体 API 编排无关的能力从 server 业务层剥离，沉淀为可复用 package。
+
+判断标准：
+
+- 如果一个能力可以被 server、worker、测试、未来 admin/customer/model-lab 多处复用，应拆为 package。
+- 如果一个能力不需要知道 Elysia route、HTTP request、React 页面状态，应拆为 package。
+- 如果一个能力未来可能替换实现，例如 OSS 换 S3、FFmpeg 换云端转码、内存限流换 Redis，应拆为 package。
+- 如果一个能力只是在编排业务流程、鉴权当前请求、返回 API 响应，可以留在 app 层。
+
+### 1. 新增 `packages/ffmpeg` 或 `packages/video-compose`
+
+待办：
+
+- 新建独立 package 承载 FFmpeg 调用、探测、合成、转码、字幕烧录等能力。
+- 暴露稳定接口，例如 `probeMedia()`、`composeVideo()`、`burnSubtitles()`、`extractThumbnail()`。
+- package 内部负责 FFmpeg binary 检测、参数拼装、临时目录、错误归一化、日志脱敏。
+- server 不直接调用 `ffmpeg` 命令，不直接拼接复杂 FFmpeg 参数。
+- worker handler 通过该 package 执行耗时媒体任务。
+
+验收：
+
+- server 侧没有 FFmpeg 业务实现，只保留 API 入参校验和任务创建。
+- worker 侧媒体处理调用来自 `packages/ffmpeg` 或 `packages/video-compose`。
+- FFmpeg 不存在、输入文件缺失、合成失败、字幕失败都有明确错误码和测试。
+- package 可以被 Canvas、字幕、最终视频合成、Model Lab 复用。
+
+### 2. 媒体处理任务化
+
+待办：
+
+- 视频合成、字幕烧录、缩略图提取等耗时操作必须走 worker task。
+- task input 只包含 assetId、projectId、shotId、subtitleConfig 等业务引用，不传大块临时数据。
+- task output 产出 asset，而不是只返回本地路径。
+- 失败后不创建伪资产，成功后资产写入统一资产模型。
+
+验收：
+
+- 刷新页面不会丢失视频合成或字幕烧录进度。
+- 合成成功后最终视频进入资产中心。
+- 合成失败能在任务面板看到可理解错误。
+
+### 3. 包边界约束
+
+待办：
+
+- `packages/ffmpeg` 不依赖 server route、React、Elysia。
+- `packages/ffmpeg` 可以依赖 shared types，但不直接操作 DB。
+- DB 写入由 worker/service 完成，FFmpeg package 只返回结构化结果。
+- package 内部不能散落业务项目状态判断。
+
+验收：
+
+- 单元测试可以不启动 server 直接测试 FFmpeg 参数和错误处理。
+- 未来替换 FFmpeg binary、切换容器镜像或增加云端转码时，不需要改 API route。
+
+### 4. 新增 `packages/storage` 或 `packages/asset-storage`
+
+状态：已完成，commit：`8ac92b3`
+
+完成内容：
+
+- 从 `packages/provider` 中拆出 `AssetStorage` 到独立 `packages/storage`。
+- `packages/storage` 承载本地存储、OSS 上传、下载、删除、public URL 构建。
+- 暴露 `AssetStorage` 类和 `OSSConfig` 类型。
+- package 有独立单元测试（224 行）。
+- `packages/provider` 改为依赖 `@excuse/storage`，不再直接持有存储实现。
+
+### 5. Storage 与 Asset 分层
+
+待办：
+
+- `packages/storage` 只负责文件对象存取，不直接操作 DB。
+- 资产记录创建、业务绑定、SSE 通知由 worker/service 完成。
+- 存储返回结构化结果：`storageKey`、`publicUrl`、`providerUrl`、`mimeType`、`sizeBytes`、`checksum`。
+- provider 临时 URL、前端 public URL、provider 可复用 URL 要明确分开。
+- OSS 上传失败不应阻塞本地 asset 创建，但必须记录 failure metadata。
+
+验收：
+
+- provider 返回临时 URL 后，worker 能下载并持久化为本地或 OSS 资产。
+- Canvas 后续 I2V/R2V 使用的是 provider 可访问 URL，而不是只能前端访问的本地 URL。
+- 替换 OSS provider 或切换 bucket/prefix 不需要修改 API route。
+
+### 6. 新增 `packages/auth` 或强化认证安全包
+
+当前迹象：
+
+- `apps/server/src/utils/crypto.ts` 中有 API Key hash。
+- `apps/server/src/plugins/auth.ts` 承担 JWT、Bearer、API Key 认证。
+- API Key secret、hash、prefix、scope、撤销、过期等能力未来会被 Gateway、Customer Web、Admin Web 复用。
+
+待办：
+
+- 将 API Key hash、secret 生成、prefix 解析、scope 校验、过期校验下沉到 `packages/auth` 或 `packages/security`。
+- server auth plugin 只做 Elysia 适配，不实现核心认证算法。
+- API Key 相关 DTO 与错误码放 shared/auth 或 auth package。
+
+验收：
+
+- API Key hash/verify 不再只存在 server utils。
+- Gateway、普通 API、未来 customer/admin 都复用同一认证包。
+- secret 只显示一次、prefix、scope、过期、撤销都有测试。
+
+### 7. 新增 `packages/rate-limit`
+
+当前迹象：
+
+- `apps/server/src/plugins/rate-limit.ts` 直接绑定 `elysia-rate-limit`，规则硬编码为全局每分钟 60 次。
+- Gateway 未来需要按 key、scope、customer、daily/monthly quota 做更细限流。
+
+待办：
+
+- 将 rate limit 策略、key generator、错误响应、存储适配器抽为 package。
+- server plugin 只负责把 HTTP request 转成 rate-limit 输入。
+- 支持内存实现和未来 Redis/DB 实现。
+
+验收：
+
+- 普通用户限流、API Key 限流、Gateway quota 可以复用同一策略层。
+- 限流测试不需要启动 Elysia server。
+
+### 8. 新增 `packages/metrics` 或 `packages/observability`
+
+当前迹象：
+
+- `apps/server/src/services/metrics.ts` 是内存指标收集器，只在 server 内可用。
+- worker health/metrics 与 server metrics 尚未统一。
+
+待办：
+
+- 将 counters、latency histogram、error count、task metrics、SSE online metrics 抽成 package。
+- 支持内存 snapshot 和 Prometheus 文本导出。
+- server/worker 只注册各自采集点。
+
+验收：
+
+- server 和 worker 使用同一 metrics 包。
+- metrics route 只负责鉴权和输出，不负责指标计算。
+- 可以在测试中 reset/snapshot 指标。
+
+### 9. 新增 `packages/events` 或 `packages/realtime`
+
+当前迹象：
+
+- `apps/server/src/services/sse-manager.ts` 同时承担连接管理、PostgreSQL LISTEN、payload mapping、dispatch。
+- 通知 route 直接调用 `dispatchToUser()`。
+
+待办：
+
+- 将 domain event type、SSE event type、event bus、PostgreSQL NOTIFY/LISTEN adapter 抽成 package。
+- server SSE route 只负责 HTTP SSE 连接。
+- notification、generation、canvas 只发布 domain event，不直接关心 SSE 连接。
+
+验收：
+
+- 事件定义集中，前后端不重复写 payload。
+- SSE 可替换为 WebSocket 或 polling event log 时，不需要改业务 service。
+- domain event 和 user notification 明确分层。
+
+### 10. 新增 `packages/workflow-engine` 和 `packages/task-engine`
+
+当前迹象：
+
+- 项目已经有 tasks、workflows、workflow_steps 表。
+- `apps/worker/src/task-handler.ts` 负责 task dispatch、retry delay、错误分类。
+- `apps/worker/src/canvas-handlers.ts` 动态加载 server canvas service，说明 worker 与 server 业务实现耦合仍偏高。
+
+待办：
+
+- 将 task definition、retry policy、task dispatch contract、claim/retry/cancel 状态机抽为 `packages/task-engine`。
+- 将 workflow step definition、advance logic、batch partial success、pause/cancel/resume 抽为 `packages/workflow-engine`。
+- worker 只注册 handler 并运行 engine。
+- Canvas phase 的纯业务逻辑从 server modules 拆到 package 或 domain service，worker 不再动态 import server 文件。
+
+验收：
+
+- worker 不再依赖 `../../server/src/...`。
+- 自动执行全部由 workflow engine 推进。
+- task retry/cancel/fail 的测试不需要启动 server。
+
+### 11. 新增 `packages/prompt-engine` 或 `packages/canvas-engine`
+
+当前迹象：
+
+- `apps/server/src/modules/canvas/prompt-builder.ts`、`prompts.ts`、`analysis.ts`、`storyboard.ts` 等承载大量 Canvas 领域逻辑。
+- 这些逻辑未来可能被 server、worker、Model Lab 或测试复用。
+
+待办：
+
+- 将 prompt 模板、结构化输出 parser、storyboard builder、continuity rules、character/location extraction schema 抽成 package。
+- server route 只负责接收请求和创建任务。
+- worker 调用 engine 完成实际生成或解析。
+
+验收：
+
+- Canvas prompt 构造和 JSON parser 有独立单元测试。
+- prompt engine 不依赖 Elysia，不直接写 DB，不发 SSE。
+- worker/server 复用同一套 prompt 和 parser。
+
+### 12. 新增 `packages/subtitle-engine`
+
+当前迹象：
+
+- `apps/server/src/modules/subtitle/service.ts` 负责项目创建，同时调用音频提取。
+- `apps/worker/src/subtitle-processor.ts` 负责 ASR 轮询、ASS 生成、字幕烧录、上传、SSE。
+- `packages/provider/src/audio-extractor.ts` 和 `subtitle-burner.ts` 实际是 FFmpeg/subtitle 能力，不应归属 provider。
+
+待办：
+
+- 将 ASS/SRT/VTT 生成、字幕样式转换、句子时间轴处理、ASR transcript parser 抽为 `packages/subtitle-engine`。
+- 音频提取和字幕烧录放入 `packages/ffmpeg` 或 `packages/video-compose`。
+- ASR provider client 保留在 provider，字幕领域逻辑不放 provider。
+
+验收：
+
+- 字幕格式转换和样式渲染可独立测试。
+- provider 包只处理 DashScope/ASR API，不包含 FFmpeg 业务。
+- server 创建字幕项目不直接执行耗时媒体处理。
+
+### 13. 新增 `packages/gateway` 或 `packages/openai-compatible`
+
+当前迹象：
+
+- `apps/server/src/routes/openai-gateway.ts` 承担 OpenAI-compatible request/response、鉴权、计费、provider 调用。
+- Gateway 如果产品化，需要被开发者中心、后台、测试复用。
+
+待办：
+
+- 将 OpenAI-compatible schema、request normalize、response mapper、error mapper、streaming adapter 抽成 package。
+- server route 只负责鉴权、限流、调用 gateway service。
+- Gateway service 复用 billing、auth、rate-limit、provider。
+
+验收：
+
+- OpenAI-compatible 协议兼容测试不需要启动完整 server。
+- 后续支持 streaming 时，不需要重写 route 主体。
+
+### 14. Package 拆分优先级
+
+优先级建议：
+
+1. `packages/storage` 或 `packages/asset-storage`：先解决 OSS、本地存储、URL 混乱。
+2. `packages/ffmpeg` 或 `packages/video-compose`：迁移音频提取、字幕烧录、最终视频合成。
+3. `packages/task-engine`：稳定 worker task claim、retry、cancel、error 分类。
+4. `packages/workflow-engine`：让 Canvas 自动执行全部脱离前端和 server fire-and-forget。
+5. `packages/events` 或 `packages/realtime`：统一 NOTIFY、SSE、domain event、notification。
+6. `packages/subtitle-engine`：把字幕格式、样式、ASR transcript parser 从 server/worker/provider 中拆开。
+7. `packages/canvas-engine` 或 `packages/prompt-engine`：沉淀 Canvas prompt、parser、storyboard、continuity。
+8. `packages/auth` / `packages/security`、`packages/rate-limit`、`packages/metrics`：随着 Gateway 产品化推进。
+9. `packages/gateway` 或 `packages/openai-compatible`：在确定 Gateway 开放状态后推进。
+
 ## 参考项目迁移指南
 
 本节合并自历史参考材料。后续 Claude 不需要再打开其他参考文档，只需要按本文执行。
@@ -439,6 +719,7 @@
 - 强化 `packages/shared`，集中维护 Canvas phase、shot status、pipeline run status、SSE event type、task type。
 - DB enum、API DTO、前端类型不要各自重复定义。
 - 跨 app 的业务协议优先放 shared/core，再由 DB schema 和前端派生。
+- 可替换、可复用、与 HTTP 编排无关的能力优先拆到 package；app 层只保留 route、auth glue、任务创建、响应映射。
 
 ### 3. 环境配置治理
 
@@ -666,7 +947,41 @@
 - metrics 增加 SSE 连接数、任务处理数、失败数、平均耗时、provider error count。
 - shutdown 时停止接新任务，等待当前任务完成或留给 recovery。
 
-### 16. API Gateway 产品化参考
+### 16. FFmpeg 与视频合成 package 参考
+
+参考文件：
+
+- `/Users/yxswy/Documents/unknown/lumora/packages/video-compose/src/concat.ts`
+- `/Users/yxswy/Documents/unknown/lumora/packages/video-compose/src/ffmpeg-runner.ts`
+- `/Users/yxswy/Documents/unknown/lumora/packages/video-compose/src/types.ts`
+- `/Users/yxswy/Documents/unknown/lumora/apps/worker/src/handlers/video-compose-final.ts`
+
+迁移建议：
+
+- `excuse` 不应把 FFmpeg 合成、字幕烧录、转码逻辑写进 server route。
+- 建议新增 `packages/ffmpeg` 或 `packages/video-compose`。
+- server 只创建媒体处理任务，worker 调 package 执行。
+- package 只处理媒体输入输出和错误归一化，不写 DB、不发 SSE、不处理用户权限。
+- 合成结果必须进入统一资产模型，并由 asset polling 回显。
+
+### 17. OSS 与 Storage package 参考
+
+参考文件：
+
+- `/Users/yxswy/Documents/unknown/lumora/packages/asset-service/src/index.ts`
+- `/Users/yxswy/Documents/unknown/lumora/packages/asset-service/src/oss.ts`
+- `/Users/yxswy/Documents/unknown/lumora/packages/asset-service/src/oss.test.ts`
+- `/Users/yxswy/Documents/unknown/lumora/apps/worker/src/services/asset-persistence.ts`
+
+迁移建议：
+
+- `excuse` 不应在 server route、worker handler、provider service 中散落 OSS SDK 调用。
+- 建议新增 `packages/storage` 或 `packages/asset-storage`。
+- package 负责本地/OSS 存储切换、上传、下载、删除、public URL、provider URL、错误归一化。
+- package 不写 DB、不发 SSE、不处理权限；业务层拿到存储结果后创建 asset 记录。
+- OSS 上传失败时可以保留本地资产，但必须把失败原因写入 asset metadata，方便后续排障。
+
+### 18. API Gateway 产品化参考
 
 参考文件：
 
@@ -683,7 +998,7 @@
 - Key 支持 scope、rate limit、daily quota、monthly quota、status、lastUsedAt。
 - 客户只能查询自己的 key、usage、transactions、tasks。
 
-### 17. Claude 执行提示
+### 19. Claude 执行提示
 
 后续可以按以下提示拆任务给 Claude：
 
@@ -695,14 +1010,21 @@
 6. “请把 Canvas analyze/characters/locations/storyboard/rebuild 从 server fire-and-forget 迁到 Worker task。”
 7. “请引入 workflow step 抽象，让自动执行全部由后端 orchestrator 推进，而不是前端逐步调用接口。”
 8. “请决定 OpenAI Gateway 是正式开放、内测隐藏还是暂缓关闭，并补对应文档和入口处理。”
+9. “请将 FFmpeg、视频合成、字幕烧录能力抽到 `packages/ffmpeg` 或 `packages/video-compose`，server 只创建任务，worker 调包执行。”
+10. “请将 OSS、本地存储、上传下载、public/provider URL 解析抽到 `packages/storage` 或 `packages/asset-storage`，server/worker 不直接散落 OSS SDK 调用。”
+11. “请梳理 server/worker 中所有非编排能力，按 `storage -> ffmpeg -> task-engine -> workflow-engine -> events -> subtitle-engine -> canvas-engine -> auth/rate-limit/metrics -> gateway` 的顺序拆包。”
 
-### 18. 注意事项
+### 20. 注意事项
 
 - 不建议直接照搬 `puzzle-bobble` 的框架形态；`excuse` 当前使用 Elysia + Eden treaty，保留即可。
 - 不建议直接照搬 `lumora` 的 SQLite；`excuse` 当前 PostgreSQL + Drizzle 更适合 SSE/NOTIFY 和多进程部署。
 - 不建议一次性迁移所有 Worker/task/workflow/billing；优先解决 Canvas 可靠性。
 - 不建议立刻把 `excuse` 拆成多个 Vite app；先拆清产品边界和路由边界。
 - `lumora` 的 React Flow 页面可参考数据回显，不代表 Canvas 主体验必须使用 React Flow。
+- 不建议把 FFmpeg 逻辑写进 server；媒体处理应作为 package + worker task，而不是 API 请求内同步执行。
+- 不建议把 OSS SDK 调用散落在 server、worker、provider 中；存储能力应通过 package 统一封装。
+- 不建议 worker 动态 import server 业务模块；worker 应调用 package/domain engine，而不是复用 route/service 文件。
+- 不建议 provider 包承载非 provider 能力；FFmpeg、storage、subtitle format、prompt parser 都不应长期留在 provider。
 - 如果未来任务量更大，再考虑 Redis/BullMQ/Temporal，不要过早引入重型系统。
 
 ## 暂不建议做的事
@@ -726,7 +1048,15 @@
 9. 补齐必须上线能力的端到端测试。
 10. 整理部署可观测性文档和 metrics 暴露策略。
 11. Model Lab 内部实验页。
-12. 管理后台和运营统计。
+12. 新增 `packages/ffmpeg` 或 `packages/video-compose`，迁移视频合成和字幕烧录能力。
+13. 新增 `packages/storage` 或 `packages/asset-storage`，迁移 OSS、本地存储和 URL 解析能力。
+14. 新增 `packages/task-engine`，迁移 task definition、retry、cancel、error 分类。
+15. 新增 `packages/workflow-engine`，迁移 Canvas 自动执行 stepper。
+16. 新增 `packages/events` 或 `packages/realtime`，迁移 NOTIFY/SSE/domain event 映射。
+17. 新增 `packages/subtitle-engine`，迁移字幕格式、样式、ASR transcript parser。
+18. 新增 `packages/canvas-engine` 或 `packages/prompt-engine`，迁移 Canvas prompt、parser、storyboard、continuity。
+19. 随 Gateway 决策推进 `packages/auth`、`packages/rate-limit`、`packages/metrics`、`packages/gateway`。
+20. 管理后台和运营统计。
 
 ## 验收命令
 

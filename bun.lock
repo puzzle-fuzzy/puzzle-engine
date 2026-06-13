@@ -126,10 +126,15 @@
         "drizzle-kit": "^0.31.4",
       },
     },
+    "packages/ffmpeg": {
+      "name": "@excuse/ffmpeg",
+      "version": "0.0.1",
+    },
     "packages/provider": {
       "name": "@excuse/provider",
       "version": "0.0.1",
       "dependencies": {
+        "@excuse/ffmpeg": "workspace:*",
         "@excuse/shared": "workspace:*",
         "@excuse/storage": "workspace:*",
       },
@@ -378,6 +383,8 @@
     "@excuse/billing": ["@excuse/billing@workspace:packages/billing"],
 
     "@excuse/db": ["@excuse/db@workspace:packages/db"],
+
+    "@excuse/ffmpeg": ["@excuse/ffmpeg@workspace:packages/ffmpeg"],
 
     "@excuse/provider": ["@excuse/provider@workspace:packages/provider"],
 

@@ -28,7 +28,7 @@
     "build:client": "bun run --cwd apps/client build",
     "build": "bun run build:server && bun run build:worker && bun run build:client",
     "typecheck": "concurrently \"bun run --cwd apps/server typecheck\" \"bun run --cwd apps/client typecheck\" \"bun run --cwd apps/worker typecheck\"",
-    "test": "concurrently \"bun test --cwd apps/server\" \"bun test --cwd apps/worker\" \"bun test --cwd packages/billing\" \"bun test --cwd packages/provider\" \"bun test --cwd packages/storage\" \"bun test --cwd packages/shared\" --names \"SERVER,WORKER,BILLING,PROVIDER,STORAGE,SHARED\" --prefix-colors \"bgBlue.bold,bgYellow.bold,bgRed.bold,bgMagenta.bold,bgMagenta.bold,bgCyan.bold\"",
+    "test": "concurrently \"bun test --cwd apps/server\" \"bun test --cwd apps/worker\" \"bun test --cwd packages/billing\" \"bun test --cwd packages/provider\" \"bun test --cwd packages/storage\" \"bun test --cwd packages/ffmpeg\" \"bun test --cwd packages/shared\" --names \"SERVER,WORKER,BILLING,PROVIDER,STORAGE,FFMPEG,SHARED\" --prefix-colors \"bgBlue.bold,bgYellow.bold,bgRed.bold,bgMagenta.bold,bgMagenta.bold,bgRed.bold,bgCyan.bold\"",
     "test:isolate": "bun test --isolate",
     "test:client": "bun run --cwd apps/client test",
     "test:all": "bun run test && bun run test:client",
