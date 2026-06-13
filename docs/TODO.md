@@ -680,6 +680,8 @@
 
 ### 13. 新增 `packages/gateway` 或 `packages/openai-compatible`
 
+状态：部分完成，`packages/gateway` 已完成 OpenAI-compatible 错误响应、chat request normalize、chat completion response mapper、models response mapper 的基础拆分（commit：`refactor(gateway): extract openai protocol helpers`）。剩余：streaming adapter、provider 调用 service、usage/credit 协议测试和开发者中心开放策略后续继续推进。
+
 当前迹象：
 
 - `apps/server/src/routes/openai-gateway.ts` 承担 OpenAI-compatible request/response、鉴权、计费、provider 调用。
@@ -687,7 +689,7 @@
 
 待办：
 
-- 将 OpenAI-compatible schema、request normalize、response mapper、error mapper、streaming adapter 抽成 package。
+- 将 OpenAI-compatible schema、request normalize、response mapper、error mapper、streaming adapter 抽成 package。基础 error/request/response/model mapper 已完成，streaming adapter 和更完整 service 边界后续推进。
 - server route 只负责鉴权、限流、调用 gateway service。
 - Gateway service 复用 billing、auth、rate-limit、provider。
 

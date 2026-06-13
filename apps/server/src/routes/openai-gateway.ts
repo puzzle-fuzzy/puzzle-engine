@@ -1,5 +1,5 @@
 import type { OutputResult } from '@excuse/db'
-import type { OpenAIChatRequest, OpenAIErrorResponse } from '@excuse/shared'
+import type { OpenAIChatRequest } from '@excuse/shared'
 import type { ServerConfig } from '../config'
 import { calculateCost } from '@excuse/billing'
 import {
@@ -10,8 +10,15 @@ import {
   refundCredit,
   reserveCredit,
 } from '@excuse/db'
+import {
+  createOpenAIChatResponse,
+  createOpenAIError,
+  createOpenAIModelsResponse,
+  isOpenAIGatewayError,
+  normalizeOpenAIChatRequest,
+} from '@excuse/gateway'
 import { DashScopeClient, getModelById, getModelsByCategory, validateAndMerge } from '@excuse/provider'
-import { extractBillingParams, resolveModelId } from '@excuse/shared'
+import { extractBillingParams } from '@excuse/shared'
 import { Elysia, t } from 'elysia'
 import { createRequireAuthPlugin } from '../plugins/auth'
 import { createDedupeKey } from '../utils/dedupe-key'
@@ -26,13 +33,6 @@ import { createDedupeKey } from '../utils/dedupe-key'
  * 计费：同一套 GenerationRecord + calculateCost
  */
 
-function openaiError(message: string, type: string, code: string, statusCode: number): { response: OpenAIErrorResponse, status: number } {
-  return {
-    response: { error: { message, type, code } },
-    status: statusCode,
-  }
-}
-
 export function createOpenAIGatewayRoutes(config: ServerConfig) {
   const client = new DashScopeClient({
     apiKey: config.dashscopeApiKey,
@@ -43,53 +43,32 @@ export function createOpenAIGatewayRoutes(config: ServerConfig) {
     .use(createRequireAuthPlugin(config))
     .post('/chat/completions', async ({ body, userId, set }) => {
       const request = body as OpenAIChatRequest
-
-      // 拒绝流式请求
-      if (request.stream) {
-        const err = openaiError('Streaming is not supported', 'invalid_request_error', 'stream_not_supported', 400)
-        set.status = err.status
-        return err.response
+      const normalized = normalizeOpenAIChatRequest(request)
+      if (isOpenAIGatewayError(normalized)) {
+        set.status = normalized.status
+        return normalized.response
       }
 
       // 模型名解析（别名 → 内部 ID）
-      const internalModelId = resolveModelId(request.model)
-      const modelConfig = getModelById(internalModelId)
+      const modelConfig = getModelById(normalized.internalModelId)
       if (!modelConfig) {
-        const err = openaiError(`Model '${request.model}' not found`, 'invalid_request_error', 'model_not_found', 404)
+        const err = createOpenAIError(`Model '${request.model}' not found`, 'invalid_request_error', 'model_not_found', 404)
         set.status = err.status
         return err.response
       }
 
       // 仅支持文本模型
       if (modelConfig.category !== 'text') {
-        const err = openaiError(`Model '${request.model}' is not a text model`, 'invalid_request_error', 'invalid_model', 400)
+        const err = createOpenAIError(`Model '${request.model}' is not a text model`, 'invalid_request_error', 'invalid_model', 400)
         set.status = err.status
         return err.response
       }
-
-      // 提取 prompt：取最后一条 user message
-      const userMessages = request.messages.filter(m => m.role === 'user')
-      if (userMessages.length === 0) {
-        const err = openaiError('No user message provided', 'invalid_request_error', 'missing_user_message', 400)
-        set.status = err.status
-        return err.response
-      }
-      const prompt = userMessages[userMessages.length - 1].content
-
-      // 构建 internal parameters
-      const parameters: Record<string, unknown> = { prompt }
-      if (request.temperature !== undefined)
-        parameters.temperature = request.temperature
-      if (request.max_tokens !== undefined)
-        parameters.max_tokens = request.max_tokens
-      if (request.top_p !== undefined)
-        parameters.top_p = request.top_p
 
       // 参数校验 + 合并默认值 — validateAndMerge 是 ValidatedModelParameters 的唯一构造路径
-      const validationResult = validateAndMerge(modelConfig, parameters)
+      const validationResult = validateAndMerge(modelConfig, normalized.parameters)
       if (!validationResult.ok) {
         const details = validationResult.errors.map(e => `${e.field}: ${e.message}`).join('; ')
-        const err = openaiError(details, 'invalid_request_error', 'invalid_parameters', 400)
+        const err = createOpenAIError(details, 'invalid_request_error', 'invalid_parameters', 400)
         set.status = err.status
         return err.response
       }
@@ -130,7 +109,7 @@ export function createOpenAIGatewayRoutes(config: ServerConfig) {
         catch (error) {
           const message = error instanceof Error ? error.message : 'Insufficient balance'
           await markGenerationFailed(record.id, message)
-          const err = openaiError(message, 'insufficient_quota', 'insufficient_balance', 402)
+          const err = createOpenAIError(message, 'insufficient_quota', 'insufficient_balance', 402)
           set.status = err.status
           return err.response
         }
@@ -148,7 +127,7 @@ export function createOpenAIGatewayRoutes(config: ServerConfig) {
             description: `OpenAI 网关失败退款：${modelConfig.id}`,
           })
         }
-        const err = openaiError(result.error, 'server_error', 'generation_failed', 500)
+        const err = createOpenAIError(result.error, 'server_error', 'generation_failed', 500)
         set.status = err.status
         return err.response
       }
@@ -169,26 +148,14 @@ export function createOpenAIGatewayRoutes(config: ServerConfig) {
         })
       }
 
-      // 组装 OpenAI 响应
-      const promptTokens = result.usage?.inputTokens ?? 0
-      const completionTokens = result.usage?.outputTokens ?? 0
-
-      return {
+      return createOpenAIChatResponse({
         id: record.id,
-        object: 'chat.completion',
-        created: Math.floor(record.createdAt.getTime() / 1000),
-        model: request.model,
-        choices: [{
-          index: 0,
-          message: { role: 'assistant', content: text },
-          finish_reason: 'stop',
-        }],
-        usage: {
-          prompt_tokens: promptTokens,
-          completion_tokens: completionTokens,
-          total_tokens: promptTokens + completionTokens,
-        },
-      }
+        createdAt: record.createdAt,
+        requestedModel: request.model,
+        text,
+        inputTokens: result.usage?.inputTokens,
+        outputTokens: result.usage?.outputTokens,
+      })
     }, {
       body: t.Object({
         model: t.String(),
@@ -210,15 +177,7 @@ export function createOpenAIGatewayRoutes(config: ServerConfig) {
     })
     .get('/models', async () => {
       const textModels = getModelsByCategory('text')
-      return {
-        object: 'list',
-        data: textModels.map(m => ({
-          id: m.id,
-          object: 'model',
-          created: Math.floor(Date.now() / 1000),
-          owned_by: 'excuse',
-        })),
-      }
+      return createOpenAIModelsResponse(textModels)
     }, {
       detail: {
         summary: '列出可用文本模型',

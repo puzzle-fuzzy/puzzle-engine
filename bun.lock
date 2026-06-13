@@ -83,6 +83,7 @@
         "@excuse/billing": "workspace:*",
         "@excuse/db": "workspace:*",
         "@excuse/events": "workspace:*",
+        "@excuse/gateway": "workspace:*",
         "@excuse/metrics": "workspace:*",
         "@excuse/prompt-engine": "workspace:*",
         "@excuse/provider": "workspace:*",
@@ -148,6 +149,13 @@
     "packages/ffmpeg": {
       "name": "@excuse/ffmpeg",
       "version": "0.0.1",
+    },
+    "packages/gateway": {
+      "name": "@excuse/gateway",
+      "version": "0.0.1",
+      "dependencies": {
+        "@excuse/shared": "workspace:*",
+      },
     },
     "packages/metrics": {
       "name": "@excuse/metrics",
@@ -437,6 +445,8 @@
     "@excuse/events": ["@excuse/events@workspace:packages/events"],
 
     "@excuse/ffmpeg": ["@excuse/ffmpeg@workspace:packages/ffmpeg"],
+
+    "@excuse/gateway": ["@excuse/gateway@workspace:packages/gateway"],
 
     "@excuse/metrics": ["@excuse/metrics@workspace:packages/metrics"],
 

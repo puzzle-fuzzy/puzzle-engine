@@ -20,6 +20,7 @@
     "@excuse/billing": "workspace:*",
     "@excuse/db": "workspace:*",
     "@excuse/events": "workspace:*",
+    "@excuse/gateway": "workspace:*",
     "@excuse/metrics": "workspace:*",
     "@excuse/prompt-engine": "workspace:*",
     "@excuse/provider": "workspace:*",
