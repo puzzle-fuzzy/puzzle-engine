@@ -9,6 +9,16 @@ export interface WorkerHealthState {
   lastPollError: string | null
   totalTasksProcessed: number
   startedAt: Date
+  /** Worker 标识 */
+  workerId: string
+  /** 当前正在执行的任务 ID */
+  currentTaskId: string | null
+  /** 通过 tasks 表 claim 的任务总数 */
+  tasksClaimed: number
+  /** orphan sweep 运行次数 */
+  orphanSweeps: number
+  /** 最近一次 sweep 时间 */
+  lastSweepAt: Date | null
 }
 
 /**
@@ -24,10 +34,15 @@ export function createHealthServer(state: WorkerHealthState, port: number) {
       }
       return Response.json({
         status: state.isPolling ? 'polling' : 'idle',
+        workerId: state.workerId,
         uptime: Math.floor((Date.now() - state.startedAt.getTime()) / 1000),
         lastPollAt: state.lastPollAt?.toISOString() ?? null,
         lastPollError: state.lastPollError,
         totalTasksProcessed: state.totalTasksProcessed,
+        currentTaskId: state.currentTaskId,
+        tasksClaimed: state.tasksClaimed,
+        orphanSweeps: state.orphanSweeps,
+        lastSweepAt: state.lastSweepAt?.toISOString() ?? null,
       })
     },
   })

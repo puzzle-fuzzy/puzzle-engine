@@ -1,11 +1,13 @@
 import type { WorkerHealthState } from './health'
 import type { TaskResult } from './task-processor'
-import { pollExportingProjects, pollPendingASRProjects, pollPendingVideoTasks } from '@excuse/db'
+import { claimNextTask, pollExportingProjects, pollPendingASRProjects, pollPendingVideoTasks, sweepOrphanTasks } from '@excuse/db'
 import { ASRClient, checkFFmpegAsync } from '@excuse/provider'
 import { createLogger } from '@excuse/shared'
 import { loadConfig } from './config'
 import { createHealthServer } from './health'
+import { startTaskHeartbeat } from './heartbeat'
 import { processASRTask, processExportTask } from './subtitle-processor'
+import { handleTask, handleTaskError } from './task-handler'
 import { createTaskProcessor } from './task-processor'
 
 const config = loadConfig()
@@ -15,6 +17,9 @@ const asrClient = new ASRClient({
   baseUrl: config.dashscopeBaseUrl,
 })
 const logger = createLogger('worker')
+
+// ── Worker ID ──────────────────────────────────────────
+const workerId = `worker-${process.env.HOSTNAME ?? 'local'}-${process.pid}`
 
 /**
  * 轮询循环控制状态
@@ -36,6 +41,11 @@ const healthState: WorkerHealthState = {
   lastPollError: null,
   totalTasksProcessed: 0,
   startedAt: new Date(),
+  workerId,
+  currentTaskId: null,
+  tasksClaimed: 0,
+  orphanSweeps: 0,
+  lastSweepAt: null,
 }
 
 const healthPort = Number(process.env.WORKER_HEALTH_PORT) || 5100
@@ -68,17 +78,35 @@ for (const signal of ['SIGINT', 'SIGTERM'] as const) {
   })
 }
 
+// ── Orphan sweep 定时任务 ──────────────────────────────────
+// 启动时立即 sweep 一次，然后每隔 sweepIntervalMs 毫秒运行一次
+async function runOrphanSweep() {
+  try {
+    const recovered = await sweepOrphanTasks(5) // 5 分钟 grace period
+    healthState.orphanSweeps++
+    healthState.lastSweepAt = new Date()
+    if (recovered > 0) {
+      logger.info({ recovered }, '🔄 Swept orphan tasks')
+    }
+  }
+  catch (err) {
+    logger.error({ err }, 'Orphan sweep error')
+  }
+}
+
+runOrphanSweep()
+const sweepTimer = setInterval(runOrphanSweep, config.sweepIntervalMs)
+
 // ── 轮询循环 ──────────────────────────────────────────
 /**
- * Worker 主循环 — 持续轮询 DB 中 pending 的视频任务并处理
+ * Worker 主循环 — 持续轮询 DB 中 pending 的视频任务 + claim tasks 表中的任务
  *
- * 流程: pollPendingVideoTasks() → processor.processTask() → 根据 action 结果处理
+ * 流程（每个 cycle）:
+ *   1. claimNextTask() → handler dispatch → heartbeat → 完成或失败
+ *   2. pollPendingVideoTasks() → processor.processTask() → 根据 action 结果处理
+ *   3. pollPendingASRProjects() → processASRTask()
+ *   4. pollExportingProjects() → processExportTask()
  * 退出: SIGINT/SIGTERM → running=false → 当前任务完成后退出（最长 30s）
- *
- * 恢复策略:
- *   - ECONNREFUSED: DB 不可用时立即停止 worker（需人工检查 DB 服务）
- *   - 其他错误: 记录日志后继续下一轮轮询
- *   - 半完成状态: pollPendingVideoTasks 会重新捞取 processing 但 provider 已返回结果的任务
  */
 async function main() {
   // ── 启动前环境检查 ──────────────────────────────────
@@ -87,11 +115,51 @@ async function main() {
     logger.warn(w)
   }
 
-  logger.info({ pollIntervalMs: config.pollIntervalMs, healthPort }, '🤖 Worker started')
+  logger.info({
+    pollIntervalMs: config.pollIntervalMs,
+    claimTtlMs: config.claimTtlMs,
+    sweepIntervalMs: config.sweepIntervalMs,
+    healthPort,
+    workerId,
+  }, '🤖 Worker started')
 
   while (running) {
     healthState.isPolling = true
     try {
+      // ── Claim tasks from unified task queue ────────────
+      const claimedTask = await claimNextTask(workerId, config.claimTtlMs)
+      if (claimedTask) {
+        healthState.tasksClaimed++
+        healthState.currentTaskId = claimedTask.id
+        const stopHeartbeat = startTaskHeartbeat(claimedTask.id, workerId, config.claimTtlMs)
+
+        try {
+          const output = await handleTask(claimedTask)
+          // Handler 成功 → markTaskSucceeded
+          const { markTaskSucceeded, notifyTaskStatusChange } = await import('@excuse/db')
+          const succeeded = await markTaskSucceeded(claimedTask.id, output)
+          if (succeeded) {
+            await notifyTaskStatusChange(succeeded)
+            healthState.totalTasksProcessed++
+            logger.info({ taskId: claimedTask.id, type: claimedTask.type }, '✅ Task completed')
+          }
+        }
+        catch (error) {
+          // Handler 失败 → handleTaskError (retryable vs permanent)
+          await handleTaskError(claimedTask, error)
+          const { notifyTaskStatusChange, getTaskById } = await import('@excuse/db')
+          const updatedTask = await getTaskById(claimedTask.id)
+          if (updatedTask) {
+            await notifyTaskStatusChange(updatedTask)
+          }
+        }
+        finally {
+          stopHeartbeat()
+          healthState.currentTaskId = null
+        }
+      }
+
+      // ── 轮询视频生成任务（generation_records）──────────
       const records = await pollPendingVideoTasks()
       healthState.lastPollAt = new Date()
       healthState.lastPollError = null
@@ -110,10 +178,6 @@ async function main() {
           healthState.totalTasksProcessed++
         }
 
-        // result.action 含义:
-        //   completed — 任务成功完成，结果已写入 DB
-        //   skipped — 记录无 taskId 或已被其他 worker 处理，跳过
-        //   ignored — provider 返回未识别状态，记录警告
         switch (result.action) {
           case 'completed':
             taskLogger.info('✅ Task completed')
@@ -183,6 +247,7 @@ async function main() {
     }
   }
 
+  clearInterval(sweepTimer)
   logger.info('🤖 Worker stopped.')
 }
 
