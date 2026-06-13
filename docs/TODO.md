@@ -140,6 +140,8 @@
 
 - 前端 CharacterNode/LocationNode 在 activeImageTaskIds 非空时显示"正在生成" spinner。
 - 前端支持用户查看同一镜头的历史图片和历史视频。
+- 前端支持用户锁定满意角色图或场景图，后续生成不自动覆盖。
+- 暂停阶段（storyboard、videos）前端需要确认按钮才能继续。
 
 验收：
 
