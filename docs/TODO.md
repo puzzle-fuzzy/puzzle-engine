@@ -207,11 +207,16 @@
   - 活跃任务计数（"任务 2（文本 1 · 图片 1）"）
   - 连接状态：SSE 实时同步 / 轮询同步中 / 连接断开
   - 最后数据更新时间
+- 任务队列面板 + 失败原因分类，commit：`2416feb`
+  - TaskQueuePanel 组件：展示「进行中的任务」+「最近失败」两栏，按任务类型/目标对象/状态/重试次数/错误摘要呈现。
+  - 共享失败分类器 `classifyCanvasFailure`（`packages/shared/src/canvas-failure.ts`）：把后端 errorMessage 归类为 balance（余额）/ content（内容审核）/ network（网络）/ storage（存储）/ cancel（取消）/ provider（模型服务）/ system（系统），并给出下一步建议。
+  - poll 端点扩展：`activeTasks` 携带 `errorMessage`/`retryCount`/`updatedAt`；新增 `recentFailures` 数组（failed/cancelled 记录，倒序限 20 条），来源覆盖 generation_records + canvas_assets。
+  - CanvasStatusBar 新增「任务队列」可点击按钮，有失败时红色角标提示；点击展开 TaskQueuePanel（选中节点时自动收起，避免面板重叠）。
+  - 测试：`apps/server/test/canvas-asset-poll.test.ts` 新增 recentFailures 分类测试（balance/content/cancel 三类 + 倒序）。
 
 待办：
 
-- 增加任务队列面板：任务类型、目标对象、状态、重试次数、错误摘要。
-- 增加失败原因和下一步建议（区分 provider / 网络 / 存储 / 余额 / 取消 / 系统错误）。
+- （无）
 
 验收：
 
