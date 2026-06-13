@@ -125,11 +125,15 @@
 - 前端 SSE 收到事件后调用轮询接口刷新真实数据。
 - SSE 断开或漏事件时，前端自动进入 polling fallback（连接模式：sse | polling | disconnected）。
 - 画布和镜头列表以资产绑定结果为准。
+- `activeImageTaskIds` 已从 `canvas_assets` 表填充（character/location），commit：`0a79421`
+- `activeTasks` 已扩展包含 canvas_asset 条目（text/image/video × character/location/shot/project），commit：`0a79421`
+- Worker 视频任务成功时标记 `shotVideo` canvas_asset 为 succeeded + setCanvasAssetActive，commit：`0a79421`
+- Worker 视频任务失败/超时时标记 `shotVideo` canvas_asset 为 failed，commit：`0a79421`
 
 待办：
 
-- 资产轮询接口的 `activeImageTaskIds` 当前为空数组，需要从 `canvas_assets` 表填充（P0-3 Step 3）。
-- Worker 完成视频任务时需要同步标记对应的 `shotVideo` canvas_asset 为 succeeded。
+- 前端 CharacterNode/LocationNode 在 activeImageTaskIds 非空时显示"正在生成" spinner。
+- 前端支持用户查看同一镜头的历史图片和历史视频。
 
 验收：
 
