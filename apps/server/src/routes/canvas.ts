@@ -285,6 +285,12 @@ export function createCanvasRoutes(config: ServerConfig) {
       const activeRun = await findActiveRunForPhase(projectId, phase)
       if (activeRun)
         return conflict(set, `该阶段已有进行中的任务`)
+
+      const autoProgress = owned.modelPreferencesJson?.autoProgress ?? false
+      if (autoProgress) {
+        return createTaskDrivenPhase(userId, projectId, phase)
+      }
+
       const run = await createPipelineRun({ projectId, phase, createdBy: userId })
       fireAndForgetWithRun(userId, projectId, phase, run.id, svc.generateCharacters(projectId, config, run.id))
       return acceptedResponse(run.id)
@@ -298,6 +304,12 @@ export function createCanvasRoutes(config: ServerConfig) {
       const activeRun = await findActiveRunForPhase(projectId, phase)
       if (activeRun)
         return conflict(set, `该阶段已有进行中的任务`)
+
+      const autoProgress = owned.modelPreferencesJson?.autoProgress ?? false
+      if (autoProgress) {
+        return createTaskDrivenPhase(userId, projectId, phase)
+      }
+
       const run = await createPipelineRun({ projectId, phase, createdBy: userId })
       fireAndForgetWithRun(userId, projectId, phase, run.id, svc.generateLocations(projectId, config, run.id))
       return acceptedResponse(run.id)
@@ -311,6 +323,12 @@ export function createCanvasRoutes(config: ServerConfig) {
       const activeRun = await findActiveRunForPhase(projectId, phase)
       if (activeRun)
         return conflict(set, `该阶段已有进行中的任务`)
+
+      const autoProgress = owned.modelPreferencesJson?.autoProgress ?? false
+      if (autoProgress) {
+        return createTaskDrivenPhase(userId, projectId, phase)
+      }
+
       const run = await createPipelineRun({ projectId, phase, createdBy: userId })
       fireAndForgetWithRun(userId, projectId, phase, run.id, svc.generateCharacterRefs(projectId, config, run.id))
       return acceptedResponse(run.id)
@@ -324,6 +342,12 @@ export function createCanvasRoutes(config: ServerConfig) {
       const activeRun = await findActiveRunForPhase(projectId, phase)
       if (activeRun)
         return conflict(set, `该阶段已有进行中的任务`)
+
+      const autoProgress = owned.modelPreferencesJson?.autoProgress ?? false
+      if (autoProgress) {
+        return createTaskDrivenPhase(userId, projectId, phase)
+      }
+
       const run = await createPipelineRun({ projectId, phase, createdBy: userId })
       fireAndForgetWithRun(userId, projectId, phase, run.id, svc.generateLocationRefs(projectId, config, run.id))
       return acceptedResponse(run.id)
@@ -337,6 +361,14 @@ export function createCanvasRoutes(config: ServerConfig) {
       const activeRun = await findActiveRunForPhase(projectId, phase)
       if (activeRun)
         return conflict(set, `该阶段已有进行中的任务`)
+
+      // autoProgress=true -> task-driven mode (Worker stepper handles subsequent phases)
+      const autoProgress = owned.modelPreferencesJson?.autoProgress ?? false
+      if (autoProgress) {
+        return createTaskDrivenPhase(userId, projectId, phase)
+      }
+
+      // autoProgress=false -> fire-and-forget mode (frontend triggers each step)
       const run = await createPipelineRun({ projectId, phase, createdBy: userId })
       fireAndForgetWithRun(userId, projectId, phase, run.id, svc.generateStoryboard(projectId, config, run.id))
       return acceptedResponse(run.id)
@@ -350,6 +382,12 @@ export function createCanvasRoutes(config: ServerConfig) {
       const activeRun = await findActiveRunForPhase(projectId, phase)
       if (activeRun)
         return conflict(set, `该阶段已有进行中的任务`)
+
+      const autoProgress = owned.modelPreferencesJson?.autoProgress ?? false
+      if (autoProgress) {
+        return createTaskDrivenPhase(userId, projectId, phase)
+      }
+
       const run = await createPipelineRun({ projectId, phase, createdBy: userId })
       fireAndForgetWithRun(userId, projectId, phase, run.id, svc.checkContinuity(projectId, run.id))
       return acceptedResponse(run.id)
@@ -363,6 +401,12 @@ export function createCanvasRoutes(config: ServerConfig) {
       const activeRun = await findActiveRunForPhase(projectId, phase)
       if (activeRun)
         return conflict(set, `该阶段已有进行中的任务`)
+
+      const autoProgress = owned.modelPreferencesJson?.autoProgress ?? false
+      if (autoProgress) {
+        return createTaskDrivenPhase(userId, projectId, phase)
+      }
+
       const run = await createPipelineRun({ projectId, phase, createdBy: userId })
       fireAndForgetWithRun(userId, projectId, phase, run.id, svc.rebuildShotPrompts(projectId, run.id))
       return acceptedResponse(run.id)
@@ -376,6 +420,14 @@ export function createCanvasRoutes(config: ServerConfig) {
       const activeRun = await findActiveRunForPhase(projectId, phase)
       if (activeRun)
         return conflict(set, `该阶段已有进行中的任务`)
+
+      // autoProgress=true -> task-driven mode (Worker stepper handles subsequent phases)
+      const autoProgress = owned.modelPreferencesJson?.autoProgress ?? false
+      if (autoProgress) {
+        return createTaskDrivenPhase(userId, projectId, phase)
+      }
+
+      // autoProgress=false -> fire-and-forget mode (frontend triggers each step)
       const run = await createPipelineRun({ projectId, phase, createdBy: userId })
       fireAndForgetWithRun(userId, projectId, phase, run.id, svc.generateVideos(projectId, config, run.id))
       return acceptedResponse(run.id)

@@ -120,7 +120,7 @@ export default function PipelineController({
   const [running, setRunning] = useState(false)
   const [currentPhase, setCurrentPhase] = useState(-1)
   const [failedPhaseIdx, setFailedPhaseIdx] = useState(-1)
-  const [countdown, setCountdown] = useState(0)
+  const [pendingConfirmIdx, setPendingConfirmIdx] = useState(-1)
   const [error, setError] = useState<string | null>(null)
   const [models, setModels] = useState<ModelConfig[]>([])
   const [prefs, setPrefs] = useState<CanvasModelPreferences>(modelPreferences ?? {})
@@ -237,6 +237,7 @@ export default function PipelineController({
     setRunning(true)
     setError(null)
     setFailedPhaseIdx(-1)
+    setPendingConfirmIdx(-1)
     setElapsed(0)
     phaseStartedAtRef.current = Date.now()
     const info: RunningPhaseInfo = {
@@ -290,9 +291,8 @@ export default function PipelineController({
       setElapsed(0)
       phaseStartedAtRef.current = 0
       onPhaseChange?.(null)
-      if (autoRef.current) {
-        setCountdown(3)
-      }
+      // 显示确认按钮，由用户手动触发
+      setPendingConfirmIdx(nextIdx)
     }
     else if (autoRef.current && prefs.autoProgress) {
       // autoProgress=true：后端 pipeline-stepper 会自动创建下一个 phase task
@@ -407,20 +407,32 @@ export default function PipelineController({
     }
   }, [running, currentPhase, projectId, onPhaseComplete, onPhaseChange, advanceAfterPhase])
 
-  // Countdown timer for auto mode pauses
-  useEffect(() => {
-    if (countdown <= 0)
+  // 暂停阶段确认 — 用户点击"确认继续"触发 PAUSE_BEFORE 阶段
+  function handleConfirmPausePhase() {
+    if (pendingConfirmIdx < 0 || running)
       return
-    const timer = setTimeout(() => {
-      const next = countdown - 1
-      setCountdown(next)
-      if (next === 0) {
-        const resumeIdx = getPhaseIndex(projectStatus)
-        triggerPhase(resumeIdx)
-      }
-    }, 1000)
-    return () => clearTimeout(timer)
-  }, [countdown, projectStatus, triggerPhase])
+    setPendingConfirmIdx(-1)
+    triggerPhase(pendingConfirmIdx)
+  }
+
+  function handleCancelPausePhase() {
+    setPendingConfirmIdx(-1)
+    setAutoMode(false)
+  }
+
+  // 页面刷新后检测 PAUSE_BEFORE 状态：项目状态已到达暂停点但尚未触发
+  useEffect(() => {
+    if (running || pendingConfirmIdx >= 0 || failedPhaseIdx >= 0)
+      return
+    // 如果当前项目状态的 startIdx 对应的是 PAUSE_BEFORE 阶段，
+    // 则提示用户需要确认才能继续
+    if (PHASES[startIdx]?.pauseBefore) {
+      setPendingConfirmIdx(startIdx)
+    }
+    else {
+      setPendingConfirmIdx(-1)
+    }
+  }, [projectStatus, running, pendingConfirmIdx, failedPhaseIdx, startIdx])
 
   // Elapsed time timer — 每秒更新已耗时
   useEffect(() => {
@@ -464,11 +476,6 @@ export default function PipelineController({
       setError(null)
       triggerPhase(nextIdx)
     }
-  }
-
-  function handleCancelCountdown() {
-    setCountdown(0)
-    setAutoMode(false)
   }
 
   const currentPhaseInfo = currentPhase >= 0
@@ -614,18 +621,25 @@ export default function PipelineController({
         </div>
 
         <div className="flex items-center gap-2">
-          {countdown > 0 && (
+          {pendingConfirmIdx >= 0 && !running && (
             <div className="flex items-center gap-2 text-sm">
-              <span className="text-yellow-600">
-                即将执行下一步... (
-                {countdown}
-                s)
+              <span className="text-yellow-700 font-medium">
+                ⏸ 准备执行
+                {PHASES[pendingConfirmIdx]?.label}
+                ，请确认继续
               </span>
               <button
-                onClick={handleCancelCountdown}
-                className="text-xs px-2 py-1 rounded border border-yellow-300 text-yellow-700 hover:bg-yellow-50"
+                onClick={handleConfirmPausePhase}
+                className="text-xs px-3 py-1.5 rounded bg-yellow-500 text-white hover:bg-yellow-600 font-medium"
               >
-                暂停
+                确认继续 →
+                {PHASES[pendingConfirmIdx]?.label}
+              </button>
+              <button
+                onClick={handleCancelPausePhase}
+                className="text-xs px-2 py-1 rounded border border-gray-300 text-gray-600 hover:bg-gray-50"
+              >
+                暂不执行
               </button>
             </div>
           )}
@@ -674,7 +688,7 @@ export default function PipelineController({
             </div>
           )}
 
-          {!running && countdown === 0 && !error && (
+          {!running && pendingConfirmIdx < 0 && !error && (
             <button
               onClick={handleAutoRun}
               className="text-xs px-3 py-1.5 rounded bg-primary text-primary-foreground hover:bg-primary/90 font-medium"

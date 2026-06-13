@@ -104,6 +104,13 @@ export default function CanvasEditor() {
             {runningPhase.modelName && ` · ${runningPhase.modelName}`}
           </span>
         )}
+        {/* PAUSE_BEFORE 待确认提示 */}
+        {!runningPhase && (project.status === 'refs_all_ready' || project.status === 'prompts_ready') && (
+          <span className="text-xs px-2 py-0.5 rounded-full bg-yellow-100 text-yellow-700">
+            ⏸ 待确认：
+            {project.status === 'refs_all_ready' ? '分镜' : '生成视频'}
+          </span>
+        )}
         {/* 连接状态指示器 */}
         {connectionMode === 'sse' && (
           <span className="text-xs text-green-600 flex items-center gap-1">
