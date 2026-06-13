@@ -20,6 +20,7 @@ import {
 } from '@excuse/db'
 import { createLogger } from '@excuse/shared'
 import { executeCanvasAnalysis } from './canvas-analysis'
+import { executeCanvasCharacterRefs } from './canvas-character-refs'
 import { executeCanvasCharacters } from './canvas-characters'
 import { executeCanvasContinuity } from './canvas-continuity'
 import { executeCanvasLocations } from './canvas-locations'
@@ -50,7 +51,6 @@ function storageConfig(workerConfig: WorkerConfig) {
 // Types match actual server function signatures for safe dynamic loading.
 
 interface CanvasServiceModule {
-  generateCharacterRefs: (projectId: string, config: { dashscopeApiKey: string, dashscopeBaseUrl?: string, storageRoot: string, oss: any }, runId?: string) => Promise<void>
   generateLocationRefs: (projectId: string, config: { dashscopeApiKey: string, dashscopeBaseUrl?: string, storageRoot: string, oss: any }, runId?: string) => Promise<void>
   generateVideos: (projectId: string, config: { dashscopeApiKey: string, dashscopeBaseUrl?: string }, runId?: string) => Promise<void>
 }
@@ -177,9 +177,9 @@ export async function handleCanvasLocations(task: TaskRow, workerConfig: WorkerC
 export async function handleCanvasCharacterRefs(task: TaskRow, workerConfig: WorkerConfig): Promise<Record<string, unknown>> {
   const projectId = task.projectId!
   const runId = await markRunRunningAndNotify(task)
-  await getService().generateCharacterRefs(projectId, storageConfig(workerConfig), runId ?? undefined)
-  await markRunSucceededAndNotify(task)
-  return { phase: 'characterRefs', projectId }
+  const result = await executeCanvasCharacterRefs(projectId, workerConfig, runId ?? undefined)
+  await markRunSucceededAndNotify(task, result)
+  return result
 }
 
 export async function handleCanvasLocationRefs(task: TaskRow, workerConfig: WorkerConfig): Promise<Record<string, unknown>> {

@@ -15,6 +15,7 @@ import { DashScopeClient } from '@excuse/provider'
 type CanvasProjectDetail = NonNullable<Awaited<ReturnType<typeof getCanvasProjectDetail>>>
 type CreateCanvasAssetInput = Parameters<typeof createCanvasAsset>[0]
 const DEFAULT_TEXT_MODEL = 'qwen3.7-plus'
+const DEFAULT_IMAGE_MODEL = 'qwen-image-2.0-pro'
 
 export function createDashScopeClient(workerConfig: WorkerConfig): DashScopeClient {
   return new DashScopeClient({
@@ -25,6 +26,10 @@ export function createDashScopeClient(workerConfig: WorkerConfig): DashScopeClie
 
 export function getTextModel(prefs: CanvasModelPreferences | null | undefined): string {
   return prefs?.textModel || DEFAULT_TEXT_MODEL
+}
+
+export function getImageModel(prefs: CanvasModelPreferences | null | undefined): string {
+  return prefs?.imageModel || DEFAULT_IMAGE_MODEL
 }
 
 export async function loadRunnableCanvasProject(projectId: string): Promise<CanvasProjectDetail> {
