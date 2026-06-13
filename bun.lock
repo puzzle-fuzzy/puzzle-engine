@@ -83,6 +83,7 @@
         "@excuse/billing": "workspace:*",
         "@excuse/db": "workspace:*",
         "@excuse/provider": "workspace:*",
+        "@excuse/rate-limit": "workspace:*",
         "@excuse/shared": "workspace:*",
         "drizzle-orm": "^0.44.2",
         "elysia": "latest",
@@ -143,6 +144,13 @@
         "@excuse/ffmpeg": "workspace:*",
         "@excuse/shared": "workspace:*",
         "@excuse/storage": "workspace:*",
+      },
+    },
+    "packages/rate-limit": {
+      "name": "@excuse/rate-limit",
+      "version": "0.0.1",
+      "dependencies": {
+        "@excuse/shared": "workspace:*",
       },
     },
     "packages/shared": {
@@ -399,6 +407,8 @@
     "@excuse/ffmpeg": ["@excuse/ffmpeg@workspace:packages/ffmpeg"],
 
     "@excuse/provider": ["@excuse/provider@workspace:packages/provider"],
+
+    "@excuse/rate-limit": ["@excuse/rate-limit@workspace:packages/rate-limit"],
 
     "@excuse/shared": ["@excuse/shared@workspace:packages/shared"],
 

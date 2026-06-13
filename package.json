@@ -28,7 +28,7 @@
     "build:client": "bun run --cwd apps/client build",
     "build": "bun run build:server && bun run build:worker && bun run build:client",
     "typecheck": "concurrently \"bun run --cwd apps/server typecheck\" \"bun run --cwd apps/client typecheck\" \"bun run --cwd apps/worker typecheck\"",
-    "test": "concurrently \"bun test --cwd apps/server\" \"bun test --cwd apps/worker\" \"bun test --cwd packages/auth\" \"bun test --cwd packages/billing\" \"bun test --cwd packages/provider\" \"bun test --cwd packages/storage\" \"bun test --cwd packages/ffmpeg\" \"bun test --cwd packages/task-engine\" \"bun test --cwd packages/shared\" --names \"SERVER,WORKER,AUTH,BILLING,PROVIDER,STORAGE,FFMPEG,TASK,SHARED\" --prefix-colors \"bgBlue.bold,bgYellow.bold,bgBlue.bold,bgRed.bold,bgMagenta.bold,bgMagenta.bold,bgRed.bold,bgYellow.bold,bgCyan.bold\"",
+    "test": "concurrently \"bun test --cwd apps/server\" \"bun test --cwd apps/worker\" \"bun test --cwd packages/auth\" \"bun test --cwd packages/billing\" \"bun test --cwd packages/provider\" \"bun test --cwd packages/rate-limit\" \"bun test --cwd packages/storage\" \"bun test --cwd packages/ffmpeg\" \"bun test --cwd packages/task-engine\" \"bun test --cwd packages/shared\" --names \"SERVER,WORKER,AUTH,BILLING,PROVIDER,RATE,STORAGE,FFMPEG,TASK,SHARED\" --prefix-colors \"bgBlue.bold,bgYellow.bold,bgBlue.bold,bgRed.bold,bgMagenta.bold,bgGreen.bold,bgMagenta.bold,bgRed.bold,bgYellow.bold,bgCyan.bold\"",
     "test:isolate": "bun test --isolate",
     "test:client": "bun run --cwd apps/client test",
     "test:all": "bun run test && bun run test:client",

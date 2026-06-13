@@ -1,4 +1,4 @@
-import type { RateLimitErrorResponse } from '@excuse/shared'
+import { buildRateLimitKey, createRateLimitErrorResponse, DEFAULT_GLOBAL_RATE_LIMIT } from '@excuse/rate-limit'
 import { rateLimit } from 'elysia-rate-limit'
 
 /**
@@ -8,21 +8,9 @@ import { rateLimit } from 'elysia-rate-limit'
  * 超限返回 429 + Retry-After + 可展示中文错误信息。
  */
 export const rateLimitPlugin = rateLimit({
-  duration: 60 * 1000,
-  max: 60,
+  duration: DEFAULT_GLOBAL_RATE_LIMIT.durationMs,
+  max: DEFAULT_GLOBAL_RATE_LIMIT.max,
   headers: true,
-  generator: (request: Request) => {
-    const authHeader = request.headers.get('authorization')
-    if (authHeader)
-      return `user:${authHeader.slice(0, 50)}`
-    return `ip:${request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? 'unknown'}`
-  },
-  errorResponse: new Response(JSON.stringify({
-    success: false,
-    error: '请求过于频繁，请稍后再试',
-    retryAfter: 60,
-  } satisfies RateLimitErrorResponse), {
-    status: 429,
-    headers: { 'Content-Type': 'application/json', 'Retry-After': '60' },
-  }),
+  generator: buildRateLimitKey,
+  errorResponse: createRateLimitErrorResponse(),
 })

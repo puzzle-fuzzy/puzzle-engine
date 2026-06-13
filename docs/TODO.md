@@ -538,6 +538,8 @@
 
 ### 7. 新增 `packages/rate-limit`
 
+状态：已完成，commit：本次提交
+
 当前迹象：
 
 - `apps/server/src/plugins/rate-limit.ts` 直接绑定 `elysia-rate-limit`，规则硬编码为全局每分钟 60 次。
