@@ -17,7 +17,7 @@
  *   - shotId 从 inputParams JSONB 或 canvas_assets.targetEntityId 提取
  *   - 这不是权威数据通道，ProjectDTO（getProjectDetail）仍是权威
  */
-import type { CanvasAssetsPoll } from '@excuse/shared'
+import type { CanvasAssetsPoll, CanvasCostPhase, CanvasCostSummary } from '@excuse/shared'
 import {
   getCanvasProjectById,
   getCanvasProjectDetail,
@@ -60,6 +60,38 @@ function mapAssetCategoryToTargetType(category: string): 'character' | 'location
 }
 
 /**
+ * canvas_asset category → 成本聚合阶段（P2-1 成本可见）。
+ * 阶段维度镜像 @excuse/shared 的 CanvasCostPhase（即 CanvasPipelinePhase）。
+ */
+function mapAssetCategoryToCostPhase(category: string): CanvasCostPhase {
+  switch (category) {
+    case 'analysis': return 'analyze'
+    case 'characterProfile': return 'characters'
+    case 'locationProfile': return 'locations'
+    case 'characterPortrait':
+    case 'characterTurnaround': return 'characterRefs'
+    case 'locationRef': return 'locationRefs'
+    case 'storyboard': return 'storyboard'
+    case 'continuityReport': return 'continuity'
+    case 'videoPrompt': return 'rebuild'
+    case 'shotVideo': return 'videos'
+    default: return 'analyze' // 文本类资产兜底归到分析阶段
+  }
+}
+
+/**
+ * generation_record category → 成本聚合阶段。
+ * Canvas 的 generation_records 主要是视频异步管线；图片/文本兜底归到对应阶段。
+ */
+function mapGenCategoryToCostPhase(category: string): CanvasCostPhase {
+  if (category === 'video')
+    return 'videos'
+  if (category === 'image')
+    return 'characterRefs'
+  return 'analyze'
+}
+
+/**
  * 获取 Canvas 项目资产轮询快照
  *
  * @returns CanvasAssetsPoll 或 null（项目不存在）
@@ -85,6 +117,20 @@ export async function getCanvasAssetsPoll(projectId: string): Promise<CanvasAsse
   const activeTasks: CanvasAssetsPoll['activeTasks'] = []
   const recentFailures: CanvasAssetsPoll['recentFailures'] = []
   const costs: CanvasAssetsPoll['costs'] = []
+
+  // P2-1 成本可见：按阶段累计成本（estimated/final/failed + count）
+  const phaseTotals = new Map<CanvasCostPhase, { estimatedCents: number, finalCents: number, failedCents: number, count: number }>()
+  function addPhaseCost(phase: CanvasCostPhase, state: 'active' | 'completed' | 'failed', cents: number | null): void {
+    const entry = phaseTotals.get(phase) ?? { estimatedCents: 0, finalCents: 0, failedCents: 0, count: 0 }
+    entry.count += 1
+    if (state === 'active')
+      entry.estimatedCents += cents ?? 0
+    else if (state === 'completed')
+      entry.finalCents += cents ?? 0
+    else
+      entry.failedCents += cents ?? 0
+    phaseTotals.set(phase, entry)
+  }
 
   for (const record of genRecords) {
     const isActive = ACTIVE_GEN_STATUSES.has(record.status)
@@ -139,6 +185,8 @@ export async function getCanvasAssetsPoll(projectId: string): Promise<CanvasAsse
       estimatedCostCents: isFinal ? null : record.totalPriceCents ?? null,
       finalCostCents: isFinal ? record.totalPriceCents ?? null : null,
     })
+    // P2-1：累加到阶段成本 rollup
+    addPhaseCost(mapGenCategoryToCostPhase(record.category), state, record.totalPriceCents ?? 0)
   }
 
   // 5. 从 canvas_assets 建立活跃图片任务映射（characters/locations）
@@ -184,6 +232,8 @@ export async function getCanvasAssetsPoll(projectId: string): Promise<CanvasAsse
       estimatedCostCents: isFinal ? null : asset.totalPriceCents ?? null,
       finalCostCents: isFinal ? asset.totalPriceCents ?? null : null,
     })
+    // P2-1：累加到阶段成本 rollup
+    addPhaseCost(mapAssetCategoryToCostPhase(asset.category), state, asset.totalPriceCents ?? 0)
 
     // 失败/取消资产纳入 recentFailures（canvas_assets 无 retryCount，记为 0）
     if (asset.status === 'failed' || asset.status === 'cancelled') {
@@ -233,6 +283,19 @@ export async function getCanvasAssetsPoll(projectId: string): Promise<CanvasAsse
     activeVideoTaskIds: activeVideoTaskIdsByShot.get(s.id) ?? [],
   }))
 
+  // 10. 组装成本 rollup（P2-1 成本可见）
+  let totalEstimatedCents = 0
+  let totalFinalCents = 0
+  let totalFailedCents = 0
+  const byPhase: CanvasCostSummary['byPhase'] = {}
+  for (const [phase, entry] of phaseTotals) {
+    totalEstimatedCents += entry.estimatedCents
+    totalFinalCents += entry.finalCents
+    totalFailedCents += entry.failedCents
+    byPhase[phase] = entry
+  }
+  const costSummary: CanvasCostSummary = { totalEstimatedCents, totalFinalCents, totalFailedCents, byPhase }
+
   return {
     scope: 'canvas',
     projectId,
@@ -243,6 +306,7 @@ export async function getCanvasAssetsPoll(projectId: string): Promise<CanvasAsse
     activeTasks,
     recentFailures: limitedFailures,
     costs,
+    costSummary,
     generatedAt: Date.now(),
   }
 }

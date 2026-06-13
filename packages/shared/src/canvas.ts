@@ -246,8 +246,55 @@ export interface CanvasAssetsPoll {
     finalCostCents: number | null
   }>
 
+  /**
+   * 成本聚合 rollup（P2-1 成本可见）。
+   * 注意：当前 beta 期间 Canvas 暂不对用户计费，此处的成本仅作「预估/已结算」展示，
+   * 不进入 credit reserve/debit/refund 体系，前端必须标注「暂未计费」避免误导。
+   */
+  costSummary: CanvasCostSummary
+
   /** 服务器生成此快照的时间戳（epoch ms），前端判断数据新鲜度 */
   generatedAt: number
+}
+
+/**
+ * Canvas 成本聚合阶段维度。
+ * 镜像 `@excuse/db` 的 `CanvasPipelinePhase` enum（权威源），用于成本按阶段分组展示。
+ * 此处不直接 import db 类型以避免 shared ← db 反向依赖。
+ */
+export type CanvasCostPhase
+  = | 'analyze'
+    | 'characters'
+    | 'locations'
+    | 'characterRefs'
+    | 'locationRefs'
+    | 'storyboard'
+    | 'continuity'
+    | 'rebuild'
+    | 'videos'
+
+/** 单个阶段的成本聚合条目（cents） */
+export interface CanvasCostPhaseEntry {
+  /** 进行中任务预估成本 */
+  estimatedCents: number
+  /** 已成功任务结算成本 */
+  finalCents: number
+  /** 失败/取消任务消耗成本 */
+  failedCents: number
+  /** 该阶段的成本记录条数 */
+  count: number
+}
+
+/** Canvas 项目级成本 rollup（P2-1） */
+export interface CanvasCostSummary {
+  /** 进行中任务的预估成本总和（cents） */
+  totalEstimatedCents: number
+  /** 已成功任务的结算成本总和（cents） */
+  totalFinalCents: number
+  /** 失败/取消任务消耗的成本总和（cents） */
+  totalFailedCents: number
+  /** 按阶段拆分（仅包含有成本记录的阶段） */
+  byPhase: Partial<Record<CanvasCostPhase, CanvasCostPhaseEntry>>
 }
 
 export type CanvasAssetsPollResponse = EntityResponse<CanvasAssetsPoll>

@@ -273,16 +273,34 @@
 
 未完成：
 
-- Canvas 的文本分析、角色提取、场景提取、参考图生成、分镜、连续性重建等阶段仍直接调用 provider，没有完整 credit reserve/debit/refund 闭环。
-- Canvas 视频阶段主要依赖生成记录和 worker 结算，但前置阶段的成本没有统一进入 credit 体系。
-- Canvas 任务缺少面向用户的预估成本、实际扣费、失败退款说明。
-- 缺少覆盖 Canvas 全链路计费的端到端测试。
+- Canvas 的文本分析、角色提取、场景提取、参考图生成、分镜、连续性重建等阶段仍直接调用 provider，没有完整 credit reserve/debit/refund 闭环。**按下方决策（暂不收费），当前不实现 Canvas 前置阶段的 credit 闭环。**
+- Canvas 视频阶段主要依赖生成记录和 worker 结算，前置阶段成本不进入 credit 体系（同上，暂不收费故不进入）。
+- Canvas 任务缺少面向用户的预估成本、实际扣费、失败退款说明 → **预估成本可见已完成**（见「1a. 成本可见 slice」），实际扣费/退款按决策暂不适用。
+- 缺少覆盖 Canvas 全链路计费的端到端测试（暂不收费，credit 闭环测试暂不需要）。
 
-决策项：
+决策项（已决定）：
 
-- 决定 Canvas 前置阶段是否上线即收费。
-- 如果收费，需要为每个 Canvas provider 调用建立统一的 cost estimate、reserve、debit、refund 策略。
-- 如果暂不收费，需要明确标注为 beta/free quota，不要让 credit 数据误导用户。
+- **已决定：Canvas 前置阶段暂不收费，标注为 beta/free quota，不进 credit 体系，避免 credit 数据误导用户**（2026-06-14）。
+- 后续若改为收费，需要为每个 Canvas provider 调用建立统一的 cost estimate、reserve、debit、refund 策略，并补端到端测试。
+
+### 1a. 成本可见 slice（已完成）
+
+状态：已完成（P2-1 轻量版，对应决策「先不定，做成本可见即可」）。
+
+完成内容：
+
+- 后端 `asset-poll.ts` 新增 `costSummary` rollup：`{ totalEstimatedCents, totalFinalCents, totalFailedCents, byPhase }`，phase 从 `canvas_asset.category` / `generation_record.category` 推导，复用现有 `costs` 数组，非破坏性。
+- `packages/shared/src/canvas.ts` 新增 `CanvasCostPhase` / `CanvasCostSummary` 类型（镜像 DB `CanvasPipelinePhase`，避免 shared ← db 反向依赖）。
+- 前端 `CostPanel.tsx`：总览三栏（预估/已结算/失败）+ 按阶段拆分 + beta 未计费说明。
+- `CanvasStatusBar.tsx`：成本按钮 + 一行摘要 chip（预估¥X · 已结算¥Y），与任务队列按钮互斥展开。
+- `CanvasEditor.tsx`：`showCost` 状态 + CostPanel 渲染 + 选中节点时关闭浮层。
+- 测试：`canvas-asset-poll.test.ts` 扩展 costSummary 断言 + 多阶段聚合专项测试；客户端 vitest 44 pass；typecheck 三端绿 + lint 0 错。
+
+验收（已满足）：
+
+- 用户能回答「这次自动生成大概花了多少钱」（状态栏 chip + 面板按阶段拆分）。
+- 成本明确标注 beta 期间暂未计费，不进 credit，不误导用户。
+- 扣费/退款因决策暂不收费而不适用。
 
 完成定义：
 

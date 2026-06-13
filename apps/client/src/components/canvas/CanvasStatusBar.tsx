@@ -44,6 +44,10 @@ interface CanvasStatusBarProps {
   taskQueueOpen: boolean
   /** 切换任务队列面板 */
   onToggleTaskQueue: () => void
+  /** 成本面板是否展开（高亮触发按钮） */
+  costOpen: boolean
+  /** 切换成本面板 */
+  onToggleCost: () => void
 }
 
 export default function CanvasStatusBar({
@@ -54,6 +58,8 @@ export default function CanvasStatusBar({
   isPolling,
   taskQueueOpen,
   onToggleTaskQueue,
+  costOpen,
+  onToggleCost,
 }: CanvasStatusBarProps) {
   // 阶段进度统计
   const phaseStats = useMemo(() => {
@@ -82,6 +88,10 @@ export default function CanvasStatusBar({
 
   // 最近失败数（用于按钮角标提示）
   const failureCount = pollData?.recentFailures?.length ?? 0
+
+  // 成本摘要（P2-1 成本可见；beta 期间暂未计费，仅展示）
+  const costSummary = pollData?.costSummary
+  const hasCost = !!costSummary && (costSummary.totalEstimatedCents + costSummary.totalFinalCents + costSummary.totalFailedCents) > 0
 
   const isPauseBefore = !runningPhase && (project.status === 'refs_all_ready' || project.status === 'prompts_ready')
 
@@ -145,6 +155,24 @@ export default function CanvasStatusBar({
         )}
         {failureCount > 0 && (
           <span className="px-1 rounded bg-red-500 text-white font-semibold">{failureCount}</span>
+        )}
+      </button>
+
+      {/* 成本按钮 — 点击展开成本 rollup 面板（beta 期间暂未计费，仅展示） */}
+      <button
+        onClick={onToggleCost}
+        className={`text-xs px-2 py-0.5 rounded-full flex items-center gap-1 transition-colors ${
+          costOpen
+            ? 'bg-green-100 text-green-700'
+            : hasCost
+              ? 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              : 'text-muted-foreground hover:bg-gray-100'
+        }`}
+        title="查看成本明细（beta 期间暂未计费）"
+      >
+        成本
+        {hasCost && costSummary && (
+          <span className="font-semibold">{`预估¥${(costSummary.totalEstimatedCents / 100).toFixed(1)} · 已结算¥${(costSummary.totalFinalCents / 100).toFixed(1)}`}</span>
         )}
       </button>
 

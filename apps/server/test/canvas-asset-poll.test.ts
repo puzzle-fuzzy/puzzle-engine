@@ -205,6 +205,10 @@ describe('Canvas 资产轮询端点', () => {
     expect(data.data.projectStatus).toBe('draft')
     expect(data.data.activeTasks).toEqual([])
     expect(data.data.costs).toEqual([])
+    expect(data.data.costSummary.totalEstimatedCents).toBe(0)
+    expect(data.data.costSummary.totalFinalCents).toBe(0)
+    expect(data.data.costSummary.totalFailedCents).toBe(0)
+    expect(data.data.costSummary.byPhase).toEqual({})
     expect(data.data.characters).toEqual([])
     expect(data.data.locations).toEqual([])
     expect(data.data.shots).toEqual([])
@@ -259,6 +263,12 @@ describe('Canvas 资产轮询端点', () => {
     expect(poll.costs[0].state).toBe('active')
     expect(poll.costs[0].estimatedCostCents).toBe(100)
     expect(poll.costs[0].finalCostCents).toBeNull()
+
+    // P2-1 成本 rollup：进行中视频任务计入 videos 阶段 estimated
+    expect(poll.costSummary.totalEstimatedCents).toBe(100)
+    expect(poll.costSummary.totalFinalCents).toBe(0)
+    expect(poll.costSummary.totalFailedCents).toBe(0)
+    expect(poll.costSummary.byPhase.videos).toEqual({ estimatedCents: 100, finalCents: 0, failedCents: 0, count: 1 })
   })
 
   it('终态记录映射为 completed/failed cost state', async () => {
@@ -494,5 +504,53 @@ describe('Canvas 资产轮询端点', () => {
 
     expect(poll.recentFailures[2].id).toBe('gen-cancel')
     expect(poll.recentFailures[2].failureKind).toBe('cancel')
+  })
+
+  it('costSummary 按阶段聚合成本（generation_records + canvas_assets 多阶段）', async () => {
+    const projectRow = makeProjectRow({ status: 'generating' })
+    mockGetCanvasProjectByIdForAccount.mockResolvedValue(projectRow)
+    mockGetCanvasProjectById.mockResolvedValue(projectRow)
+    mockGetCanvasProjectDetail.mockResolvedValue({
+      project: projectRow,
+      characters: [],
+      locations: [],
+      shots: [],
+      latestContinuity: null,
+    })
+    // 视频管线：一条进行中（estimated）、一条成功（final）
+    mockListCanvasGenerationRecordsByProject.mockResolvedValue([
+      { id: 'gen-active', category: 'video', status: 'processing', totalPriceCents: 100, cost: null, shotId: null },
+      { id: 'gen-done', category: 'video', status: 'succeeded', totalPriceCents: 200, cost: null, shotId: null },
+    ])
+    mockListActiveCanvasAssetsByProject.mockResolvedValue([])
+    // 前置阶段终态资产：角色参考图、场景参考图、分镜
+    mockListTerminalCanvasAssetsByProject.mockResolvedValue([
+      { id: 'a-portrait', category: 'characterPortrait', targetEntityType: 'character', targetEntityId: 'char-1', status: 'succeeded', totalPriceCents: 40 },
+      { id: 'a-locref', category: 'locationRef', targetEntityType: 'location', targetEntityId: 'loc-1', status: 'succeeded', totalPriceCents: 30 },
+      { id: 'a-story', category: 'storyboard', targetEntityType: 'project', targetEntityId: 'proj-001', status: 'succeeded', totalPriceCents: 20 },
+      // 失败资产计入 failedCents
+      { id: 'a-fail', category: 'characterTurnaround', targetEntityType: 'character', targetEntityId: 'char-1', status: 'failed', totalPriceCents: 15 },
+    ])
+
+    const res = await client.api.canvas.projects({ projectId: 'proj-001' }).assets.poll.get(headers)
+    const data = (res as any).data ?? res
+    const summary = data.data.costSummary
+
+    // 总额：estimated=100, final=200+40+30+20=290, failed=15
+    expect(summary.totalEstimatedCents).toBe(100)
+    expect(summary.totalFinalCents).toBe(290)
+    expect(summary.totalFailedCents).toBe(15)
+
+    // 视频阶段：estimated 100 + final 200（两条记录）
+    expect(summary.byPhase.videos).toEqual({ estimatedCents: 100, finalCents: 200, failedCents: 0, count: 2 })
+    // 角色参考图阶段：characterPortrait(final 40) + characterTurnaround(failed 15)
+    expect(summary.byPhase.characterRefs).toEqual({ estimatedCents: 0, finalCents: 40, failedCents: 15, count: 2 })
+    // 场景参考图阶段
+    expect(summary.byPhase.locationRefs).toEqual({ estimatedCents: 0, finalCents: 30, failedCents: 0, count: 1 })
+    // 分镜阶段
+    expect(summary.byPhase.storyboard).toEqual({ estimatedCents: 0, finalCents: 20, failedCents: 0, count: 1 })
+    // 未涉及的阶段不应出现
+    expect(summary.byPhase.analyze).toBeUndefined()
+    expect(summary.byPhase.continuity).toBeUndefined()
   })
 })

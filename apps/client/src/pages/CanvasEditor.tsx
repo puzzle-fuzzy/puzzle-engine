@@ -5,6 +5,7 @@ import { useParams } from 'react-router'
 import { getCanvasProject } from '../api/client'
 import CanvasFlow from '../components/canvas/CanvasFlow'
 import CanvasStatusBar from '../components/canvas/CanvasStatusBar'
+import CostPanel from '../components/canvas/CostPanel'
 import NodeDetailPanel from '../components/canvas/NodeDetailPanel'
 import PipelineController from '../components/canvas/PipelineController'
 import TaskQueuePanel from '../components/canvas/TaskQueuePanel'
@@ -19,6 +20,7 @@ export default function CanvasEditor() {
   const [selectedNode, setSelectedNode] = useState<{ id: string, type: string } | null>(null)
   const [runningPhase, setRunningPhase] = useState<RunningPhaseInfo | null>(null)
   const [showTaskQueue, setShowTaskQueue] = useState(false)
+  const [showCost, setShowCost] = useState(false)
 
   // 从 RealtimeSync 获取项目版本号和 pipeline 阶段完成信号
   const projectVersion = useRealtimeSync(s => projectId ? s.projectVersions[projectId] : 0)
@@ -100,7 +102,15 @@ export default function CanvasEditor() {
         connectionMode={connectionMode}
         isPolling={isPolling}
         taskQueueOpen={showTaskQueue}
-        onToggleTaskQueue={() => setShowTaskQueue(v => !v)}
+        onToggleTaskQueue={() => {
+          setShowCost(false)
+          setShowTaskQueue(v => !v)
+        }}
+        costOpen={showCost}
+        onToggleCost={() => {
+          setShowTaskQueue(false)
+          setShowCost(v => !v)
+        }}
       />
 
       {/* Canvas area */}
@@ -110,8 +120,9 @@ export default function CanvasEditor() {
           runningPhase={runningPhase}
           pollData={pollData}
           onNodeClick={(nodeId, nodeType) => {
-            // 选中节点时关闭任务队列面板，避免两个右侧面板重叠
+            // 选中节点时关闭右侧浮层面板，避免重叠
             setShowTaskQueue(false)
+            setShowCost(false)
             setSelectedNode(selectedNode?.id === nodeId ? null : { id: nodeId, type: nodeType })
           }}
         />
@@ -122,6 +133,14 @@ export default function CanvasEditor() {
             pollData={pollData}
             project={project}
             onClose={() => setShowTaskQueue(false)}
+          />
+        )}
+
+        {/* Cost panel — 项目级成本 rollup 与按阶段拆分（beta 期间暂未计费） */}
+        {showCost && (
+          <CostPanel
+            pollData={pollData}
+            onClose={() => setShowCost(false)}
           />
         )}
 
