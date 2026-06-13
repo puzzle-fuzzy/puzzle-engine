@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@excuse/billing": "workspace:*",
+    "@excuse/canvas-engine": "workspace:*",
     "@excuse/db": "workspace:*",
     "@excuse/provider": "workspace:*",
     "@excuse/shared": "workspace:*",

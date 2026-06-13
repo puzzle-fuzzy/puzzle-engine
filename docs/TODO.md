@@ -614,7 +614,7 @@
 
 ### 10. 新增 `packages/workflow-engine` 和 `packages/task-engine`
 
-状态：部分完成，`packages/task-engine` 已完成 retry/error 分类、retry/fail 决策和 handler registry 基础拆分（commit：`2c0d727`、`refactor(task-engine): add handler registry`、`refactor(task-engine): centralize failure action decisions`），`packages/workflow-engine` 已完成 Canvas phase 顺序、task type 映射、自动推进决策的基础拆分（commit：`refactor(workflow-engine): extract canvas phase rules`）。剩余：worker 仍负责 DB 适配、run/task 创建，且 Canvas handler 仍动态加载 server service，后续需要继续抽 Canvas domain service。
+状态：部分完成，`packages/task-engine` 已完成 retry/error 分类、retry/fail 决策和 handler registry 基础拆分（commit：`2c0d727`、`refactor(task-engine): add handler registry`、`refactor(task-engine): centralize failure action decisions`），`packages/workflow-engine` 已完成 Canvas phase 顺序、task type 映射、自动推进决策的基础拆分（commit：`refactor(workflow-engine): extract canvas phase rules`）。`canvas.continuity` 已从 worker 动态 server service 调用中移除，改为 worker 直接调用 `@excuse/canvas-engine` 规则执行（commit：`refactor(worker): execute canvas continuity without server service`）。剩余：worker 仍负责 DB 适配、run/task 创建，且部分 Canvas handler 仍动态加载 server service，后续需要继续抽 Canvas domain service。
 
 当前迹象：
 
@@ -627,7 +627,7 @@
 - 将 task definition、retry policy、task dispatch contract、claim/retry/cancel 状态机抽为 `packages/task-engine`。基础 retry policy、failure action decision 和 handler registry 已完成，剩余 DB claim/cancel adapter 继续推进。
 - 将 workflow step definition、advance logic、batch partial success、pause/cancel/resume 抽为 `packages/workflow-engine`。基础 Canvas phase/advance decision 已完成，剩余 batch partial success、pause/cancel/resume 与 handler registry 继续推进。
 - worker 只注册 handler 并运行 engine。基础 handler registry 已完成，worker task dispatch 已从 switch 改为 registry。
-- Canvas phase 的纯业务逻辑从 server modules 拆到 package 或 domain service，worker 不再动态 import server 文件。
+- Canvas phase 的纯业务逻辑从 server modules 拆到 package 或 domain service，worker 不再动态 import server 文件。`canvas.continuity` 已完成 worker 去 server service，剩余 analyze/characters/locations/refs/storyboard/rebuild/videos 继续迁移。
 
 验收：
 
