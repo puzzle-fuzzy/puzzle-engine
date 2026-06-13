@@ -1,5 +1,11 @@
 import type { OSSConfig } from '@excuse/provider'
-import { generateCanvasImageAsset } from '@excuse/canvas-runtime'
+import {
+  buildCharacterPortraitPrompt,
+  buildCharacterTurnaroundPrompt,
+  buildLocationRefPrompt,
+  generateCharacterRefAssets,
+  generateLocationRefAsset,
+} from '@excuse/canvas-runtime'
 import {
   createCanvasAsset,
   getCanvasProjectDetail,
@@ -7,8 +13,6 @@ import {
   markCanvasAssetRunning,
   markPipelineRunRunning,
   markPipelineRunSucceeded,
-  updateCanvasCharacter,
-  updateCanvasLocation,
   updateCanvasProject,
 } from '@excuse/db'
 import { AssetStorage, getModelById } from '@excuse/provider'
@@ -37,8 +41,8 @@ export async function generateCharacterRefs(projectId: string, config: { dashsco
       continue
 
     notifyNode(accountId, projectId, 'character', char.id, 'running', undefined, undefined, runId)
-    const portraitPrompt = `${char.identityPrompt}, portrait photo, neutral expression, solid background, front view, high quality`
-    const turnaroundPrompt = `${char.identityPrompt}, character turnaround sheet showing front view, side view, and back view, white background, character design sheet`
+    const portraitPrompt = buildCharacterPortraitPrompt(char.identityPrompt)
+    const turnaroundPrompt = buildCharacterTurnaroundPrompt(char.identityPrompt)
 
     // ── 为角色肖像创建 canvas_asset ──────────────────
     const portraitAsset = await createCanvasAsset({
@@ -68,35 +72,15 @@ export async function generateCharacterRefs(projectId: string, config: { dashsco
       await markCanvasAssetRunning(portraitAsset.id)
       await markCanvasAssetRunning(turnaroundAsset.id)
 
-      const portrait = await generateCanvasImageAsset({
-        assetId: portraitAsset.id,
+      await generateCharacterRefAssets({
+        character: char,
+        portraitAssetId: portraitAsset.id,
+        turnaroundAssetId: turnaroundAsset.id,
         imageModel,
         imageModelConfig,
-        prompt: portraitPrompt,
-        subDir: `canvas/${char.id}`,
-        prefix: 'portrait',
-        errorMessage: '角色肖像生成失败',
         client,
         storage,
       })
-
-      if (portrait)
-        await updateCanvasCharacter(char.id, { referenceImageUrl: portrait.publicUrl })
-
-      const turnaround = await generateCanvasImageAsset({
-        assetId: turnaroundAsset.id,
-        imageModel,
-        imageModelConfig,
-        prompt: turnaroundPrompt,
-        subDir: `canvas/${char.id}`,
-        prefix: 'turnaround',
-        errorMessage: '角色三视图生成失败',
-        client,
-        storage,
-      })
-
-      if (turnaround)
-        await updateCanvasCharacter(char.id, { turnaroundSheetUrl: turnaround.publicUrl })
 
       notifyNode(accountId, projectId, 'character', char.id, 'completed', undefined, undefined, runId)
     }
@@ -138,7 +122,7 @@ export async function generateLocationRefs(projectId: string, config: { dashscop
       continue
 
     notifyNode(accountId, projectId, 'location', loc.id, 'running', undefined, undefined, runId)
-    const prompt = `${loc.scenePrompt}, establishing shot, wide angle, cinematic lighting, no people, no characters, empty scene, uninhabited`
+    const prompt = buildLocationRefPrompt(loc.scenePrompt)
 
     // ── 为场景参考图创建 canvas_asset ──────────────────
     const refAsset = await createCanvasAsset({
@@ -156,20 +140,14 @@ export async function generateLocationRefs(projectId: string, config: { dashscop
       // ── 标记资产为运行状态 ──────────────────────────
       await markCanvasAssetRunning(refAsset.id)
 
-      const generated = await generateCanvasImageAsset({
-        assetId: refAsset.id,
+      await generateLocationRefAsset({
+        location: loc,
+        refAssetId: refAsset.id,
         imageModel,
         imageModelConfig,
-        prompt,
-        subDir: `canvas/${loc.id}`,
-        prefix: 'ref',
-        errorMessage: '场景参考图生成失败',
         client,
         storage,
       })
-
-      if (generated)
-        await updateCanvasLocation(loc.id, { referenceImageUrl: generated.publicUrl })
 
       notifyNode(accountId, projectId, 'location', loc.id, 'completed', undefined, undefined, runId)
     }

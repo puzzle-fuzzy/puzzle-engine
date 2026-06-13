@@ -1,4 +1,4 @@
-import { submitCanvasShotVideo } from '@excuse/canvas-runtime'
+import { submitCanvasShotVideo, submitShotVideoEntity } from '@excuse/canvas-runtime'
 import {
   createCanvasAsset,
   getCanvasProjectDetail,
@@ -26,8 +26,6 @@ export async function generateVideos(projectId: string, config: { dashscopeApiKe
 
   const accountId = detail.project.accountId
   const client = createClient(config)
-  const characterMap = new Map(detail.characters.map(c => [c.id, c]))
-  const locationMap = new Map(detail.locations.map(l => [l.id, l]))
 
   if (runId)
     await markPipelineRunRunning(runId)
@@ -55,25 +53,15 @@ export async function generateVideos(projectId: string, config: { dashscopeApiKe
     await markCanvasAssetRunning(shotVideoAsset.id)
 
     try {
-      const charRefUrls = shot.characterIdsJson
-        .map(id => characterMap.get(id)?.referenceImageUrl)
-        .filter(Boolean) as string[]
-      const locRefUrl = shot.locationId
-        ? locationMap.get(shot.locationId)?.referenceImageUrl ?? null
-        : null
-      const referenceUrls = [...charRefUrls, ...(locRefUrl ? [locRefUrl] : [])]
-
-      const model = getVideoModel(detail.project.modelPreferencesJson, referenceUrls)
-      await submitCanvasShotVideo({
-        accountId,
+      await submitShotVideoEntity({
         projectId,
+        accountId,
         shotId: shot.id,
         assetId: shotVideoAsset.id,
-        model,
-        videoPrompt: shot.videoPrompt,
-        negativePrompt: shot.negativePrompt,
-        duration: shot.duration,
-        referenceUrls,
+        shot,
+        characters: detail.characters,
+        locations: detail.locations,
+        modelPreferences: detail.project.modelPreferencesJson,
         client,
       })
       hasAnyVideo = true

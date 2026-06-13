@@ -1,10 +1,13 @@
 import type { WorkerConfig } from './config'
-import { generateCanvasImageAsset } from '@excuse/canvas-runtime'
+import {
+  buildCharacterPortraitPrompt,
+  buildCharacterTurnaroundPrompt,
+  generateCharacterRefAssets,
+} from '@excuse/canvas-runtime'
 import {
   createCanvasAsset,
   markCanvasAssetFailed,
   markCanvasAssetRunning,
-  updateCanvasCharacter,
   updateCanvasProject,
 } from '@excuse/db'
 import {
@@ -16,18 +19,6 @@ import {
   getImageModel,
   loadRunnableCanvasProject,
 } from './canvas-execution'
-
-interface CharacterRefSpec {
-  assetId: string
-  characterId: string
-  imageModel: string
-  imageModelConfig: NonNullable<ReturnType<typeof getModelById>>
-  prompt: string
-  prefix: string
-  updateField: 'referenceImageUrl' | 'turnaroundSheetUrl'
-  client: ReturnType<typeof createDashScopeClient>
-  storage: AssetStorage
-}
 
 export interface CanvasCharacterRefsResult extends Record<string, unknown> {
   phase: 'characterRefs'
@@ -68,8 +59,8 @@ export async function executeCanvasCharacterRefs(
 
     charactersProcessed += 1
 
-    const portraitPrompt = `${character.identityPrompt}, portrait photo, neutral expression, solid background, front view, high quality`
-    const turnaroundPrompt = `${character.identityPrompt}, character turnaround sheet showing front view, side view, and back view, white background, character design sheet`
+    const portraitPrompt = buildCharacterPortraitPrompt(character.identityPrompt)
+    const turnaroundPrompt = buildCharacterTurnaroundPrompt(character.identityPrompt)
 
     const portraitAsset = await createCanvasAsset({
       accountId,
@@ -97,32 +88,18 @@ export async function executeCanvasCharacterRefs(
       await markCanvasAssetRunning(portraitAsset.id)
       await markCanvasAssetRunning(turnaroundAsset.id)
 
-      const portraitCreated = await generateCharacterRef({
-        assetId: portraitAsset.id,
-        characterId: character.id,
+      const { portraitUrl, turnaroundUrl } = await generateCharacterRefAssets({
+        character,
+        portraitAssetId: portraitAsset.id,
+        turnaroundAssetId: turnaroundAsset.id,
         imageModel,
         imageModelConfig,
-        prompt: portraitPrompt,
-        prefix: 'portrait',
-        updateField: 'referenceImageUrl',
         client,
         storage,
       })
-      if (portraitCreated)
+      if (portraitUrl)
         portraitsCreated += 1
-
-      const turnaroundCreated = await generateCharacterRef({
-        assetId: turnaroundAsset.id,
-        characterId: character.id,
-        imageModel,
-        imageModelConfig,
-        prompt: turnaroundPrompt,
-        prefix: 'turnaround',
-        updateField: 'turnaroundSheetUrl',
-        client,
-        storage,
-      })
-      if (turnaroundCreated)
+      if (turnaroundUrl)
         turnaroundsCreated += 1
     }
     catch (error) {
@@ -144,23 +121,4 @@ export async function executeCanvasCharacterRefs(
     portraitsCreated,
     turnaroundsCreated,
   }
-}
-
-async function generateCharacterRef(args: CharacterRefSpec): Promise<boolean> {
-  const generated = await generateCanvasImageAsset({
-    assetId: args.assetId,
-    imageModel: args.imageModel,
-    imageModelConfig: args.imageModelConfig,
-    prompt: args.prompt,
-    subDir: `canvas/${args.characterId}`,
-    prefix: args.prefix,
-    errorMessage: '角色参考图生成失败',
-    client: args.client,
-    storage: args.storage,
-  })
-  if (!generated)
-    return false
-
-  await updateCanvasCharacter(args.characterId, { [args.updateField]: generated.publicUrl })
-  return true
 }

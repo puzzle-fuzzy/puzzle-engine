@@ -1,5 +1,5 @@
 import type { WorkerConfig } from './config'
-import { submitCanvasShotVideo } from '@excuse/canvas-runtime'
+import { submitShotVideoEntity } from '@excuse/canvas-runtime'
 import {
   createCanvasAsset,
   markCanvasAssetFailed,
@@ -31,8 +31,6 @@ export async function executeCanvasVideos(
   const project = detail.project
   const accountId = project.accountId
   const client = createDashScopeClient(workerConfig)
-  const characterMap = new Map(detail.characters.map(character => [character.id, character]))
-  const locationMap = new Map(detail.locations.map(location => [location.id, location]))
   let shotsSubmitted = 0
   let shotsSkipped = 0
   let shotsFailed = 0
@@ -58,25 +56,15 @@ export async function executeCanvasVideos(
     await markCanvasAssetRunning(shotVideoAsset.id)
 
     try {
-      const characterReferenceUrls = shot.characterIdsJson
-        .map(id => characterMap.get(id)?.referenceImageUrl)
-        .filter((url): url is string => Boolean(url))
-      const locationReferenceUrl = shot.locationId
-        ? locationMap.get(shot.locationId)?.referenceImageUrl ?? null
-        : null
-      const referenceUrls = [...characterReferenceUrls, ...(locationReferenceUrl ? [locationReferenceUrl] : [])]
-      const model = getVideoModel(project.modelPreferencesJson, referenceUrls)
-
-      await submitCanvasShotVideo({
-        accountId,
+      await submitShotVideoEntity({
         projectId,
+        accountId,
         shotId: shot.id,
         assetId: shotVideoAsset.id,
-        model,
-        videoPrompt: shot.videoPrompt,
-        negativePrompt: shot.negativePrompt,
-        duration: shot.duration,
-        referenceUrls,
+        shot,
+        characters: detail.characters,
+        locations: detail.locations,
+        modelPreferences: project.modelPreferencesJson,
         client,
       })
 

@@ -1,10 +1,9 @@
 import type { WorkerConfig } from './config'
-import { generateCanvasImageAsset } from '@excuse/canvas-runtime'
+import { buildLocationRefPrompt, generateLocationRefAsset } from '@excuse/canvas-runtime'
 import {
   createCanvasAsset,
   markCanvasAssetFailed,
   markCanvasAssetRunning,
-  updateCanvasLocation,
   updateCanvasProject,
 } from '@excuse/db'
 import {
@@ -53,7 +52,7 @@ export async function executeCanvasLocationRefs(
     }
 
     locationsProcessed += 1
-    const prompt = `${location.scenePrompt}, establishing shot, wide angle, cinematic lighting, no people, no characters, empty scene, uninhabited`
+    const prompt = buildLocationRefPrompt(location.scenePrompt)
 
     const refAsset = await createCanvasAsset({
       accountId,
@@ -69,22 +68,16 @@ export async function executeCanvasLocationRefs(
     try {
       await markCanvasAssetRunning(refAsset.id)
 
-      const generated = await generateCanvasImageAsset({
-        assetId: refAsset.id,
+      const { refUrl } = await generateLocationRefAsset({
+        location,
+        refAssetId: refAsset.id,
         imageModel,
         imageModelConfig,
-        prompt,
-        subDir: `canvas/${location.id}`,
-        prefix: 'ref',
-        errorMessage: '场景参考图生成失败',
         client,
         storage,
       })
-      if (!generated)
-        continue
-
-      await updateCanvasLocation(location.id, { referenceImageUrl: generated.publicUrl })
-      refsCreated += 1
+      if (refUrl)
+        refsCreated += 1
     }
     catch (error) {
       locationsFailed += 1
