@@ -23,5 +23,12 @@ function killPort(port: number) {
   }
 }
 
-killPort(5007)
-killPort(8007)
+const ports = [
+  Number(process.env.PORT) || 5007,
+  Number(process.env.VITE_PORT) || 8007,
+  Number(process.env.WORKER_HEALTH_PORT) || 5100,
+]
+
+for (const port of new Set(ports)) {
+  killPort(port)
+}
