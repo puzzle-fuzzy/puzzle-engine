@@ -23,8 +23,8 @@ import { createLogger } from '@excuse/shared'
 import {
   CANVAS_PAUSE_BEFORE,
   CANVAS_PHASE_ORDER,
+  createNextCanvasPipelineTask,
   decideCanvasAutoAdvance,
-  phaseToTaskType,
 } from '@excuse/workflow-engine'
 
 const logger = createLogger('pipeline-stepper')
@@ -86,29 +86,20 @@ export async function advancePipelineAfterTaskSuccess(
     return null
   }
 
-  // 7. 创建 pipeline_run + task + 链接
   try {
-    const run = await createPipelineRun({
+    const result = await createNextCanvasPipelineTask({
       projectId,
-      phase: nextPhase,
-      createdBy: accountId,
-    })
-
-    const taskType = phaseToTaskType(nextPhase)
-    const newTask = await createTask({
       accountId,
-      type: taskType,
-      domain: 'canvas',
-      priority: 5,
-      projectId,
-      targetType: 'pipeline_run',
-      targetId: run.id,
+      nextPhase,
+      adapter: {
+        createPipelineRun,
+        createTask,
+        linkPipelineRunToTask,
+      },
     })
 
-    await linkPipelineRunToTask(run.id, newTask.id)
-
-    logger.info({ projectId, currentPhase, nextPhase, runId: run.id, taskId: newTask.id }, 'pipeline auto-advanced to next phase')
-    return newTask.id
+    logger.info({ projectId, currentPhase, nextPhase, runId: result.runId, taskId: result.taskId }, 'pipeline auto-advanced to next phase')
+    return result.taskId
   }
   catch (err) {
     logger.error({ err, projectId, nextPhase }, 'failed to auto-advance pipeline')

@@ -30,6 +30,37 @@ export interface CanvasAutoAdvanceDecision {
   reason?: CanvasAutoAdvanceSkipReason
 }
 
+export interface CanvasPipelineTaskAdapter<TRun extends { id: string }, TTask extends { id: string }> {
+  createPipelineRun: (values: {
+    projectId: string
+    phase: CanvasPipelinePhase
+    createdBy: string
+  }) => Promise<TRun> | TRun
+  createTask: (values: {
+    accountId: string
+    type: `canvas.${CanvasPipelinePhase}`
+    domain: 'canvas'
+    priority: number
+    projectId: string
+    targetType: 'pipeline_run'
+    targetId: string
+  }) => Promise<TTask> | TTask
+  linkPipelineRunToTask: (runId: string, taskId: string) => Promise<unknown> | unknown
+}
+
+export interface CreateNextCanvasPipelineTaskInput<TRun extends { id: string }, TTask extends { id: string }> {
+  projectId: string
+  accountId: string
+  nextPhase: CanvasPipelinePhase
+  adapter: CanvasPipelineTaskAdapter<TRun, TTask>
+}
+
+export interface CreateNextCanvasPipelineTaskResult {
+  runId: string
+  taskId: string
+  taskType: `canvas.${CanvasPipelinePhase}`
+}
+
 export const CANVAS_PHASE_ORDER: readonly CanvasPipelinePhase[] = [
   'analyze',
   'characters',
@@ -49,6 +80,35 @@ export const CANVAS_PAUSE_BEFORE: ReadonlySet<CanvasPipelinePhase> = new Set([
 
 export function phaseToTaskType(phase: CanvasPipelinePhase): `canvas.${CanvasPipelinePhase}` {
   return `canvas.${phase}`
+}
+
+export async function createNextCanvasPipelineTask<TRun extends { id: string }, TTask extends { id: string }>(
+  input: CreateNextCanvasPipelineTaskInput<TRun, TTask>,
+): Promise<CreateNextCanvasPipelineTaskResult> {
+  const run = await input.adapter.createPipelineRun({
+    projectId: input.projectId,
+    phase: input.nextPhase,
+    createdBy: input.accountId,
+  })
+
+  const taskType = phaseToTaskType(input.nextPhase)
+  const task = await input.adapter.createTask({
+    accountId: input.accountId,
+    type: taskType,
+    domain: 'canvas',
+    priority: 5,
+    projectId: input.projectId,
+    targetType: 'pipeline_run',
+    targetId: run.id,
+  })
+
+  await input.adapter.linkPipelineRunToTask(run.id, task.id)
+
+  return {
+    runId: run.id,
+    taskId: task.id,
+    taskType,
+  }
 }
 
 export function getCanvasPhaseFromTaskType(taskType: string): CanvasPipelinePhase | null {
