@@ -19,6 +19,7 @@ import {
   pgClient,
 } from '@excuse/db'
 import { createLogger } from '@excuse/shared'
+import { executeCanvasAnalysis } from './canvas-analysis'
 import { executeCanvasContinuity } from './canvas-continuity'
 import { executeCanvasRebuild } from './canvas-rebuild'
 import { executeCanvasStoryboard } from './canvas-storyboard'
@@ -47,7 +48,6 @@ function storageConfig(workerConfig: WorkerConfig) {
 // Types match actual server function signatures for safe dynamic loading.
 
 interface CanvasServiceModule {
-  analyzeProject: (projectId: string, config: { dashscopeApiKey: string, dashscopeBaseUrl?: string }, runId?: string) => Promise<void>
   generateCharacters: (projectId: string, config: { dashscopeApiKey: string, dashscopeBaseUrl?: string }, runId?: string) => Promise<void>
   generateLocations: (projectId: string, config: { dashscopeApiKey: string, dashscopeBaseUrl?: string }, runId?: string) => Promise<void>
   generateCharacterRefs: (projectId: string, config: { dashscopeApiKey: string, dashscopeBaseUrl?: string, storageRoot: string, oss: any }, runId?: string) => Promise<void>
@@ -153,9 +153,9 @@ function getService(): CanvasServiceModule {
 export async function handleCanvasAnalyze(task: TaskRow, workerConfig: WorkerConfig): Promise<Record<string, unknown>> {
   const projectId = task.projectId!
   const runId = await markRunRunningAndNotify(task)
-  await getService().analyzeProject(projectId, providerConfig(workerConfig), runId ?? undefined)
-  await markRunSucceededAndNotify(task)
-  return { phase: 'analyze', projectId }
+  const result = await executeCanvasAnalysis(projectId, workerConfig, runId ?? undefined)
+  await markRunSucceededAndNotify(task, result)
+  return result
 }
 
 export async function handleCanvasCharacters(task: TaskRow, workerConfig: WorkerConfig): Promise<Record<string, unknown>> {

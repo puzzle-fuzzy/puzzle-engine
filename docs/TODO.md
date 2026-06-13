@@ -109,12 +109,21 @@
   - `autoProgress=true` → 创建 pipeline_run + task（Worker 执行）
   - `autoProgress=false` → 保持 fire-and-forget 模式（向后兼容）
 - model-preferences PATCH 支持 `autoProgress` 字段，commit：`095d151`
+- 前端 "自动执行全部"按钮设置 `autoProgress=true` 后只触发 phase 1（analyze），commit：`b123756`
+- 暂停阶段（storyboard、videos）前端确认按钮已实现，commit：`d73cd15`
+  - PipelineController 用 `pendingConfirmIdx` 状态替代倒计时自动触发
+  - 显示 "确认继续 → [阶段]" + "暂不执行" 按钮
+  - 页面刷新后根据项目状态（refs_all_ready / prompts_ready）恢复确认提示
+  - 所有 8 个 phase 路由支持 `autoProgress` task-driven 模式，commit：`d73cd15`
+- 暂停、继续、终止、重试失败阶段已实现，commit：`e3dbccb`
+  - `POST /projects/:projectId/cancel-active` 终止活跃 pipeline run + 关联 task + 活跃 canvas_assets
+  - 前端 "终止当前阶段" 按钮
+  - 失败阶段可单独重试（handleRunFrom 已支持 failedPhaseIdx）
+  - 暂停 = PAUSE_BEFORE 确认提示，继续 = 确认按钮触发
 
 待办：
 
-- 前端 “自动执行全部”按钮设置 `autoProgress=true` 后只触发 phase 1（analyze）。
-- 暂停阶段（storyboard、videos）前端需要确认按钮才能继续。
-- 支持暂停、继续、终止、重试失败阶段。
+- 暂无。
 
 验收：
 
@@ -135,13 +144,14 @@
 - `activeTasks` 已扩展包含 canvas_asset 条目（text/image/video × character/location/shot/project），commit：`0a79421`
 - Worker 视频任务成功时标记 `shotVideo` canvas_asset 为 succeeded + setCanvasAssetActive，commit：`0a79421`
 - Worker 视频任务失败/超时时标记 `shotVideo` canvas_asset 为 failed，commit：`0a79421`
+- 前端 CharacterNode/LocationNode 在 activeImageTaskIds 非空时显示"正在生成" spinner，commit：`d783551`
+- 前端支持用户查看同一镜头的历史图片和历史视频（AssetHistory 组件），commit：`67f9548`
+- 前端支持用户锁定满意角色图或场景图，后续生成不自动覆盖，commit：`67f9548`
+- 暂停阶段（storyboard、videos）前端确认按钮已实现，commit：`d73cd15`
 
 待办：
 
-- 前端 CharacterNode/LocationNode 在 activeImageTaskIds 非空时显示"正在生成" spinner。
-- 前端支持用户查看同一镜头的历史图片和历史视频。
-- 前端支持用户锁定满意角色图或场景图，后续生成不自动覆盖。
-- 暂停阶段（storyboard、videos）前端需要确认按钮才能继续。
+- 暂无。
 
 验收：
 
@@ -165,13 +175,19 @@
   - continuity-rebuild → `continuityReport` + `videoPrompt` per shot
   - videos → `shotVideo` per shot（保持 running 直到 Worker 完成）
   - regenerate → 按实体类型创建对应 asset
+- asset polling 接口从 `canvas_assets` 表填充 `activeImageTaskIds`，commit：`0a79421`
+- Worker 完成视频任务时标记对应 `shotVideo` canvas_asset 为 succeeded，commit：`0a79421`
+- 前端支持用户查看同一镜头的历史图片和历史视频，commit：`67f9548`
+  - `GET /assets/:targetEntityType/:targetEntityId` 查询历史资产
+  - AssetHistory 组件在 NodeDetailPanel 中展示角色肖像/转面图、场景参考图、镜头视频的历史版本
+- 前端支持用户锁定满意角色图或场景图，后续生成不自动覆盖，commit：`67f9548`
+  - `PATCH /asset/:assetId/lock` 切换锁定状态
+  - `PATCH /asset/:assetId/activate` 切换当前活跃版本
+  - 锁定版本显示 🔒 标记，活跃版本显示绿色边框 + "当前版本" 标签
 
 待办：
 
-- asset polling 接口需要从 `canvas_assets` 表填充 `activeImageTaskIds`（当前为空数组）。
-- Worker 完成视频任务时需标记对应 `shotVideo` canvas_asset 为 succeeded。
-- 前端支持用户查看同一镜头的历史图片和历史视频。
-- 前端支持用户锁定满意角色图或场景图，后续生成不自动覆盖。
+- 暂无。
 
 验收：
 
@@ -181,12 +197,21 @@
 
 ### 4. 用户可理解的状态面板
 
+已完成：
+
+- CanvasStatusBar 组件已实现，commit：`cb0fd99`
+  - 项目状态：中文翻译标签 + 颜色编码（草稿/已分析/角色已生成/.../已完成/失败）
+  - 当前运行阶段 + 模型名（如 "正在生成角色 · 千问 3.7 Plus"）
+  - PAUSE_BEFORE 待确认提示（"⏸ 待确认：分镜"）
+  - 阶段进度计数（"阶段 3/8"）
+  - 活跃任务计数（"任务 2（文本 1 · 图片 1）"）
+  - 连接状态：SSE 实时同步 / 轮询同步中 / 连接断开
+  - 最后数据更新时间
+
 待办：
 
-- Canvas 顶部显示当前阶段、已完成数量、失败数量、进行中数量。
-- 显示连接状态：SSE 正常、轮询中、已断开、最后更新时间。
 - 增加任务队列面板：任务类型、目标对象、状态、重试次数、错误摘要。
-- 增加失败原因和下一步建议。
+- 增加失败原因和下一步建议（区分 provider / 网络 / 存储 / 余额 / 取消 / 系统错误）。
 
 验收：
 
@@ -614,7 +639,7 @@
 
 ### 10. 新增 `packages/workflow-engine` 和 `packages/task-engine`
 
-状态：部分完成，`packages/task-engine` 已完成 retry/error 分类、retry/fail 决策和 handler registry 基础拆分（commit：`2c0d727`、`refactor(task-engine): add handler registry`、`refactor(task-engine): centralize failure action decisions`），`packages/workflow-engine` 已完成 Canvas phase 顺序、task type 映射、自动推进决策的基础拆分（commit：`refactor(workflow-engine): extract canvas phase rules`）。`canvas.storyboard`、`canvas.continuity`、`canvas.rebuild` 已从 worker 动态 server service 调用中移除，改为 worker 直接调用 `@excuse/prompt-engine` / `@excuse/canvas-engine` 执行（commit：`refactor(worker): execute canvas storyboard without server service`、`refactor(worker): execute canvas continuity without server service`、`refactor(worker): execute canvas rebuild without server service`），并已抽出 worker Canvas execution helpers 复用项目加载、资产状态和标准化 mapper（commit：`refactor(worker): share canvas execution helpers`）。剩余：worker 仍负责 DB 适配、run/task 创建，且部分 Canvas handler 仍动态加载 server service，后续需要继续抽 Canvas domain service。
+状态：部分完成，`packages/task-engine` 已完成 retry/error 分类、retry/fail 决策和 handler registry 基础拆分（commit：`2c0d727`、`refactor(task-engine): add handler registry`、`refactor(task-engine): centralize failure action decisions`），`packages/workflow-engine` 已完成 Canvas phase 顺序、task type 映射、自动推进决策的基础拆分（commit：`refactor(workflow-engine): extract canvas phase rules`）。`canvas.analyze`、`canvas.storyboard`、`canvas.continuity`、`canvas.rebuild` 已从 worker 动态 server service 调用中移除，改为 worker 直接调用 `@excuse/prompt-engine` / `@excuse/canvas-engine` 执行（commit：`refactor(worker): execute canvas analysis without server service`、`refactor(worker): execute canvas storyboard without server service`、`refactor(worker): execute canvas continuity without server service`、`refactor(worker): execute canvas rebuild without server service`），并已抽出 worker Canvas execution helpers 复用项目加载、资产状态和标准化 mapper（commit：`refactor(worker): share canvas execution helpers`）。剩余：worker 仍负责 DB 适配、run/task 创建，且部分 Canvas handler 仍动态加载 server service，后续需要继续抽 Canvas domain service。
 
 当前迹象：
 
@@ -627,7 +652,7 @@
 - 将 task definition、retry policy、task dispatch contract、claim/retry/cancel 状态机抽为 `packages/task-engine`。基础 retry policy、failure action decision 和 handler registry 已完成，剩余 DB claim/cancel adapter 继续推进。
 - 将 workflow step definition、advance logic、batch partial success、pause/cancel/resume 抽为 `packages/workflow-engine`。基础 Canvas phase/advance decision 已完成，剩余 batch partial success、pause/cancel/resume 与 handler registry 继续推进。
 - worker 只注册 handler 并运行 engine。基础 handler registry 已完成，worker task dispatch 已从 switch 改为 registry。
-- Canvas phase 的纯业务逻辑从 server modules 拆到 package 或 domain service，worker 不再动态 import server 文件。`canvas.storyboard`、`canvas.continuity`、`canvas.rebuild` 已完成 worker 去 server service，剩余 analyze/characters/locations/refs/videos 继续迁移。
+- Canvas phase 的纯业务逻辑从 server modules 拆到 package 或 domain service，worker 不再动态 import server 文件。`canvas.analyze`、`canvas.storyboard`、`canvas.continuity`、`canvas.rebuild` 已完成 worker 去 server service，剩余 characters/locations/refs/videos 继续迁移。
 
 验收：
 
