@@ -43,14 +43,18 @@ import {
   createPipelineRun,
   createTask,
   findActiveRunForPhase,
+  getCanvasAssetById,
   getCanvasCharacterForAccount,
   getCanvasLocationForAccount,
   getCanvasProjectByIdForAccount,
   getCanvasShotForAccount,
   getPipelineRunById,
   linkPipelineRunToTask,
+  listCanvasAssetsByTarget,
   listPipelineRunsByProject,
   markPipelineRunCancelled,
+  setCanvasAssetActive,
+  setCanvasAssetLocked,
   updateCanvasProject,
 } from '@excuse/db'
 import { createLogger } from '@excuse/shared'
@@ -686,5 +690,100 @@ export function createCanvasRoutes(config: ServerConfig) {
         logger.error({ err, shotId }, 'regenerate shot video failed')
       })
       return acceptedResponse()
+    })
+
+    // ===== 资产历史与选择 =====
+
+    // 查询目标实体（角色/场景/镜头/项目）的历史资产
+    .get('/assets/:targetEntityType/:targetEntityId', async ({ params: { targetEntityType, targetEntityId }, userId, set }) => {
+      // 权限校验：通过实体归属检查
+      if (targetEntityType === 'character') {
+        const character = await getCanvasCharacterForAccount(targetEntityId, userId)
+        if (!character)
+          return notFound(set, '角色不存在或无权访问')
+      }
+      else if (targetEntityType === 'location') {
+        const location = await getCanvasLocationForAccount(targetEntityId, userId)
+        if (!location)
+          return notFound(set, '场景不存在或无权访问')
+      }
+      else if (targetEntityType === 'shot') {
+        const shot = await getCanvasShotForAccount(targetEntityId, userId)
+        if (!shot)
+          return notFound(set, '镜头不存在或无权访问')
+      }
+      else {
+        return validationError(set, '不支持的实体类型')
+      }
+
+      const assets = await listCanvasAssetsByTarget(targetEntityType, targetEntityId)
+      return { success: true, data: assets }
+    })
+
+    // 切换资产为当前活跃版本（同时取消其他同类别资产的 isActive）
+    .patch('/asset/:assetId/activate', async ({ params: { assetId }, userId, set }) => {
+      const asset = await getCanvasAssetById(assetId)
+      if (!asset)
+        return notFound(set, '资产不存在')
+
+      // 权限校验：通过实体归属间接验证
+      if (asset.targetEntityType === 'character') {
+        const character = await getCanvasCharacterForAccount(asset.targetEntityId, userId)
+        if (!character)
+          return notFound(set, '无权访问此资产')
+      }
+      else if (asset.targetEntityType === 'location') {
+        const location = await getCanvasLocationForAccount(asset.targetEntityId, userId)
+        if (!location)
+          return notFound(set, '无权访问此资产')
+      }
+      else if (asset.targetEntityType === 'shot') {
+        const shot = await getCanvasShotForAccount(asset.targetEntityId, userId)
+        if (!shot)
+          return notFound(set, '无权访问此资产')
+      }
+
+      if (asset.status !== 'succeeded')
+        return conflict(set, '只能将成功完成的资产设为活跃版本')
+
+      const updated = await setCanvasAssetActive(assetId)
+      if (!updated)
+        return notFound(set, '资产激活失败')
+
+      return { success: true, data: updated }
+    })
+
+    // 切换资产锁定状态（锁定后不会被后续生成自动覆盖）
+    .patch('/asset/:assetId/lock', async ({ params: { assetId }, body, userId, set }) => {
+      const asset = await getCanvasAssetById(assetId)
+      if (!asset)
+        return notFound(set, '资产不存在')
+
+      // 权限校验
+      if (asset.targetEntityType === 'character') {
+        const character = await getCanvasCharacterForAccount(asset.targetEntityId, userId)
+        if (!character)
+          return notFound(set, '无权访问此资产')
+      }
+      else if (asset.targetEntityType === 'location') {
+        const location = await getCanvasLocationForAccount(asset.targetEntityId, userId)
+        if (!location)
+          return notFound(set, '无权访问此资产')
+      }
+      else if (asset.targetEntityType === 'shot') {
+        const shot = await getCanvasShotForAccount(asset.targetEntityId, userId)
+        if (!shot)
+          return notFound(set, '无权访问此资产')
+      }
+
+      const updated = await setCanvasAssetLocked(assetId, body.locked)
+      if (!updated)
+        return notFound(set, '资产更新失败')
+
+      return { success: true, data: updated }
+    }, {
+      body: t.Object({
+        locked: t.Boolean(),
+      }),
     })
 }

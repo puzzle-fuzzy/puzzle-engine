@@ -2,6 +2,7 @@ import type { ProjectDTO } from '@excuse/shared'
 import { useCallback, useState } from 'react'
 import { toast } from 'sonner'
 import { deleteCanvasCharacter, deleteCanvasLocation, deleteCanvasShot, regenerateCanvasCharacter, regenerateCanvasLocation, regenerateCanvasShot, retryCanvasShot, updateCanvasCharacter, updateCanvasLocation, updateCanvasProject, updateCanvasShot, uploadFile } from '../../api/client'
+import AssetHistory from './AssetHistory'
 import { Button } from '../ui/button'
 import { ConfirmDialog } from '../ui/confirm-dialog'
 import { Input } from '../ui/input'
@@ -275,6 +276,14 @@ export default function NodeDetailPanel({ selectedNode, project, onUpdate }: Nod
             </div>
           )}
 
+          {/* 镜头资产历史 — 视频 */}
+          <AssetHistory
+            targetEntityType="shot"
+            targetEntityId={shot.id}
+            category="shotVideo"
+            onUpdate={onUpdate}
+          />
+
           {shot.status === 'failed' && (
             <Button
               size="sm"
@@ -374,6 +383,20 @@ export default function NodeDetailPanel({ selectedNode, project, onUpdate }: Nod
             重新生成
           </Button>
 
+          {/* 角色资产历史 — 肖像 + 转面图 */}
+          <AssetHistory
+            targetEntityType="character"
+            targetEntityId={character.id}
+            category="characterPortrait"
+            onUpdate={onUpdate}
+          />
+          <AssetHistory
+            targetEntityType="character"
+            targetEntityId={character.id}
+            category="characterTurnaround"
+            onUpdate={onUpdate}
+          />
+
           <Button
             variant="destructive"
             size="sm"
@@ -437,6 +460,14 @@ export default function NodeDetailPanel({ selectedNode, project, onUpdate }: Nod
           >
             重新生成
           </Button>
+
+          {/* 场景资产历史 — 参考图 */}
+          <AssetHistory
+            targetEntityType="location"
+            targetEntityId={location.id}
+            category="locationRef"
+            onUpdate={onUpdate}
+          />
 
           <Button
             variant="destructive"

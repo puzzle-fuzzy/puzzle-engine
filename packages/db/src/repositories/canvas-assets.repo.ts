@@ -261,3 +261,15 @@ export async function cancelActiveCanvasAssetsByProject(projectId: string) {
     ))
     .returning()
 }
+
+/**
+ * 设置资产锁定状态 — 锁定后后续生成不会自动覆盖此版本
+ */
+export async function setCanvasAssetLocked(id: string, locked: boolean) {
+  const [updated] = await getDb()
+    .update(canvasAssets)
+    .set({ locked, updatedAt: new Date() })
+    .where(eq(canvasAssets.id, id))
+    .returning()
+  return updated ?? null
+}
