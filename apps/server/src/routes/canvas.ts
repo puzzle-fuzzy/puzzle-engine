@@ -692,7 +692,7 @@ export function createCanvasRoutes(config: ServerConfig) {
       return acceptedResponse()
     })
 
-    // ===== 资产历史与选择 =====
+  // ===== 资产历史与选择 =====
 
     // 查询目标实体（角色/场景/镜头/项目）的历史资产
     .get('/assets/:targetEntityType/:targetEntityId', async ({ params: { targetEntityType, targetEntityId }, userId, set }) => {

@@ -104,19 +104,21 @@ export default function AssetHistory({
               }`}
             >
               {/* 缩略图 */}
-              {asset.category === 'shotVideo' ? (
-                <video
-                  src={asset.publicUrl!}
-                  className="w-full h-20 object-cover rounded"
-                  muted
-                />
-              ) : (
-                <img
-                  src={asset.publicUrl!}
-                  alt={CATEGORY_LABELS[asset.category] || asset.category}
-                  className="w-full h-20 object-cover rounded"
-                />
-              )}
+              {asset.category === 'shotVideo'
+                ? (
+                    <video
+                      src={asset.publicUrl!}
+                      className="w-full h-20 object-cover rounded"
+                      muted
+                    />
+                  )
+                : (
+                    <img
+                      src={asset.publicUrl!}
+                      alt={CATEGORY_LABELS[asset.category] || asset.category}
+                      className="w-full h-20 object-cover rounded"
+                    />
+                  )}
 
               {/* 状态标签 */}
               <div className="flex items-center gap-1 text-xs">

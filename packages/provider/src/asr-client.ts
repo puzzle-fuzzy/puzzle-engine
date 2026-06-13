@@ -1,6 +1,7 @@
 import type { SubtitleSentence } from '@excuse/subtitle-engine'
 import { parseAsrTranscription } from '@excuse/subtitle-engine'
 import { parseDashScopeError } from './dashscope-errors'
+
 export type { SubtitleSentence } from '@excuse/subtitle-engine'
 
 /**

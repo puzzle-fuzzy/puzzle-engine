@@ -1,6 +1,6 @@
-import { describe, expect, it } from 'bun:test'
 import type { NormalizedCharacter, NormalizedLocation, NormalizedShot } from '@excuse/canvas-engine'
 import { validateShotContinuity } from '@excuse/canvas-engine'
+import { describe, expect, it } from 'bun:test'
 
 function makeShot(overrides: Partial<NormalizedShot> = {}): NormalizedShot {
   return {

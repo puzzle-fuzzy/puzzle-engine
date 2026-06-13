@@ -1,5 +1,5 @@
-import type { CanvasAssetCategory, CanvasAssetInsert } from '../types'
 import type { CanvasAssetOutput, CostDetail } from '../domain-types'
+import type { CanvasAssetCategory, CanvasAssetInsert } from '../types'
 import { and, eq, inArray, ne } from 'drizzle-orm'
 import { getDb } from '../db'
 import { canvasAssets } from '../schema/canvas-assets'

@@ -12,9 +12,9 @@ export interface TaskErrorDecision {
   message: string
 }
 
-export type TaskFailureAction =
-  | { action: 'retry', decision: TaskErrorDecision, delayMs: number }
-  | { action: 'fail', decision: TaskErrorDecision }
+export type TaskFailureAction
+  = | { action: 'retry', decision: TaskErrorDecision, delayMs: number }
+    | { action: 'fail', decision: TaskErrorDecision }
 
 export interface TaskRetryCandidate {
   type: string

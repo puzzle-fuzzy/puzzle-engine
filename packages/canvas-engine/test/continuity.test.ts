@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'bun:test'
 import type { NormalizedCharacter, NormalizedLocation, NormalizedShot } from '../src'
+import { describe, expect, it } from 'bun:test'
 import { validateShotContinuity } from '../src'
 
 function makeShot(overrides: Partial<NormalizedShot> = {}): NormalizedShot {

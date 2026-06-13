@@ -1,10 +1,6 @@
 import type { CanvasAssetOutput } from '@excuse/db'
 import type { NovelAnalysis } from '@excuse/shared'
 import {
-  buildAnalysisPrompt,
-  parseLLMJson,
-} from '@excuse/prompt-engine'
-import {
   createCanvasAsset,
   deleteCanvasCharactersByProject,
   deleteCanvasLocationsByProject,
@@ -19,6 +15,10 @@ import {
   setCanvasAssetActive,
   updateCanvasProject,
 } from '@excuse/db'
+import {
+  buildAnalysisPrompt,
+  parseLLMJson,
+} from '@excuse/prompt-engine'
 import { getModelById, validateAndMerge } from '@excuse/provider'
 import { getProjectDetail } from './service-crud'
 import { createClient, getTextModel, notifyNode } from './service-helpers'

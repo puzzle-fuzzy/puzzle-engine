@@ -1,20 +1,20 @@
-export type CanvasPipelinePhase =
-  | 'analyze'
-  | 'characters'
-  | 'locations'
-  | 'characterRefs'
-  | 'locationRefs'
-  | 'storyboard'
-  | 'continuity'
-  | 'rebuild'
-  | 'videos'
+export type CanvasPipelinePhase
+  = | 'analyze'
+    | 'characters'
+    | 'locations'
+    | 'characterRefs'
+    | 'locationRefs'
+    | 'storyboard'
+    | 'continuity'
+    | 'rebuild'
+    | 'videos'
 
-export type CanvasAutoAdvanceSkipReason =
-  | 'not_canvas_task'
-  | 'unknown_phase'
-  | 'last_phase'
-  | 'auto_progress_disabled'
-  | 'pause_before'
+export type CanvasAutoAdvanceSkipReason
+  = | 'not_canvas_task'
+    | 'unknown_phase'
+    | 'last_phase'
+    | 'auto_progress_disabled'
+    | 'pause_before'
 
 export interface CanvasTaskRef {
   type: string

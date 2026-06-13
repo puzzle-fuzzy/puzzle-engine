@@ -1,3 +1,4 @@
+import { pgClient } from '@excuse/db'
 /**
  * SSE 连接管理器 + PostgreSQL LISTEN 桥接
  *
@@ -19,7 +20,6 @@ import {
   GENERATION_STATUS_CHANNEL,
   UserEventHub,
 } from '@excuse/events'
-import { pgClient } from '@excuse/db'
 import { createLogger } from '@excuse/shared'
 
 const logger = createLogger('sse-manager')

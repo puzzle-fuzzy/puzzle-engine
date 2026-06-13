@@ -31,7 +31,7 @@ mock.module('@excuse/shared', () => ({
 }))
 
 // eslint-disable-next-line import/first
-import { PHASE_ORDER, PAUSE_BEFORE, advancePipelineAfterTaskSuccess } from '../src/pipeline-stepper'
+import { advancePipelineAfterTaskSuccess, PAUSE_BEFORE, PHASE_ORDER } from '../src/pipeline-stepper'
 
 const mockConfig = {
   dashscopeApiKey: 'test',

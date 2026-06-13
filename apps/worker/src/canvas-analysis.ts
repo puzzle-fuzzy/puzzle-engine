@@ -9,13 +9,13 @@ import {
   updateCanvasProject,
 } from '@excuse/db'
 import {
-  getModelById,
-  validateAndMerge,
-} from '@excuse/provider'
-import {
   buildAnalysisPrompt,
   parseLLMJson,
 } from '@excuse/prompt-engine'
+import {
+  getModelById,
+  validateAndMerge,
+} from '@excuse/provider'
 import {
   createDashScopeClient,
   getTextModel,
