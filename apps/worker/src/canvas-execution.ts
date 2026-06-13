@@ -1,5 +1,7 @@
 import type { NormalizedCharacter, NormalizedLocation, NormalizedShot } from '@excuse/canvas-engine'
 import type { CanvasAssetOutput } from '@excuse/db'
+import type { CanvasModelPreferences } from '@excuse/shared'
+import type { WorkerConfig } from './config'
 import {
   createCanvasAsset,
   getCanvasProjectDetail,
@@ -8,9 +10,22 @@ import {
   markCanvasAssetSucceeded,
   setCanvasAssetActive,
 } from '@excuse/db'
+import { DashScopeClient } from '@excuse/provider'
 
 type CanvasProjectDetail = NonNullable<Awaited<ReturnType<typeof getCanvasProjectDetail>>>
 type CreateCanvasAssetInput = Parameters<typeof createCanvasAsset>[0]
+const DEFAULT_TEXT_MODEL = 'qwen3.7-plus'
+
+export function createDashScopeClient(workerConfig: WorkerConfig): DashScopeClient {
+  return new DashScopeClient({
+    apiKey: workerConfig.dashscopeApiKey,
+    baseUrl: workerConfig.dashscopeBaseUrl,
+  })
+}
+
+export function getTextModel(prefs: CanvasModelPreferences | null | undefined): string {
+  return prefs?.textModel || DEFAULT_TEXT_MODEL
+}
 
 export async function loadRunnableCanvasProject(projectId: string): Promise<CanvasProjectDetail> {
   const detail = await getCanvasProjectDetail(projectId)
