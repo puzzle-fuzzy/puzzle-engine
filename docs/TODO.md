@@ -101,13 +101,19 @@
 - `tasks` 表 + Worker claim 机制 + lock heartbeat + orphan sweep 已实现，commit：`a2b4c9f`
 - Worker `task-handler.ts` 已支持 canvas phase handlers dispatch，commit：`e3d6277`
 - `canvas_pipeline_runs` 表和状态追踪已存在。
+- Pipeline stepper 自动推进已实现，commit：`095d151`
+  - Worker 完成当前 phase task 后，如果 `autoProgress=true`，自动创建下一个 phase task
+  - `PAUSE_BEFORE` 阻塞 storyboard 和 videos 阶段（需用户确认）
+  - 并发守卫：下一个 phase 没有 active run 时才推进
+- Canvas analyze 路由支持 `autoProgress` 分支，commit：`095d151`
+  - `autoProgress=true` → 创建 pipeline_run + task（Worker 执行）
+  - `autoProgress=false` → 保持 fire-and-forget 模式（向后兼容）
+- model-preferences PATCH 支持 `autoProgress` 字段，commit：`095d151`
 
 待办：
 
-- 将”自动执行全部”从前端连续调用接口，迁移为后端/worker 驱动的 pipeline run + task 创建。
-- 前端点击自动执行后，只创建或启动一次 run + 第一个 phase task。
-- Worker 完成当前 phase task 后，如果 `autoProgress=true`，自动创建下一个 phase task。
-- 暂停阶段（storyboard、videos）不自动推进，需要用户确认。
+- 前端 “自动执行全部”按钮设置 `autoProgress=true` 后只触发 phase 1（analyze）。
+- 暂停阶段（storyboard、videos）前端需要确认按钮才能继续。
 - 支持暂停、继续、终止、重试失败阶段。
 
 验收：
