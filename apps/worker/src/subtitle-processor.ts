@@ -20,7 +20,8 @@ import {
   updateSubtitleSentences,
 } from '@excuse/db'
 import { AssetStorage, burnSubtitlesToVideo } from '@excuse/provider'
-import { createLogger, sentencesToAss } from '@excuse/shared'
+import { createLogger } from '@excuse/shared'
+import { sentencesToAss } from '@excuse/subtitle-engine'
 
 const logger = createLogger('subtitle-processor')
 

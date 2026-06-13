@@ -103,6 +103,7 @@
         "@excuse/db": "workspace:*",
         "@excuse/provider": "workspace:*",
         "@excuse/shared": "workspace:*",
+        "@excuse/subtitle-engine": "workspace:*",
         "@excuse/task-engine": "workspace:*",
         "drizzle-orm": "^0.44.2",
       },
@@ -149,6 +150,7 @@
         "@excuse/ffmpeg": "workspace:*",
         "@excuse/shared": "workspace:*",
         "@excuse/storage": "workspace:*",
+        "@excuse/subtitle-engine": "workspace:*",
       },
     },
     "packages/rate-limit": {
@@ -163,6 +165,7 @@
       "version": "0.0.1",
       "dependencies": {
         "@excuse/db": "workspace:*",
+        "@excuse/subtitle-engine": "workspace:*",
         "pino": "^10.3.1",
         "pino-pretty": "^13.1.3",
       },
@@ -174,6 +177,10 @@
         "@excuse/shared": "workspace:*",
         "ali-oss": "^6.23.0",
       },
+    },
+    "packages/subtitle-engine": {
+      "name": "@excuse/subtitle-engine",
+      "version": "0.0.1",
     },
     "packages/task-engine": {
       "name": "@excuse/task-engine",
@@ -420,6 +427,8 @@
     "@excuse/shared": ["@excuse/shared@workspace:packages/shared"],
 
     "@excuse/storage": ["@excuse/storage@workspace:packages/storage"],
+
+    "@excuse/subtitle-engine": ["@excuse/subtitle-engine@workspace:packages/subtitle-engine"],
 
     "@excuse/task-engine": ["@excuse/task-engine@workspace:packages/task-engine"],
 

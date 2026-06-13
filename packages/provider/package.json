@@ -10,6 +10,7 @@
   "dependencies": {
     "@excuse/ffmpeg": "workspace:*",
     "@excuse/shared": "workspace:*",
-    "@excuse/storage": "workspace:*"
+    "@excuse/storage": "workspace:*",
+    "@excuse/subtitle-engine": "workspace:*"
   }
 }

@@ -1,18 +1,7 @@
-/**
- * 字幕句子类型 — ASR 转录后的最小编辑单元
- *
- * 定义在 provider 包内（独立于 @excuse/db），因为 provider 不直接依赖 db。
- * 与 @excuse/db 中的 SubtitleSentence 接口结构一致。
- */
+import type { SubtitleSentence } from '@excuse/subtitle-engine'
+import { parseAsrTranscription } from '@excuse/subtitle-engine'
 import { parseDashScopeError } from './dashscope-errors'
-
-export interface SubtitleSentence {
-  id: string
-  text: string
-  beginTime: number
-  endTime: number
-  speakerId?: number
-}
+export type { SubtitleSentence } from '@excuse/subtitle-engine'
 
 /**
  * ASR 客户端配置
@@ -210,33 +199,6 @@ export class ASRClient {
    * 每个 sentence 有 begin_time/end_time（毫秒）、text、words[]
    */
   parseTranscription(rawJson: unknown): SubtitleSentence[] {
-    if (!rawJson || typeof rawJson !== 'object')
-      return []
-
-    const root = rawJson as Record<string, unknown>
-    const transcripts = root.transcripts as Array<Record<string, unknown>> | undefined
-
-    if (!transcripts || !Array.isArray(transcripts))
-      return []
-
-    const sentences: SubtitleSentence[] = []
-
-    for (const transcript of transcripts) {
-      const rawSentences = transcript.sentences as Array<Record<string, unknown>> | undefined
-      if (!rawSentences || !Array.isArray(rawSentences))
-        continue
-
-      for (const s of rawSentences) {
-        sentences.push({
-          id: crypto.randomUUID(),
-          text: typeof s.text === 'string' ? s.text : '',
-          beginTime: typeof s.begin_time === 'number' ? s.begin_time : 0,
-          endTime: typeof s.end_time === 'number' ? s.end_time : 0,
-          ...(typeof s.speaker_id === 'number' && { speakerId: s.speaker_id }),
-        })
-      }
-    }
-
-    return sentences
+    return parseAsrTranscription(rawJson)
   }
 }

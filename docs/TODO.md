@@ -640,6 +640,8 @@
 
 ### 12. 新增 `packages/subtitle-engine`
 
+状态：已完成，commit：本次提交
+
 当前迹象：
 
 - `apps/server/src/modules/subtitle/service.ts` 负责项目创建，同时调用音频提取。
