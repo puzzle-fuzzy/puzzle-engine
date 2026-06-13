@@ -7,12 +7,12 @@
 
 import type { TaskErrorInfo, TaskRow } from '@excuse/db'
 import type { WorkerConfig } from './config'
-import { markTaskFailed } from '@excuse/db'
+import { markTaskFailed, markTaskRetrying } from '@excuse/db'
 import { createLogger } from '@excuse/shared'
 import {
+  applyTaskFailureWithAdapter,
   classifyTaskError,
   createTaskHandlerRegistry,
-  decideTaskFailureAction,
   TaskNotImplementedError,
 } from '@excuse/task-engine'
 import { markRunFailedAndNotify } from './canvas-handlers'
@@ -121,23 +121,19 @@ export async function handleTaskError(task: TaskRow, error: unknown): Promise<vo
     return
   }
 
-  const failureAction = decideTaskFailureAction(task, error)
-  const decision = failureAction.decision
+  const failureAction = await applyTaskFailureWithAdapter({
+    task,
+    error,
+    adapter: {
+      markTaskRetrying,
+      markTaskFailed,
+    },
+  })
 
   if (failureAction.action === 'retry') {
-    const nextRunAt = new Date(Date.now() + failureAction.delayMs)
-    const { markTaskRetrying } = await import('@excuse/db')
-    await markTaskRetrying(task.id, nextRunAt)
     logger.info({ taskId: task.id, type: task.type, attempts: task.attempts, nextRetryDelay: failureAction.delayMs }, 'Task retrying')
   }
   else {
-    const errorInfo: TaskErrorInfo = {
-      category: decision.category,
-      retriable: decision.retriable,
-      code: decision.code,
-      message: errorMessage,
-    }
-    await markTaskFailed(task.id, errorInfo, errorMessage)
     logger.error({ taskId: task.id, type: task.type, attempts: task.attempts }, `Task permanently failed: ${errorMessage}`)
 
     // Canvas 任务额外标记 pipeline run 为 failed + PG NOTIFY

@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'bun:test'
 import {
+  applyTaskFailureWithAdapter,
   classifyTaskError,
+  completeTaskWithAdapter,
   computeRetryDelay,
   createTaskHandlerRegistry,
   decideTaskFailureAction,
@@ -122,5 +124,103 @@ describe('@excuse/task-engine', () => {
         message: 'timeout',
       },
     })
+  })
+
+  it('completes a task through an adapter and notifies when updated', async () => {
+    const calls: string[] = []
+    const updated = await completeTaskWithAdapter({
+      task: { id: 'task-1' },
+      output: { ok: true },
+      adapter: {
+        markTaskSucceeded: async (id, output) => {
+          calls.push(`succeed:${id}:${JSON.stringify(output)}`)
+          return { id, status: 'succeeded' }
+        },
+        notifyTaskStatusChange: async (task) => {
+          calls.push(`notify:${task.id}`)
+        },
+      },
+    })
+
+    expect(updated).toEqual({ id: 'task-1', status: 'succeeded' })
+    expect(calls).toEqual(['succeed:task-1:{"ok":true}', 'notify:task-1'])
+  })
+
+  it('does not notify when complete adapter returns null', async () => {
+    const calls: string[] = []
+    const updated = await completeTaskWithAdapter({
+      task: { id: 'task-1' },
+      adapter: {
+        markTaskSucceeded: async (id) => {
+          calls.push(`succeed:${id}`)
+          return null
+        },
+        notifyTaskStatusChange: async (task) => {
+          calls.push(`notify:${task.id}`)
+        },
+      },
+    })
+
+    expect(updated).toBeNull()
+    expect(calls).toEqual(['succeed:task-1'])
+  })
+
+  it('applies retry failure action through an adapter', async () => {
+    const error = new Error('throttled', { cause: { code: 'Throttling' } })
+    const calls: string[] = []
+    const result = await applyTaskFailureWithAdapter({
+      task: { id: 'task-1', type: 'canvas.videos', attempts: 1, maxAttempts: 3 },
+      error,
+      now: () => 1_000,
+      adapter: {
+        markTaskRetrying: async (id, nextRunAt) => {
+          calls.push(`retry:${id}:${nextRunAt.getTime()}`)
+        },
+        markTaskFailed: async () => {
+          calls.push('fail')
+        },
+      },
+    })
+
+    expect(result).toMatchObject({
+      action: 'retry',
+      delayMs: 60_000,
+    })
+    expect(calls).toEqual(['retry:task-1:61000'])
+  })
+
+  it('applies fail action through an adapter when retry budget is exhausted', async () => {
+    const error = new Error('timeout', { cause: { code: 'ETIMEDOUT' } })
+    const calls: unknown[] = []
+    const result = await applyTaskFailureWithAdapter({
+      task: { id: 'task-1', type: 'canvas.videos', attempts: 3, maxAttempts: 3 },
+      error,
+      adapter: {
+        markTaskRetrying: async () => {
+          calls.push('retry')
+        },
+        markTaskFailed: async (id, errorInfo, errorMessage) => {
+          calls.push({ id, errorInfo, errorMessage })
+        },
+      },
+    })
+
+    const expectedFailure = {
+      id: 'task-1',
+      errorInfo: {
+        category: 'timeout',
+        retriable: true,
+        code: 'ETIMEDOUT',
+        message: 'timeout',
+      },
+      errorMessage: 'timeout',
+    }
+
+    expect(result).toMatchObject({
+      action: 'fail',
+      errorInfo: expectedFailure.errorInfo,
+      errorMessage: expectedFailure.errorMessage,
+    })
+    expect(calls).toEqual([expectedFailure])
   })
 })

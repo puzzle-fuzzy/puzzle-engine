@@ -12,6 +12,13 @@ export interface TaskErrorDecision {
   message: string
 }
 
+export interface TaskErrorInfo {
+  category: TaskErrorCategory
+  retriable: boolean
+  code?: string
+  message: string
+}
+
 export type TaskFailureAction
   = | { action: 'retry', decision: TaskErrorDecision, delayMs: number }
     | { action: 'fail', decision: TaskErrorDecision }
@@ -26,6 +33,33 @@ export interface TaskDefinition<TTask, TContext, TOutput = Record<string, unknow
   type: string
   handler: TaskHandler<TTask, TContext, TOutput>
 }
+
+export interface TaskCompletionAdapter<TTask extends { id: string }, TOutput = Record<string, unknown> | undefined> {
+  markTaskSucceeded: (id: string, output?: TOutput) => Promise<TTask | null> | TTask | null
+  notifyTaskStatusChange: (task: TTask) => Promise<unknown> | unknown
+}
+
+export interface CompleteTaskWithAdapterInput<TTask extends { id: string }, TOutput = Record<string, unknown> | undefined> {
+  task: TTask
+  output?: TOutput
+  adapter: TaskCompletionAdapter<TTask, TOutput>
+}
+
+export interface TaskFailureAdapter {
+  markTaskRetrying: (id: string, nextRunAt: Date) => Promise<unknown> | unknown
+  markTaskFailed: (id: string, errorInfo?: TaskErrorInfo, errorMessage?: string) => Promise<unknown> | unknown
+}
+
+export interface ApplyTaskFailureWithAdapterInput<TTask extends TaskRetryCandidate & { id: string }> {
+  task: TTask
+  error: unknown
+  adapter: TaskFailureAdapter
+  now?: () => number
+}
+
+export type ApplyTaskFailureWithAdapterResult
+  = | { action: 'retry', decision: TaskErrorDecision, delayMs: number, nextRunAt: Date }
+    | { action: 'fail', decision: TaskErrorDecision, errorInfo: TaskErrorInfo, errorMessage: string }
 
 export class TaskHandlerRegistry<TTask extends { type: string }, TContext, TOutput = Record<string, unknown> | undefined> {
   private readonly handlers = new Map<string, TaskHandler<TTask, TContext, TOutput>>()
@@ -73,6 +107,41 @@ export function createTaskHandlerRegistry<TTask extends { type: string }, TConte
   definitions: Array<TaskDefinition<TTask, TContext, TOutput>> = [],
 ): TaskHandlerRegistry<TTask, TContext, TOutput> {
   return new TaskHandlerRegistry<TTask, TContext, TOutput>().registerMany(definitions)
+}
+
+export async function completeTaskWithAdapter<TTask extends { id: string }, TOutput = Record<string, unknown> | undefined>(
+  input: CompleteTaskWithAdapterInput<TTask, TOutput>,
+): Promise<TTask | null> {
+  const updatedTask = await input.adapter.markTaskSucceeded(input.task.id, input.output)
+  if (updatedTask)
+    await input.adapter.notifyTaskStatusChange(updatedTask)
+  return updatedTask
+}
+
+export async function applyTaskFailureWithAdapter<TTask extends TaskRetryCandidate & { id: string }>(
+  input: ApplyTaskFailureWithAdapterInput<TTask>,
+): Promise<ApplyTaskFailureWithAdapterResult> {
+  const failureAction = decideTaskFailureAction(input.task, input.error)
+  if (failureAction.action === 'retry') {
+    const nextRunAt = new Date((input.now?.() ?? Date.now()) + failureAction.delayMs)
+    await input.adapter.markTaskRetrying(input.task.id, nextRunAt)
+    return {
+      action: 'retry',
+      decision: failureAction.decision,
+      delayMs: failureAction.delayMs,
+      nextRunAt,
+    }
+  }
+
+  const errorMessage = input.error instanceof Error ? input.error.message : String(input.error)
+  const errorInfo = toTaskErrorInfo(failureAction.decision, errorMessage)
+  await input.adapter.markTaskFailed(input.task.id, errorInfo, errorMessage)
+  return {
+    action: 'fail',
+    decision: failureAction.decision,
+    errorInfo,
+    errorMessage,
+  }
 }
 
 export function classifyTaskError(error: unknown): TaskErrorDecision {
@@ -157,4 +226,13 @@ function categorizeTaskErrorCode(code: string | undefined): TaskErrorCategory {
   if (code === 'Throttling' || code === 'InternalError' || code === 'ECONNRESET')
     return 'provider_error'
   return 'system'
+}
+
+function toTaskErrorInfo(decision: TaskErrorDecision, message: string): TaskErrorInfo {
+  return {
+    category: decision.category,
+    retriable: decision.retriable,
+    ...(decision.code && { code: decision.code }),
+    message,
+  }
 }

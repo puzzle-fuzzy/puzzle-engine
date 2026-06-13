@@ -1,8 +1,9 @@
 import type { WorkerHealthState } from './health'
 import type { TaskResult } from './task-processor'
-import { claimNextTask, pollExportingProjects, pollPendingASRProjects, pollPendingVideoTasks, sweepOrphanTasks } from '@excuse/db'
+import { claimNextTask, markTaskSucceeded, notifyTaskStatusChange, pollExportingProjects, pollPendingASRProjects, pollPendingVideoTasks, sweepOrphanTasks } from '@excuse/db'
 import { ASRClient, checkFFmpegAsync } from '@excuse/provider'
 import { createLogger } from '@excuse/shared'
+import { completeTaskWithAdapter } from '@excuse/task-engine'
 import { loadConfig } from './config'
 import { createHealthServer } from './health'
 import { startTaskHeartbeat } from './heartbeat'
@@ -136,11 +137,15 @@ async function main() {
 
         try {
           const output = await handleTask(claimedTask, config)
-          // Handler 成功 → markTaskSucceeded
-          const { markTaskSucceeded, notifyTaskStatusChange } = await import('@excuse/db')
-          const succeeded = await markTaskSucceeded(claimedTask.id, output)
+          const succeeded = await completeTaskWithAdapter({
+            task: claimedTask,
+            output,
+            adapter: {
+              markTaskSucceeded,
+              notifyTaskStatusChange,
+            },
+          })
           if (succeeded) {
-            await notifyTaskStatusChange(succeeded)
             healthState.totalTasksProcessed++
             logger.info({ taskId: claimedTask.id, type: claimedTask.type }, '✅ Task completed')
 
