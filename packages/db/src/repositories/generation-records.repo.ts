@@ -236,6 +236,9 @@ export async function listCanvasGenerationRecordsByProject(projectId: string) {
       status: generationRecords.status,
       totalPriceCents: generationRecords.totalPriceCents,
       cost: generationRecords.cost,
+      errorMessage: generationRecords.errorMessage,
+      retryCount: generationRecords.retryCount,
+      updatedAt: generationRecords.updatedAt,
       shotId: sql<string | null>`input_params->>'shotId'`,
     })
     .from(generationRecords)

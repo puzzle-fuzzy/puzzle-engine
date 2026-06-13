@@ -19,6 +19,7 @@ import type {
   ShotTimelineEntry,
 } from '@excuse/db'
 import type { EntityResponse, ListResponse, MutationOkResponse } from './api-response'
+import type { CanvasFailureKind } from './canvas-failure'
 
 // 域类型从 @excuse/db import type 重导出（编译期擦除，零运行时影响）
 export type { CanvasModelPreferences, CharacterProfile, ContinuityIssue, LocationProfile, NovelAnalysis }
@@ -206,6 +207,33 @@ export interface CanvasAssetsPoll {
     targetId: string
     /** 任务目标实体类型 */
     targetType: 'character' | 'location' | 'shot' | 'project'
+    /** 失败时的错误信息（重试中的任务可能携带上一次失败原因） */
+    errorMessage?: string | null
+    /** 重试次数（仅 generation_records 有此字段；canvas_assets 为 null） */
+    retryCount?: number | null
+    /** 任务最后更新时间（epoch ms），用于任务队列面板展示 */
+    updatedAt?: number | null
+  }>
+
+  /**
+   * 项目下最近的失败任务（failed/cancelled 状态）
+   * — 用于任务队列面板的失败原因与下一步建议展示
+   * 来自 generation_records + canvas_assets 的终态记录，按 updatedAt 倒序，限制 20 条
+   */
+  recentFailures: Array<{
+    id: string
+    category: 'text' | 'image' | 'video'
+    status: string
+    targetId: string
+    targetType: 'character' | 'location' | 'shot' | 'project'
+    errorMessage: string | null
+    retryCount: number
+    /** 分类后的失败类型（balance/content/network/storage/cancel/provider/system） */
+    failureKind: CanvasFailureKind
+    /** 下一步建议 */
+    suggestion: string
+    /** 失败时间（epoch ms） */
+    failedAt: number | null
   }>
 
   /** 项目下所有生成记录的成本快照（来自 generation_records + canvas_assets） */

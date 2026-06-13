@@ -7,6 +7,7 @@ import CanvasFlow from '../components/canvas/CanvasFlow'
 import CanvasStatusBar from '../components/canvas/CanvasStatusBar'
 import NodeDetailPanel from '../components/canvas/NodeDetailPanel'
 import PipelineController from '../components/canvas/PipelineController'
+import TaskQueuePanel from '../components/canvas/TaskQueuePanel'
 import { useCanvasAssetsPolling } from '../hooks/use-canvas-assets-polling'
 import { useRealtimeSync } from '../stores/realtime-sync'
 
@@ -17,6 +18,7 @@ export default function CanvasEditor() {
   const [error, setError] = useState<string | null>(null)
   const [selectedNode, setSelectedNode] = useState<{ id: string, type: string } | null>(null)
   const [runningPhase, setRunningPhase] = useState<RunningPhaseInfo | null>(null)
+  const [showTaskQueue, setShowTaskQueue] = useState(false)
 
   // 从 RealtimeSync 获取项目版本号和 pipeline 阶段完成信号
   const projectVersion = useRealtimeSync(s => projectId ? s.projectVersions[projectId] : 0)
@@ -97,6 +99,8 @@ export default function CanvasEditor() {
         pollData={pollData}
         connectionMode={connectionMode}
         isPolling={isPolling}
+        taskQueueOpen={showTaskQueue}
+        onToggleTaskQueue={() => setShowTaskQueue(v => !v)}
       />
 
       {/* Canvas area */}
@@ -106,9 +110,20 @@ export default function CanvasEditor() {
           runningPhase={runningPhase}
           pollData={pollData}
           onNodeClick={(nodeId, nodeType) => {
+            // 选中节点时关闭任务队列面板，避免两个右侧面板重叠
+            setShowTaskQueue(false)
             setSelectedNode(selectedNode?.id === nodeId ? null : { id: nodeId, type: nodeType })
           }}
         />
+
+        {/* Task queue panel — 活跃任务 + 最近失败原因与建议 */}
+        {showTaskQueue && (
+          <TaskQueuePanel
+            pollData={pollData}
+            project={project}
+            onClose={() => setShowTaskQueue(false)}
+          />
+        )}
 
         {/* Side panel for selected node */}
         {selectedNode && (

@@ -40,6 +40,10 @@ interface CanvasStatusBarProps {
   pollData: CanvasAssetsPoll | null
   connectionMode: 'sse' | 'polling' | 'disconnected'
   isPolling: boolean
+  /** 任务队列面板是否展开（高亮触发按钮） */
+  taskQueueOpen: boolean
+  /** 切换任务队列面板 */
+  onToggleTaskQueue: () => void
 }
 
 export default function CanvasStatusBar({
@@ -48,6 +52,8 @@ export default function CanvasStatusBar({
   pollData,
   connectionMode,
   isPolling,
+  taskQueueOpen,
+  onToggleTaskQueue,
 }: CanvasStatusBarProps) {
   // 阶段进度统计
   const phaseStats = useMemo(() => {
@@ -73,6 +79,9 @@ export default function CanvasStatusBar({
       video: tasks.filter(t => t.category === 'video').length,
     }
   }, [pollData])
+
+  // 最近失败数（用于按钮角标提示）
+  const failureCount = pollData?.recentFailures?.length ?? 0
 
   const isPauseBefore = !runningPhase && (project.status === 'refs_all_ready' || project.status === 'prompts_ready')
 
@@ -116,20 +125,28 @@ export default function CanvasStatusBar({
         {phaseStats.total}
       </span>
 
-      {/* 活跃任务统计 */}
-      {taskStats.total > 0 && (
-        <span className="text-xs text-muted-foreground">
-          任务
-          {taskStats.total}
-          （文本
-          {taskStats.text}
-          · 图片
-          {taskStats.image}
-          · 视频
-          {taskStats.video}
-          ）
-        </span>
-      )}
+      {/* 任务队列按钮 — 点击展开活跃任务 + 最近失败详情 */}
+      <button
+        onClick={onToggleTaskQueue}
+        className={`text-xs px-2 py-0.5 rounded-full flex items-center gap-1 transition-colors ${
+          taskQueueOpen
+            ? 'bg-blue-100 text-blue-700'
+            : failureCount > 0
+              ? 'bg-red-100 text-red-700 hover:bg-red-200'
+              : taskStats.total > 0
+                ? 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                : 'text-muted-foreground hover:bg-gray-100'
+        }`}
+        title="查看任务队列与失败原因"
+      >
+        任务队列
+        {taskStats.total > 0 && (
+          <span className="font-semibold">{taskStats.total}</span>
+        )}
+        {failureCount > 0 && (
+          <span className="px-1 rounded bg-red-500 text-white font-semibold">{failureCount}</span>
+        )}
+      </button>
 
       {/* 连接状态 */}
       {connectionMode === 'sse' && (

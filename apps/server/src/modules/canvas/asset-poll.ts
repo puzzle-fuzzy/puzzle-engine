@@ -25,6 +25,7 @@ import {
   listCanvasGenerationRecordsByProject,
   listTerminalCanvasAssetsByProject,
 } from '@excuse/db'
+import { classifyCanvasFailure } from '@excuse/shared'
 
 /** generation record 非终态 status 列表 */
 const ACTIVE_GEN_STATUSES = new Set(['pending', 'submitting', 'processing', 'saving_output'])
@@ -82,11 +83,13 @@ export async function getCanvasAssetsPoll(projectId: string): Promise<CanvasAsse
   // 4. 按 shotId 分组活跃视频 generation_records
   const activeVideoTaskIdsByShot = new Map<string, string[]>()
   const activeTasks: CanvasAssetsPoll['activeTasks'] = []
+  const recentFailures: CanvasAssetsPoll['recentFailures'] = []
   const costs: CanvasAssetsPoll['costs'] = []
 
   for (const record of genRecords) {
     const isActive = ACTIVE_GEN_STATUSES.has(record.status)
     const shotId = record.shotId
+    const updatedAtMs = record.updatedAt ? new Date(record.updatedAt).getTime() : null
 
     // 活跃视频任务 → shot.activeVideoTaskIds
     if (isActive && shotId && record.category === 'video') {
@@ -95,7 +98,7 @@ export async function getCanvasAssetsPoll(projectId: string): Promise<CanvasAsse
       activeVideoTaskIdsByShot.set(shotId, existing)
     }
 
-    // 组装 activeTasks
+    // 组装 activeTasks（携带 errorMessage/retryCount 用于重试中任务展示）
     if (isActive) {
       activeTasks.push({
         id: record.id,
@@ -103,6 +106,26 @@ export async function getCanvasAssetsPoll(projectId: string): Promise<CanvasAsse
         status: record.status,
         targetId: shotId ?? '',
         targetType: 'shot',
+        errorMessage: record.errorMessage ?? null,
+        retryCount: record.retryCount ?? null,
+        updatedAt: updatedAtMs,
+      })
+    }
+
+    // 组装失败任务（recentFailures）
+    if (record.status === 'failed' || record.status === 'cancelled') {
+      const { kind, suggestion } = classifyCanvasFailure(record.errorMessage, record.status)
+      recentFailures.push({
+        id: record.id,
+        category: record.category === 'image' ? 'image' : 'video',
+        status: record.status,
+        targetId: shotId ?? '',
+        targetType: 'shot',
+        errorMessage: record.errorMessage ?? null,
+        retryCount: record.retryCount ?? 0,
+        failureKind: kind,
+        suggestion,
+        failedAt: updatedAtMs,
       })
     }
 
@@ -123,6 +146,8 @@ export async function getCanvasAssetsPoll(projectId: string): Promise<CanvasAsse
   const activeImageTaskIdsByLocation = new Map<string, string[]>()
 
   for (const asset of activeAssets) {
+    const updatedAtMs = asset.updatedAt ? new Date(asset.updatedAt).getTime() : null
+
     // 活跃图片资产 → character/location.activeImageTaskIds
     if (['characterPortrait', 'characterTurnaround'].includes(asset.category) && asset.targetEntityType === 'character') {
       const existing = activeImageTaskIdsByCharacter.get(asset.targetEntityId) ?? []
@@ -135,17 +160,20 @@ export async function getCanvasAssetsPoll(projectId: string): Promise<CanvasAsse
       activeImageTaskIdsByLocation.set(asset.targetEntityId, existing)
     }
 
-    // 组装 activeTasks（canvas_asset 也纳入）
+    // 组装 activeTasks（canvas_asset 也纳入；canvas_assets 无 retryCount）
     activeTasks.push({
       id: asset.id,
       category: mapAssetCategoryToTaskCategory(asset.category),
       status: asset.status,
       targetId: asset.targetEntityId,
       targetType: mapAssetCategoryToTargetType(asset.category),
+      errorMessage: null,
+      retryCount: null,
+      updatedAt: updatedAtMs,
     })
   }
 
-  // 6. 终态 canvas_assets 也纳入 costs（文本/图片等非视频管线成本）
+  // 6. 终态 canvas_assets 也纳入 costs（文本/图片等非视频管线成本）+ 失败任务
   for (const asset of terminalAssets) {
     const state = mapCostState(asset.status)
     const isFinal = state !== 'active'
@@ -156,7 +184,28 @@ export async function getCanvasAssetsPoll(projectId: string): Promise<CanvasAsse
       estimatedCostCents: isFinal ? null : asset.totalPriceCents ?? null,
       finalCostCents: isFinal ? asset.totalPriceCents ?? null : null,
     })
+
+    // 失败/取消资产纳入 recentFailures（canvas_assets 无 retryCount，记为 0）
+    if (asset.status === 'failed' || asset.status === 'cancelled') {
+      const { kind, suggestion } = classifyCanvasFailure(asset.errorMessage, asset.status)
+      recentFailures.push({
+        id: asset.id,
+        category: mapAssetCategoryToTaskCategory(asset.category),
+        status: asset.status,
+        targetId: asset.targetEntityId,
+        targetType: mapAssetCategoryToTargetType(asset.category),
+        errorMessage: asset.errorMessage ?? null,
+        retryCount: 0,
+        failureKind: kind,
+        suggestion,
+        failedAt: asset.updatedAt ? new Date(asset.updatedAt).getTime() : null,
+      })
+    }
   }
+
+  // 6.5 recentFailures 按失败时间倒序，限制 20 条（避免长项目历史失败过多）
+  recentFailures.sort((a, b) => (b.failedAt ?? 0) - (a.failedAt ?? 0))
+  const limitedFailures = recentFailures.slice(0, 20)
 
   // 7. 组装 characters
   const characters: CanvasAssetsPoll['characters'] = detail.characters.map(c => ({
@@ -192,6 +241,7 @@ export async function getCanvasAssetsPoll(projectId: string): Promise<CanvasAsse
     locations,
     shots,
     activeTasks,
+    recentFailures: limitedFailures,
     costs,
     generatedAt: Date.now(),
   }

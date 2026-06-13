@@ -412,4 +412,87 @@ describe('Canvas 资产轮询端点', () => {
     expect(poll.activeTasks[2].category).toBe('image')
     expect(poll.activeTasks[2].targetType).toBe('location')
   })
+
+  it('recentFailures 分类失败原因并给出建议（generation_records + canvas_assets）', async () => {
+    const projectRow = makeProjectRow({ status: 'partial_failed' })
+    mockGetCanvasProjectByIdForAccount.mockResolvedValue(projectRow)
+    mockGetCanvasProjectById.mockResolvedValue(projectRow)
+    mockGetCanvasProjectDetail.mockResolvedValue({
+      project: projectRow,
+      characters: [],
+      locations: [],
+      shots: [],
+      latestContinuity: null,
+    })
+    mockListCanvasGenerationRecordsByProject.mockResolvedValue([
+      // 余额不足 → balance
+      {
+        id: 'gen-balance',
+        category: 'video',
+        status: 'failed',
+        totalPriceCents: 0,
+        cost: null,
+        errorMessage: '账号欠费，请前往阿里云控制台充值后重试',
+        retryCount: 2,
+        updatedAt: new Date('2024-06-13T10:00:00Z'),
+        shotId: 'shot-001',
+      },
+      // 用户取消 → cancel
+      {
+        id: 'gen-cancel',
+        category: 'video',
+        status: 'cancelled',
+        totalPriceCents: 0,
+        cost: null,
+        errorMessage: '用户取消',
+        retryCount: 0,
+        updatedAt: new Date('2024-06-13T09:00:00Z'),
+        shotId: null,
+      },
+    ])
+    mockListActiveCanvasAssetsByProject.mockResolvedValue([])
+    mockListTerminalCanvasAssetsByProject.mockResolvedValue([
+      // 内容审核未通过 → content（canvas_asset）
+      {
+        id: 'asset-content',
+        category: 'characterPortrait',
+        targetEntityType: 'character',
+        targetEntityId: 'char-001',
+        status: 'failed',
+        totalPriceCents: null,
+        errorMessage: '生成内容不合规，请调整提示词后重试',
+        updatedAt: new Date('2024-06-13T11:00:00Z'),
+      },
+      // 成功资产不应出现在 recentFailures
+      {
+        id: 'asset-ok',
+        category: 'locationRef',
+        targetEntityType: 'location',
+        targetEntityId: 'loc-001',
+        status: 'succeeded',
+        totalPriceCents: 30,
+        updatedAt: new Date('2024-06-13T08:00:00Z'),
+      },
+    ])
+
+    const res = await client.api.canvas.projects({ projectId: 'proj-001' }).assets.poll.get(headers)
+    const data = (res as any).data ?? res
+    const poll = data.data
+
+    // 仅失败/取消记录进入 recentFailures（成功资产排除）
+    expect(poll.recentFailures).toHaveLength(3)
+
+    // 按失败时间倒序：11:00(content) → 10:00(balance) → 09:00(cancel)
+    expect(poll.recentFailures[0].id).toBe('asset-content')
+    expect(poll.recentFailures[0].failureKind).toBe('content')
+    expect(poll.recentFailures[0].targetType).toBe('character')
+    expect(poll.recentFailures[0].suggestion).toBeTruthy()
+
+    expect(poll.recentFailures[1].id).toBe('gen-balance')
+    expect(poll.recentFailures[1].failureKind).toBe('balance')
+    expect(poll.recentFailures[1].retryCount).toBe(2)
+
+    expect(poll.recentFailures[2].id).toBe('gen-cancel')
+    expect(poll.recentFailures[2].failureKind).toBe('cancel')
+  })
 })
