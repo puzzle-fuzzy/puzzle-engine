@@ -1,6 +1,6 @@
 import type { WorkerHealthState } from './health'
 import type { TaskResult } from './task-processor'
-import { claimNextTask, markTaskSucceeded, notifyTaskStatusChange, pollExportingProjects, pollPendingASRProjects, pollPendingVideoTasks, sweepOrphanTasks } from '@excuse/db'
+import { claimNextTask, extendTaskLock, markTaskSucceeded, notifyTaskStatusChange, pollExportingProjects, pollPendingASRProjects, pollPendingVideoTasks, sweepOrphanTasks } from '@excuse/db'
 import { ASRClient, checkFFmpegAsync } from '@excuse/provider'
 import { createLogger } from '@excuse/shared'
 import { claimNextTaskWithAdapter, completeTaskWithAdapter, sweepOrphanTasksWithAdapter } from '@excuse/task-engine'
@@ -133,7 +133,7 @@ async function main() {
       if (claimedTask) {
         healthState.tasksClaimed++
         healthState.currentTaskId = claimedTask.id
-        const stopHeartbeat = startTaskHeartbeat(claimedTask.id, workerId, config.claimTtlMs)
+        const stopHeartbeat = startTaskHeartbeat(claimedTask.id, workerId, config.claimTtlMs, { extendTaskLock })
 
         try {
           const output = await handleTask(claimedTask, config)

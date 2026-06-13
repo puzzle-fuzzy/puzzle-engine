@@ -7,6 +7,7 @@ import {
   computeRetryDelay,
   createTaskHandlerRegistry,
   decideTaskFailureAction,
+  extendTaskLockWithAdapter,
   shouldRetryTask,
   sweepOrphanTasksWithAdapter,
   TaskNotImplementedError,
@@ -226,6 +227,38 @@ describe('@excuse/task-engine', () => {
 
     expect(result).toBe(0)
     expect(calls).toEqual([[undefined]])
+  })
+
+  it('extends a task lock through an adapter with task/worker/ttl args', async () => {
+    const calls: Array<[string, string, number]> = []
+    const updated = { id: 'task-1', status: 'running' }
+    const result = await extendTaskLockWithAdapter({
+      taskId: 'task-1',
+      workerId: 'worker-1',
+      claimTtlMs: 30_000,
+      adapter: {
+        extendTaskLock: async (id, workerId, claimTtlMs) => {
+          calls.push([id, workerId, claimTtlMs])
+          return updated
+        },
+      },
+    })
+
+    expect(result).toBe(updated)
+    expect(calls).toEqual([['task-1', 'worker-1', 30_000]])
+  })
+
+  it('returns null when extend lock adapter reports task no longer running', async () => {
+    const result = await extendTaskLockWithAdapter({
+      taskId: 'task-1',
+      workerId: 'worker-1',
+      claimTtlMs: 30_000,
+      adapter: {
+        extendTaskLock: async () => null,
+      },
+    })
+
+    expect(result).toBeNull()
   })
 
   it('applies retry failure action through an adapter', async () => {

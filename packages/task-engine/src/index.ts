@@ -64,6 +64,17 @@ export interface SweepOrphanTasksWithAdapterInput {
   adapter: TaskSweepAdapter
 }
 
+export interface TaskHeartbeatAdapter<TTask> {
+  extendTaskLock: (id: string, workerId: string, claimTtlMs: number) => Promise<TTask | null> | TTask | null
+}
+
+export interface ExtendTaskLockWithAdapterInput<TTask> {
+  taskId: string
+  workerId: string
+  claimTtlMs: number
+  adapter: TaskHeartbeatAdapter<TTask>
+}
+
 export interface TaskFailureAdapter {
   markTaskRetrying: (id: string, nextRunAt: Date) => Promise<unknown> | unknown
   markTaskFailed: (id: string, errorInfo?: TaskErrorInfo, errorMessage?: string) => Promise<unknown> | unknown
@@ -159,6 +170,17 @@ export async function sweepOrphanTasksWithAdapter(
   input: SweepOrphanTasksWithAdapterInput,
 ): Promise<number> {
   return input.adapter.sweepOrphanTasks(input.timeoutMinutes)
+}
+
+/**
+ * 通过 adapter 延长任务锁 — heartbeat 定期续锁的续锁动作注入，task-engine 不依赖 DB
+ *
+ * @returns 续锁后的 task；adapter 返回 null 表示任务已不再 running（被 sweep/cancel）
+ */
+export async function extendTaskLockWithAdapter<TTask>(
+  input: ExtendTaskLockWithAdapterInput<TTask>,
+): Promise<TTask | null> {
+  return input.adapter.extendTaskLock(input.taskId, input.workerId, input.claimTtlMs)
 }
 
 export async function applyTaskFailureWithAdapter<TTask extends TaskRetryCandidate & { id: string }>(
