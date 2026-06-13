@@ -2,6 +2,7 @@ import { describe, expect, it } from 'bun:test'
 import {
   classifyTaskError,
   computeRetryDelay,
+  createTaskHandlerRegistry,
   shouldRetryTask,
   TaskNotImplementedError,
 } from '../src'
@@ -50,5 +51,38 @@ describe('@excuse/task-engine', () => {
     expect(computeRetryDelay('canvas.videos', 1)).toBe(60_000)
     expect(computeRetryDelay('generate.video', 3)).toBe(240_000)
     expect(computeRetryDelay('canvas.analyze', 3)).toBe(30_000)
+  })
+
+  it('dispatches tasks through a typed handler registry', async () => {
+    const registry = createTaskHandlerRegistry<
+      { type: string, payload: string },
+      { suffix: string },
+      { value: string }
+    >([
+      {
+        type: 'demo.echo',
+        handler: (task, context) => ({ value: `${task.payload}${context.suffix}` }),
+      },
+    ])
+
+    expect(registry.has('demo.echo')).toBe(true)
+    expect(registry.listTypes()).toEqual(['demo.echo'])
+    await expect(registry.handle({ type: 'demo.echo', payload: 'hello' }, { suffix: '!' })).resolves.toEqual({
+      value: 'hello!',
+    })
+  })
+
+  it('throws TaskNotImplementedError for unregistered task types', async () => {
+    const registry = createTaskHandlerRegistry<{ type: string }, undefined>()
+
+    await expect(registry.handle({ type: 'missing.task' }, undefined)).rejects.toThrow(TaskNotImplementedError)
+  })
+
+  it('allows later registrations to replace handlers for a task type', async () => {
+    const registry = createTaskHandlerRegistry<{ type: string }, undefined, string>()
+      .register({ type: 'demo.task', handler: () => 'first' })
+      .register({ type: 'demo.task', handler: () => 'second' })
+
+    await expect(registry.handle({ type: 'demo.task' }, undefined)).resolves.toBe('second')
   })
 })

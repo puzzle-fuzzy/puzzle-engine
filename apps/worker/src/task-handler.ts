@@ -9,10 +9,84 @@ import type { TaskErrorInfo, TaskRow } from '@excuse/db'
 import type { WorkerConfig } from './config'
 import { markTaskFailed } from '@excuse/db'
 import { createLogger } from '@excuse/shared'
-import { classifyTaskError, computeRetryDelay, shouldRetryTask, TaskNotImplementedError } from '@excuse/task-engine'
+import {
+  classifyTaskError,
+  computeRetryDelay,
+  createTaskHandlerRegistry,
+  shouldRetryTask,
+  TaskNotImplementedError,
+} from '@excuse/task-engine'
 import { markRunFailedAndNotify } from './canvas-handlers'
 
 const logger = createLogger('task-handler')
+
+type WorkerTaskOutput = Record<string, unknown> | undefined
+
+const taskRegistry = createTaskHandlerRegistry<TaskRow, WorkerConfig, WorkerTaskOutput>([
+  {
+    type: 'canvas.analyze',
+    handler: async (task, workerConfig) => {
+      const { handleCanvasAnalyze } = await import('./canvas-handlers')
+      return handleCanvasAnalyze(task, workerConfig)
+    },
+  },
+  {
+    type: 'canvas.characters',
+    handler: async (task, workerConfig) => {
+      const { handleCanvasCharacters } = await import('./canvas-handlers')
+      return handleCanvasCharacters(task, workerConfig)
+    },
+  },
+  {
+    type: 'canvas.locations',
+    handler: async (task, workerConfig) => {
+      const { handleCanvasLocations } = await import('./canvas-handlers')
+      return handleCanvasLocations(task, workerConfig)
+    },
+  },
+  {
+    type: 'canvas.characterRefs',
+    handler: async (task, workerConfig) => {
+      const { handleCanvasCharacterRefs } = await import('./canvas-handlers')
+      return handleCanvasCharacterRefs(task, workerConfig)
+    },
+  },
+  {
+    type: 'canvas.locationRefs',
+    handler: async (task, workerConfig) => {
+      const { handleCanvasLocationRefs } = await import('./canvas-handlers')
+      return handleCanvasLocationRefs(task, workerConfig)
+    },
+  },
+  {
+    type: 'canvas.storyboard',
+    handler: async (task, workerConfig) => {
+      const { handleCanvasStoryboard } = await import('./canvas-handlers')
+      return handleCanvasStoryboard(task, workerConfig)
+    },
+  },
+  {
+    type: 'canvas.continuity',
+    handler: async (task, workerConfig) => {
+      const { handleCanvasContinuity } = await import('./canvas-handlers')
+      return handleCanvasContinuity(task, workerConfig)
+    },
+  },
+  {
+    type: 'canvas.rebuild',
+    handler: async (task, workerConfig) => {
+      const { handleCanvasRebuild } = await import('./canvas-handlers')
+      return handleCanvasRebuild(task, workerConfig)
+    },
+  },
+  {
+    type: 'canvas.videos',
+    handler: async (task, workerConfig) => {
+      const { handleCanvasVideos } = await import('./canvas-handlers')
+      return handleCanvasVideos(task, workerConfig)
+    },
+  },
+])
 
 /**
  * 处理已 claim 的 task — 根据 task.type dispatch 到对应 handler
@@ -22,65 +96,7 @@ const logger = createLogger('task-handler')
  */
 export async function handleTask(task: TaskRow, workerConfig: WorkerConfig): Promise<Record<string, unknown> | undefined> {
   logger.info({ taskId: task.id, type: task.type, domain: task.domain }, 'Handling task')
-
-  switch (task.type) {
-    // ── Canvas pipeline phases ─────────────────────────
-    // Delegated to canvas-handlers.ts — dynamic import of server service functions
-    case 'canvas.analyze': {
-      const { handleCanvasAnalyze } = await import('./canvas-handlers')
-      return handleCanvasAnalyze(task, workerConfig)
-    }
-    case 'canvas.characters': {
-      const { handleCanvasCharacters } = await import('./canvas-handlers')
-      return handleCanvasCharacters(task, workerConfig)
-    }
-    case 'canvas.locations': {
-      const { handleCanvasLocations } = await import('./canvas-handlers')
-      return handleCanvasLocations(task, workerConfig)
-    }
-    case 'canvas.characterRefs': {
-      const { handleCanvasCharacterRefs } = await import('./canvas-handlers')
-      return handleCanvasCharacterRefs(task, workerConfig)
-    }
-    case 'canvas.locationRefs': {
-      const { handleCanvasLocationRefs } = await import('./canvas-handlers')
-      return handleCanvasLocationRefs(task, workerConfig)
-    }
-    case 'canvas.storyboard': {
-      const { handleCanvasStoryboard } = await import('./canvas-handlers')
-      return handleCanvasStoryboard(task, workerConfig)
-    }
-    case 'canvas.continuity': {
-      const { handleCanvasContinuity } = await import('./canvas-handlers')
-      return handleCanvasContinuity(task, workerConfig)
-    }
-    case 'canvas.rebuild': {
-      const { handleCanvasRebuild } = await import('./canvas-handlers')
-      return handleCanvasRebuild(task, workerConfig)
-    }
-    case 'canvas.videos': {
-      const { handleCanvasVideos } = await import('./canvas-handlers')
-      return handleCanvasVideos(task, workerConfig)
-    }
-
-    // ── 通用生成任务 ────────────────────────────────────
-    case 'generate.text':
-    case 'generate.image':
-    case 'generate.video':
-      throw new TaskNotImplementedError(task.type)
-
-    // ── 字幕任务 ──────────────────────────────────────
-    case 'subtitle.asr':
-    case 'subtitle.export':
-      throw new TaskNotImplementedError(task.type)
-
-    // ── Gateway 任务 ──────────────────────────────────
-    case 'gateway.chatCompletion':
-      throw new TaskNotImplementedError(task.type)
-
-    default:
-      throw new TaskNotImplementedError(task.type)
-  }
+  return taskRegistry.handle(task, workerConfig)
 }
 
 /**

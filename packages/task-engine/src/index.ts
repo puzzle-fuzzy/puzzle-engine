@@ -1,5 +1,10 @@
 export type TaskErrorCategory = 'provider_error' | 'timeout' | 'validation' | 'system'
 
+export type TaskHandler<TTask, TContext, TOutput = Record<string, unknown> | undefined> = (
+  task: TTask,
+  context: TContext,
+) => Promise<TOutput> | TOutput
+
 export interface TaskErrorDecision {
   category: TaskErrorCategory
   retriable: boolean
@@ -7,11 +12,57 @@ export interface TaskErrorDecision {
   message: string
 }
 
+export interface TaskDefinition<TTask, TContext, TOutput = Record<string, unknown> | undefined> {
+  type: string
+  handler: TaskHandler<TTask, TContext, TOutput>
+}
+
+export class TaskHandlerRegistry<TTask extends { type: string }, TContext, TOutput = Record<string, unknown> | undefined> {
+  private readonly handlers = new Map<string, TaskHandler<TTask, TContext, TOutput>>()
+
+  register(definition: TaskDefinition<TTask, TContext, TOutput>): this {
+    this.handlers.set(definition.type, definition.handler)
+    return this
+  }
+
+  registerMany(definitions: Array<TaskDefinition<TTask, TContext, TOutput>>): this {
+    for (const definition of definitions) {
+      this.register(definition)
+    }
+    return this
+  }
+
+  has(taskType: string): boolean {
+    return this.handlers.has(taskType)
+  }
+
+  get(taskType: string): TaskHandler<TTask, TContext, TOutput> | undefined {
+    return this.handlers.get(taskType)
+  }
+
+  listTypes(): string[] {
+    return [...this.handlers.keys()]
+  }
+
+  async handle(task: TTask, context: TContext): Promise<TOutput> {
+    const handler = this.get(task.type)
+    if (!handler)
+      throw new TaskNotImplementedError(task.type)
+    return handler(task, context)
+  }
+}
+
 export class TaskNotImplementedError extends Error {
   constructor(taskType: string) {
     super(`Task handler not implemented: ${taskType}`)
     this.name = 'TaskNotImplementedError'
   }
+}
+
+export function createTaskHandlerRegistry<TTask extends { type: string }, TContext, TOutput = Record<string, unknown> | undefined>(
+  definitions: Array<TaskDefinition<TTask, TContext, TOutput>> = [],
+): TaskHandlerRegistry<TTask, TContext, TOutput> {
+  return new TaskHandlerRegistry<TTask, TContext, TOutput>().registerMany(definitions)
 }
 
 export function classifyTaskError(error: unknown): TaskErrorDecision {
