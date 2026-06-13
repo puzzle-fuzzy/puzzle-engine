@@ -12,6 +12,16 @@ export interface TaskErrorDecision {
   message: string
 }
 
+export type TaskFailureAction =
+  | { action: 'retry', decision: TaskErrorDecision, delayMs: number }
+  | { action: 'fail', decision: TaskErrorDecision }
+
+export interface TaskRetryCandidate {
+  type: string
+  attempts: number
+  maxAttempts: number
+}
+
 export interface TaskDefinition<TTask, TContext, TOutput = Record<string, unknown> | undefined> {
   type: string
   handler: TaskHandler<TTask, TContext, TOutput>
@@ -100,6 +110,22 @@ export function shouldRetryTask(
   maxAttempts: number,
 ): boolean {
   return classifyTaskError(error).retriable && attempts < maxAttempts
+}
+
+export function decideTaskFailureAction(task: TaskRetryCandidate, error: unknown): TaskFailureAction {
+  const decision = classifyTaskError(error)
+  if (decision.retriable && task.attempts < task.maxAttempts) {
+    return {
+      action: 'retry',
+      decision,
+      delayMs: computeRetryDelay(task.type, task.attempts),
+    }
+  }
+
+  return {
+    action: 'fail',
+    decision,
+  }
 }
 
 export function computeRetryDelay(taskType: string, attempts: number): number {

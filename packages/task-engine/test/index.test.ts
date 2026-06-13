@@ -3,6 +3,7 @@ import {
   classifyTaskError,
   computeRetryDelay,
   createTaskHandlerRegistry,
+  decideTaskFailureAction,
   shouldRetryTask,
   TaskNotImplementedError,
 } from '../src'
@@ -84,5 +85,42 @@ describe('@excuse/task-engine', () => {
       .register({ type: 'demo.task', handler: () => 'second' })
 
     await expect(registry.handle({ type: 'demo.task' }, undefined)).resolves.toBe('second')
+  })
+
+  it('decides retry action with the task retry delay policy', () => {
+    const error = new Error('timeout', { cause: { code: 'ETIMEDOUT' } })
+
+    expect(decideTaskFailureAction({
+      type: 'generate.video',
+      attempts: 2,
+      maxAttempts: 3,
+    }, error)).toEqual({
+      action: 'retry',
+      delayMs: 120_000,
+      decision: {
+        category: 'timeout',
+        retriable: true,
+        code: 'ETIMEDOUT',
+        message: 'timeout',
+      },
+    })
+  })
+
+  it('decides fail action when retry budget is exhausted', () => {
+    const error = new Error('timeout', { cause: { code: 'ETIMEDOUT' } })
+
+    expect(decideTaskFailureAction({
+      type: 'generate.video',
+      attempts: 3,
+      maxAttempts: 3,
+    }, error)).toEqual({
+      action: 'fail',
+      decision: {
+        category: 'timeout',
+        retriable: true,
+        code: 'ETIMEDOUT',
+        message: 'timeout',
+      },
+    })
   })
 })

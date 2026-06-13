@@ -11,9 +11,8 @@ import { markTaskFailed } from '@excuse/db'
 import { createLogger } from '@excuse/shared'
 import {
   classifyTaskError,
-  computeRetryDelay,
   createTaskHandlerRegistry,
-  shouldRetryTask,
+  decideTaskFailureAction,
   TaskNotImplementedError,
 } from '@excuse/task-engine'
 import { markRunFailedAndNotify } from './canvas-handlers'
@@ -108,10 +107,10 @@ export async function handleTask(task: TaskRow, workerConfig: WorkerConfig): Pro
  */
 export async function handleTaskError(task: TaskRow, error: unknown): Promise<void> {
   const isNotImplemented = error instanceof TaskNotImplementedError
-  const decision = classifyTaskError(error)
   const errorMessage = error instanceof Error ? error.message : String(error)
 
   if (isNotImplemented) {
+    const decision = classifyTaskError(error)
     const errorInfo: TaskErrorInfo = {
       category: decision.category,
       retriable: decision.retriable,
@@ -122,12 +121,14 @@ export async function handleTaskError(task: TaskRow, error: unknown): Promise<vo
     return
   }
 
-  if (shouldRetryTask(error, task.attempts, task.maxAttempts)) {
-    const delayMs = computeRetryDelay(task.type, task.attempts)
-    const nextRunAt = new Date(Date.now() + delayMs)
+  const failureAction = decideTaskFailureAction(task, error)
+  const decision = failureAction.decision
+
+  if (failureAction.action === 'retry') {
+    const nextRunAt = new Date(Date.now() + failureAction.delayMs)
     const { markTaskRetrying } = await import('@excuse/db')
     await markTaskRetrying(task.id, nextRunAt)
-    logger.info({ taskId: task.id, type: task.type, attempts: task.attempts, nextRetryDelay: delayMs }, 'Task retrying')
+    logger.info({ taskId: task.id, type: task.type, attempts: task.attempts, nextRetryDelay: failureAction.delayMs }, 'Task retrying')
   }
   else {
     const errorInfo: TaskErrorInfo = {
