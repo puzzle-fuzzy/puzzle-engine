@@ -280,7 +280,10 @@ export default function PipelineController({
     }
 
     const nextPhase = PHASES[nextIdx]
+
     if (nextPhase.pauseBefore) {
+      // PAUSE_BEFORE 阶段：暂停，等待用户确认
+      // 当 autoProgress=true 时，后端 stepper 也会在这里暂停
       setRunning(false)
       setCurrentPhase(-1)
       activeRunIdRef.current = null
@@ -290,6 +293,16 @@ export default function PipelineController({
       if (autoRef.current) {
         setCountdown(3)
       }
+    }
+    else if (autoRef.current && prefs.autoProgress) {
+      // autoProgress=true：后端 pipeline-stepper 会自动创建下一个 phase task
+      // 前端只需显示 "等待下一阶段..." 状态，不主动触发 API
+      setRunning(false)
+      setCurrentPhase(-1)
+      activeRunIdRef.current = null
+      setElapsed(0)
+      phaseStartedAtRef.current = 0
+      onPhaseChange?.(null)
     }
     else if (autoRef.current) {
       triggerPhase(nextIdx)
@@ -302,7 +315,7 @@ export default function PipelineController({
       phaseStartedAtRef.current = 0
       onPhaseChange?.(null)
     }
-  }, [onPhaseChange, triggerPhase])
+  }, [onPhaseChange, triggerPhase, prefs])
 
   // Handle phase completion from SSE events
   useEffect(() => {
@@ -432,7 +445,14 @@ export default function PipelineController({
       return
     setAutoMode(true)
     setError(null)
-    triggerPhase(startIdx)
+    // autoProgress=true → set backend flag then trigger only phase 1 (analyze)
+    // Backend pipeline-stepper handles subsequent phase advancement
+    updateCanvasModelPreferences(projectId, { ...prefs, autoProgress: true })
+      .then(() => triggerPhase(startIdx))
+      .catch(() => {
+        // Fallback: still trigger even if autoProgress save fails
+        triggerPhase(startIdx)
+      })
   }
 
   function handleSkipAndContinue() {

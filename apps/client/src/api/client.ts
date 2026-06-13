@@ -321,7 +321,7 @@ export async function saveCanvasLayout(projectId: string, layout: import('@excus
 
 export async function updateCanvasModelPreferences(
   projectId: string,
-  prefs: { textModel?: string, imageModel?: string, videoModel?: string },
+  prefs: { textModel?: string, imageModel?: string, videoModel?: string, autoProgress?: boolean },
 ): Promise<CanvasProjectResponse> {
   return unwrapEden<CanvasProjectResponse>(
     await api.api.canvas.projects({ projectId })['model-preferences'].patch(prefs),
