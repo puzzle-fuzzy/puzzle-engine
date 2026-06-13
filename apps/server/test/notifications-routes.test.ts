@@ -33,10 +33,12 @@ mock.module('@excuse/db', () => ({
   markNotificationRead: mockMarkNotificationRead,
 }))
 
-const mockDispatchToUser = mock(() => {})
-
-mock.module('../src/services/sse-manager', () => ({
-  dispatchToUser: mockDispatchToUser,
+mock.module('@excuse/db', () => ({
+  createNotification: mockCreateNotification,
+  getUnreadCount: mockGetUnreadCount,
+  listNotifications: mockListNotifications,
+  markAllNotificationsRead: mockMarkAllNotificationsRead,
+  markNotificationRead: mockMarkNotificationRead,
 }))
 
 // eslint-disable-next-line import/first
@@ -67,7 +69,6 @@ describe('notification routes', () => {
       mockMarkNotificationRead,
       mockMarkAllNotificationsRead,
       mockCreateNotification,
-      mockDispatchToUser,
     ]) {
       fn.mockClear()
     }
