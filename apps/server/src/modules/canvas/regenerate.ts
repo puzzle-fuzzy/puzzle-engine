@@ -7,7 +7,7 @@
  */
 import type { CanvasAssetOutput } from '@excuse/db'
 import type { CharacterProfile, LocationProfile } from '@excuse/shared'
-import { submitCanvasShotVideo } from '@excuse/canvas-runtime'
+import { runCanvasAssetStep, submitCanvasShotVideo } from '@excuse/canvas-runtime'
 import {
   createCanvasAsset,
   createCanvasCharacter,
@@ -20,8 +20,6 @@ import {
   getCanvasShotById,
   markCanvasAssetFailed,
   markCanvasAssetRunning,
-  markCanvasAssetSucceeded,
-  setCanvasAssetActive,
 } from '@excuse/db'
 import {
   buildCharacterPrompt,
@@ -49,66 +47,60 @@ export async function regenerateCharacter(characterId: string, config: { dashsco
 
   notifyNode(accountId, character.projectId, 'character', characterId, 'running')
 
-  // ── 为重新生成的角色档案创建 canvas_asset ──────
-  const profileAsset = await createCanvasAsset({
-    accountId,
-    projectId: character.projectId,
-    category: 'characterProfile',
-    targetEntityType: 'character',
-    targetEntityId: characterId,
-    model: textModel,
-  })
-
   const client = createClient(config)
 
   try {
-    // ── 标记资产为运行状态 ──────────────────────────
-    await markCanvasAssetRunning(profileAsset.id)
+    const { newCharacter, profile } = await runCanvasAssetStep({
+      asset: {
+        accountId,
+        projectId: character.projectId,
+        category: 'characterProfile',
+        targetEntityType: 'character',
+        targetEntityId: characterId,
+        model: textModel,
+      },
+      execute: async () => {
+        const { system, prompt: userPrompt } = buildCharacterPrompt(project.storyText, analysis, name)
+        const modelConfig = getProviderModelById(textModel)
+        if (!modelConfig)
+          throw new Error(`未知文本模型：${textModel}`)
 
-    const { system, prompt: userPrompt } = buildCharacterPrompt(project.storyText, analysis, name)
-    const modelConfig = getProviderModelById(textModel)
-    if (!modelConfig)
-      throw new Error(`未知文本模型：${textModel}`)
+        const rawParams: Record<string, unknown> = {
+          prompt: `${system}\n\n${userPrompt}`,
+          max_tokens: 4096,
+          temperature: 0.7,
+        }
+        const validationResult = validateAndMerge(modelConfig, rawParams)
+        if (!validationResult.ok) {
+          const detail = validationResult.errors.map(e => `${e.field}: ${e.message}`).join('; ')
+          throw new Error(`参数校验失败：${detail}`)
+        }
 
-    const rawParams: Record<string, unknown> = {
-      prompt: `${system}\n\n${userPrompt}`,
-      max_tokens: 4096,
-      temperature: 0.7,
-    }
-    const validationResult = validateAndMerge(modelConfig, rawParams)
-    if (!validationResult.ok) {
-      const detail = validationResult.errors.map(e => `${e.field}: ${e.message}`).join('; ')
-      throw new Error(`参数校验失败：${detail}`)
-    }
+        const result = await client.chatCompletion(textModel, validationResult.params)
+        if (result.type === 'failed')
+          throw new Error(result.error || '角色重新生成失败')
 
-    const result = await client.chatCompletion(textModel, validationResult.params)
+        const profile = parseLLMJson<CharacterProfile>(result.output.text as string)
+        const newCharacter = await createCanvasCharacter({
+          projectId: character.projectId,
+          name: profile.name || name,
+          role: profile.role,
+          description: `${profile.age} ${profile.gender} ${profile.bodyShape}`,
+          identityPrompt: profile.identityPrompt,
+          negativePrompt: profile.negativePrompt,
+          profileJson: profile,
+        })
 
-    if (result.type === 'failed')
-      throw new Error(result.error || '角色重新生成失败')
-
-    const profile = parseLLMJson<CharacterProfile>(result.output.text as string)
-    const newCharacter = await createCanvasCharacter({
-      projectId: character.projectId,
-      name: profile.name || name,
-      role: profile.role,
-      description: `${profile.age} ${profile.gender} ${profile.bodyShape}`,
-      identityPrompt: profile.identityPrompt,
-      negativePrompt: profile.negativePrompt,
-      profileJson: profile,
+        const output: CanvasAssetOutput = { type: 'json', data: { ...profile } }
+        return { result: { newCharacter, profile }, output }
+      },
     })
-
-    // ── 标记角色档案资产成功 + 设为活跃 ──────────────
-    const outputJson: CanvasAssetOutput = { type: 'json', data: { ...profile } }
-    await markCanvasAssetSucceeded(profileAsset.id, outputJson)
-    await setCanvasAssetActive(profileAsset.id)
 
     notifyNode(accountId, character.projectId, 'character', newCharacter.id, 'completed', { name: profile.name, profile })
     return newCharacter
   }
   catch (error) {
     const errorMessage = (error as Error).message
-    // ── 标记资产失败 ──────────────────────────────
-    await markCanvasAssetFailed(profileAsset.id, errorMessage).catch(() => {})
     notifyNode(accountId, character.projectId, 'character', characterId, 'failed', undefined, errorMessage)
     throw error
   }
@@ -132,65 +124,59 @@ export async function regenerateLocation(locationId: string, config: { dashscope
 
   notifyNode(accountId, location.projectId, 'location', locationId, 'running')
 
-  // ── 为重新生成的场景档案创建 canvas_asset ──────
-  const profileAsset = await createCanvasAsset({
-    accountId,
-    projectId: location.projectId,
-    category: 'locationProfile',
-    targetEntityType: 'location',
-    targetEntityId: locationId,
-    model: textModel,
-  })
-
   const client = createClient(config)
 
   try {
-    // ── 标记资产为运行状态 ──────────────────────────
-    await markCanvasAssetRunning(profileAsset.id)
+    const { newLocation, profile } = await runCanvasAssetStep({
+      asset: {
+        accountId,
+        projectId: location.projectId,
+        category: 'locationProfile',
+        targetEntityType: 'location',
+        targetEntityId: locationId,
+        model: textModel,
+      },
+      execute: async () => {
+        const { system, prompt: userPrompt } = buildLocationPrompt(project.storyText, analysis, name)
+        const modelConfig = getProviderModelById(textModel)
+        if (!modelConfig)
+          throw new Error(`未知文本模型：${textModel}`)
 
-    const { system, prompt: userPrompt } = buildLocationPrompt(project.storyText, analysis, name)
-    const modelConfig = getProviderModelById(textModel)
-    if (!modelConfig)
-      throw new Error(`未知文本模型：${textModel}`)
+        const rawParams: Record<string, unknown> = {
+          prompt: `${system}\n\n${userPrompt}`,
+          max_tokens: 4096,
+          temperature: 0.7,
+        }
+        const validationResult = validateAndMerge(modelConfig, rawParams)
+        if (!validationResult.ok) {
+          const detail = validationResult.errors.map(e => `${e.field}: ${e.message}`).join('; ')
+          throw new Error(`参数校验失败：${detail}`)
+        }
 
-    const rawParams: Record<string, unknown> = {
-      prompt: `${system}\n\n${userPrompt}`,
-      max_tokens: 4096,
-      temperature: 0.7,
-    }
-    const validationResult = validateAndMerge(modelConfig, rawParams)
-    if (!validationResult.ok) {
-      const detail = validationResult.errors.map(e => `${e.field}: ${e.message}`).join('; ')
-      throw new Error(`参数校验失败：${detail}`)
-    }
+        const result = await client.chatCompletion(textModel, validationResult.params)
+        if (result.type === 'failed')
+          throw new Error(result.error || '场景重新生成失败')
 
-    const result = await client.chatCompletion(textModel, validationResult.params)
+        const profile = parseLLMJson<LocationProfile>(result.output.text as string)
+        const newLocation = await createCanvasLocation({
+          projectId: location.projectId,
+          name: profile.name || name,
+          type: profile.type,
+          profileJson: profile,
+          scenePrompt: profile.scenePrompt,
+          negativePrompt: profile.negativePrompt,
+        })
 
-    if (result.type === 'failed')
-      throw new Error(result.error || '场景重新生成失败')
-
-    const profile = parseLLMJson<LocationProfile>(result.output.text as string)
-    const newLocation = await createCanvasLocation({
-      projectId: location.projectId,
-      name: profile.name || name,
-      type: profile.type,
-      profileJson: profile,
-      scenePrompt: profile.scenePrompt,
-      negativePrompt: profile.negativePrompt,
+        const output: CanvasAssetOutput = { type: 'json', data: { ...profile } }
+        return { result: { newLocation, profile }, output }
+      },
     })
-
-    // ── 标记场景档案资产成功 + 设为活跃 ──────────────
-    const outputJson: CanvasAssetOutput = { type: 'json', data: { ...profile } }
-    await markCanvasAssetSucceeded(profileAsset.id, outputJson)
-    await setCanvasAssetActive(profileAsset.id)
 
     notifyNode(accountId, location.projectId, 'location', newLocation.id, 'completed', { name: profile.name, profile })
     return newLocation
   }
   catch (error) {
     const errorMessage = (error as Error).message
-    // ── 标记资产失败 ──────────────────────────────
-    await markCanvasAssetFailed(profileAsset.id, errorMessage).catch(() => {})
     notifyNode(accountId, location.projectId, 'location', locationId, 'failed', undefined, errorMessage)
     throw error
   }

@@ -1,19 +1,17 @@
-import type { CanvasAssetOutput } from '@excuse/db'
 import type { OSSConfig } from '@excuse/provider'
+import { generateCanvasImageAsset } from '@excuse/canvas-runtime'
 import {
   createCanvasAsset,
   getCanvasProjectDetail,
   markCanvasAssetFailed,
   markCanvasAssetRunning,
-  markCanvasAssetSucceeded,
   markPipelineRunRunning,
   markPipelineRunSucceeded,
-  setCanvasAssetActive,
   updateCanvasCharacter,
   updateCanvasLocation,
   updateCanvasProject,
 } from '@excuse/db'
-import { AssetStorage, getModelById, validateAndMerge } from '@excuse/provider'
+import { AssetStorage, getModelById } from '@excuse/provider'
 import { getProjectDetail } from './service-crud'
 import { assertNotGenerating, createClient, getImageModel, notifyNode } from './service-helpers'
 
@@ -39,6 +37,8 @@ export async function generateCharacterRefs(projectId: string, config: { dashsco
       continue
 
     notifyNode(accountId, projectId, 'character', char.id, 'running', undefined, undefined, runId)
+    const portraitPrompt = `${char.identityPrompt}, portrait photo, neutral expression, solid background, front view, high quality`
+    const turnaroundPrompt = `${char.identityPrompt}, character turnaround sheet showing front view, side view, and back view, white background, character design sheet`
 
     // ── 为角色肖像创建 canvas_asset ──────────────────
     const portraitAsset = await createCanvasAsset({
@@ -49,7 +49,7 @@ export async function generateCharacterRefs(projectId: string, config: { dashsco
       targetEntityId: char.id,
       pipelineRunId: runId ?? undefined,
       model: imageModel,
-      inputJson: { prompt: `${char.identityPrompt}, portrait photo, neutral expression, solid background, front view, high quality`, size: '2048*2048', n: 1 },
+      inputJson: { prompt: portraitPrompt, size: '2048*2048', n: 1 },
     })
     // ── 为角色三视图创建 canvas_asset ──────────────────
     const turnaroundAsset = await createCanvasAsset({
@@ -60,7 +60,7 @@ export async function generateCharacterRefs(projectId: string, config: { dashsco
       targetEntityId: char.id,
       pipelineRunId: runId ?? undefined,
       model: imageModel,
-      inputJson: { prompt: `${char.identityPrompt}, character turnaround sheet showing front view, side view, and back view, white background, character design sheet`, size: '2048*2048', n: 1 },
+      inputJson: { prompt: turnaroundPrompt, size: '2048*2048', n: 1 },
     })
 
     try {
@@ -68,53 +68,35 @@ export async function generateCharacterRefs(projectId: string, config: { dashsco
       await markCanvasAssetRunning(portraitAsset.id)
       await markCanvasAssetRunning(turnaroundAsset.id)
 
-      const portraitValidation = validateAndMerge(imageModelConfig, {
-        prompt: `${char.identityPrompt}, portrait photo, neutral expression, solid background, front view, high quality`,
-        size: '2048*2048',
-        n: 1,
+      const portrait = await generateCanvasImageAsset({
+        assetId: portraitAsset.id,
+        imageModel,
+        imageModelConfig,
+        prompt: portraitPrompt,
+        subDir: `canvas/${char.id}`,
+        prefix: 'portrait',
+        errorMessage: '角色肖像生成失败',
+        client,
+        storage,
       })
-      if (!portraitValidation.ok) {
-        const detail = portraitValidation.errors.map(e => `${e.field}: ${e.message}`).join('; ')
-        throw new Error(`参数校验失败：${detail}`)
-      }
-      const portraitResult = await client.generateImage(imageModel, portraitValidation.params)
 
-      if (portraitResult.success && portraitResult.output) {
-        const urls = portraitResult.output.urls
-        if (Array.isArray(urls) && urls.length) {
-          const savedUrls = await storage.downloadAndMap(urls as string[], `canvas/${char.id}`, 'portrait')
-          const publicUrl = savedUrls[0] || urls[0]
-          await updateCanvasCharacter(char.id, { referenceImageUrl: publicUrl })
-          // ── 标记肖像资产成功 + 设为活跃 ──────────────
-          const outputJson: CanvasAssetOutput = { type: 'image', urls: savedUrls.length > 0 ? savedUrls : urls }
-          await markCanvasAssetSucceeded(portraitAsset.id, outputJson, publicUrl, savedUrls[0] ?? undefined, urls[0], undefined)
-          await setCanvasAssetActive(portraitAsset.id)
-        }
-      }
+      if (portrait)
+        await updateCanvasCharacter(char.id, { referenceImageUrl: portrait.publicUrl })
 
-      const turnaroundValidation = validateAndMerge(imageModelConfig, {
-        prompt: `${char.identityPrompt}, character turnaround sheet showing front view, side view, and back view, white background, character design sheet`,
-        size: '2048*2048',
-        n: 1,
+      const turnaround = await generateCanvasImageAsset({
+        assetId: turnaroundAsset.id,
+        imageModel,
+        imageModelConfig,
+        prompt: turnaroundPrompt,
+        subDir: `canvas/${char.id}`,
+        prefix: 'turnaround',
+        errorMessage: '角色三视图生成失败',
+        client,
+        storage,
       })
-      if (!turnaroundValidation.ok) {
-        const detail = turnaroundValidation.errors.map(e => `${e.field}: ${e.message}`).join('; ')
-        throw new Error(`参数校验失败：${detail}`)
-      }
-      const turnaroundResult = await client.generateImage(imageModel, turnaroundValidation.params)
 
-      if (turnaroundResult.success && turnaroundResult.output) {
-        const urls = turnaroundResult.output.urls
-        if (Array.isArray(urls) && urls.length) {
-          const savedUrls = await storage.downloadAndMap(urls as string[], `canvas/${char.id}`, 'turnaround')
-          const publicUrl = savedUrls[0] || urls[0]
-          await updateCanvasCharacter(char.id, { turnaroundSheetUrl: publicUrl })
-          // ── 标记三视图资产成功 + 设为活跃 ──────────────
-          const outputJson: CanvasAssetOutput = { type: 'image', urls: savedUrls.length > 0 ? savedUrls : urls }
-          await markCanvasAssetSucceeded(turnaroundAsset.id, outputJson, publicUrl, savedUrls[0] ?? undefined, urls[0], undefined)
-          await setCanvasAssetActive(turnaroundAsset.id)
-        }
-      }
+      if (turnaround)
+        await updateCanvasCharacter(char.id, { turnaroundSheetUrl: turnaround.publicUrl })
 
       notifyNode(accountId, projectId, 'character', char.id, 'completed', undefined, undefined, runId)
     }
@@ -156,6 +138,7 @@ export async function generateLocationRefs(projectId: string, config: { dashscop
       continue
 
     notifyNode(accountId, projectId, 'location', loc.id, 'running', undefined, undefined, runId)
+    const prompt = `${loc.scenePrompt}, establishing shot, wide angle, cinematic lighting, no people, no characters, empty scene, uninhabited`
 
     // ── 为场景参考图创建 canvas_asset ──────────────────
     const refAsset = await createCanvasAsset({
@@ -166,36 +149,27 @@ export async function generateLocationRefs(projectId: string, config: { dashscop
       targetEntityId: loc.id,
       pipelineRunId: runId ?? undefined,
       model: imageModel,
-      inputJson: { prompt: `${loc.scenePrompt}, establishing shot, wide angle, cinematic lighting, no people, no characters, empty scene, uninhabited`, size: '2048*2048', n: 1 },
+      inputJson: { prompt, size: '2048*2048', n: 1 },
     })
 
     try {
       // ── 标记资产为运行状态 ──────────────────────────
       await markCanvasAssetRunning(refAsset.id)
 
-      const refValidation = validateAndMerge(imageModelConfig, {
-        prompt: `${loc.scenePrompt}, establishing shot, wide angle, cinematic lighting, no people, no characters, empty scene, uninhabited`,
-        size: '2048*2048',
-        n: 1,
+      const generated = await generateCanvasImageAsset({
+        assetId: refAsset.id,
+        imageModel,
+        imageModelConfig,
+        prompt,
+        subDir: `canvas/${loc.id}`,
+        prefix: 'ref',
+        errorMessage: '场景参考图生成失败',
+        client,
+        storage,
       })
-      if (!refValidation.ok) {
-        const detail = refValidation.errors.map(e => `${e.field}: ${e.message}`).join('; ')
-        throw new Error(`参数校验失败：${detail}`)
-      }
-      const result = await client.generateImage(imageModel, refValidation.params)
 
-      if (result.success && result.output) {
-        const urls = result.output.urls
-        if (Array.isArray(urls) && urls.length) {
-          const savedUrls = await storage.downloadAndMap(urls as string[], `canvas/${loc.id}`, 'ref')
-          const publicUrl = savedUrls[0] || urls[0]
-          await updateCanvasLocation(loc.id, { referenceImageUrl: publicUrl })
-          // ── 标记参考图资产成功 + 设为活跃 ──────────────
-          const outputJson: CanvasAssetOutput = { type: 'image', urls: savedUrls.length > 0 ? savedUrls : urls }
-          await markCanvasAssetSucceeded(refAsset.id, outputJson, publicUrl, savedUrls[0] ?? undefined, urls[0], undefined)
-          await setCanvasAssetActive(refAsset.id)
-        }
-      }
+      if (generated)
+        await updateCanvasLocation(loc.id, { referenceImageUrl: generated.publicUrl })
 
       notifyNode(accountId, projectId, 'location', loc.id, 'completed', undefined, undefined, runId)
     }
