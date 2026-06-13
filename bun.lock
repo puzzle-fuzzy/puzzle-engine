@@ -82,6 +82,7 @@
         "@excuse/auth": "workspace:*",
         "@excuse/billing": "workspace:*",
         "@excuse/db": "workspace:*",
+        "@excuse/events": "workspace:*",
         "@excuse/metrics": "workspace:*",
         "@excuse/provider": "workspace:*",
         "@excuse/rate-limit": "workspace:*",
@@ -133,6 +134,13 @@
       "devDependencies": {
         "@types/bun": "latest",
         "drizzle-kit": "^0.31.4",
+      },
+    },
+    "packages/events": {
+      "name": "@excuse/events",
+      "version": "0.0.1",
+      "dependencies": {
+        "@excuse/shared": "workspace:*",
       },
     },
     "packages/ffmpeg": {
@@ -415,6 +423,8 @@
     "@excuse/billing": ["@excuse/billing@workspace:packages/billing"],
 
     "@excuse/db": ["@excuse/db@workspace:packages/db"],
+
+    "@excuse/events": ["@excuse/events@workspace:packages/events"],
 
     "@excuse/ffmpeg": ["@excuse/ffmpeg@workspace:packages/ffmpeg"],
 

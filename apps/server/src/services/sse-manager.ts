@@ -14,7 +14,11 @@
  *   - generation_status: 通用生成任务状态变更
  *   - pipeline_node_update: Canvas pipeline 进度（含 canvasMeta 时自动发送）
  */
-import type { GenerationNotifyPayload, SSEGenerationStatusEvent, SSEPipelineNodeEvent } from '@excuse/shared'
+import {
+  GENERATION_STATUS_CHANNEL,
+  mapGenerationNotifyToSSEEvents,
+  parseGenerationNotifyPayload,
+} from '@excuse/events'
 import { pgClient } from '@excuse/db'
 import { createLogger } from '@excuse/shared'
 
@@ -87,54 +91,22 @@ export function getOnlineUserCount() {
  * 接收 Worker 通过 NOTIFY 发送的生成状态变更，推送到对应用户的 SSE 连接
  */
 export async function startSSEListener() {
-  await pgClient.listen('generation_status', (rawPayload) => {
+  await pgClient.listen(GENERATION_STATUS_CHANNEL, (rawPayload) => {
     try {
-      const payload: GenerationNotifyPayload = JSON.parse(rawPayload)
-
-      const event: SSEGenerationStatusEvent = {
-        id: payload.recordId,
-        taskId: payload.taskId,
-        traceId: payload.traceId,
-        status: payload.status,
-        category: payload.category,
-        model: payload.model,
-        ...(payload.outputResult && { outputResult: payload.outputResult }),
-        ...(payload.errorMessage && { errorMessage: payload.errorMessage }),
-        ...(payload.cost && { cost: payload.cost }),
+      const payload = parseGenerationNotifyPayload(rawPayload)
+      const events = mapGenerationNotifyToSSEEvents(payload)
+      for (const event of events) {
+        dispatchToUser(event.userId, event.event, event.data)
       }
-
-      dispatchToUser(payload.accountId, 'generation_status', event)
       logger.info(
         { userId: payload.accountId, recordId: payload.recordId, traceId: payload.traceId, status: payload.status },
         'SSE event dispatched',
       )
-
-      // Canvas pipeline: dispatch pipeline_node_update for canvas-sourced records
-      if (payload.canvasMeta) {
-        const pipelineEvent: SSEPipelineNodeEvent = {
-          projectId: payload.canvasMeta.projectId,
-          nodeType: 'shot',
-          nodeId: payload.canvasMeta.shotId,
-          status: payload.status === 'succeeded' ? 'completed' : payload.status === 'failed' ? 'failed' : 'running',
-        }
-        dispatchToUser(payload.accountId, 'pipeline_node_update', pipelineEvent)
-
-        if (payload.canvasMeta.projectStatus) {
-          const phaseEvent: SSEPipelineNodeEvent = {
-            projectId: payload.canvasMeta.projectId,
-            nodeType: 'phase',
-            nodeId: 'videos',
-            status: payload.canvasMeta.projectStatus === 'completed' ? 'completed' : 'failed',
-            data: { projectStatus: payload.canvasMeta.projectStatus },
-          }
-          dispatchToUser(payload.accountId, 'pipeline_node_update', phaseEvent)
-        }
-      }
     }
     catch (err) {
       logger.error({ err, rawPayload }, 'Failed to parse generation_status notification')
     }
   })
 
-  logger.info('SSE listener started on PostgreSQL channel "generation_status"')
+  logger.info(`SSE listener started on PostgreSQL channel "${GENERATION_STATUS_CHANNEL}"`)
 }

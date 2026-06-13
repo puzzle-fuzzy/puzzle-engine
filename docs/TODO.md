@@ -579,6 +579,8 @@
 
 ### 9. 新增 `packages/events` 或 `packages/realtime`
 
+状态：部分完成，事件常量、NOTIFY payload 解析和 SSE 事件映射已进入 `packages/events`，PostgreSQL LISTEN adapter / SSE 连接管理仍在 server，commit：本次提交
+
 当前迹象：
 
 - `apps/server/src/services/sse-manager.ts` 同时承担连接管理、PostgreSQL LISTEN、payload mapping、dispatch。
