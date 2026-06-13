@@ -1027,6 +1027,7 @@ interface TaskDefinition {
 | 统一 response DTO 重构 | ✅ 已完成 | auth/api-key/billing/upload/canvas/generation 各域响应 DTO 已统一 |
 | Subtitle 管线 | ✅ 已完成 | ASR → SRT → burn 全链路已落地 |
 | SSE polling 兜底（局部） | ✅ 部分完成 | PipelineController 有 3 秒 polling pipeline runs 兜底，但非通用化 |
+| P0-1：统一 tasks 表 + claim 机制 | ✅ 已完成 | `tasks` 表（schema + repo + migration），`FOR UPDATE SKIP LOCKED` claim，heartbeat extend，orphan sweep，canvas_pipeline_runs 加 taskId FK |
 
 ## 优先级调整说明
 
