@@ -442,6 +442,8 @@
 
 ### 1. 新增 `packages/ffmpeg` 或 `packages/video-compose`
 
+状态：已完成，commit：`65e775b`
+
 待办：
 
 - 新建独立 package 承载 FFmpeg 调用、探测、合成、转码、字幕烧录等能力。
@@ -516,7 +518,7 @@
 
 ### 6. 新增 `packages/auth` 或强化认证安全包
 
-状态：已完成，commit：本次提交
+状态：已完成，commit：`de60178`
 
 当前迹象：
 
@@ -538,7 +540,7 @@
 
 ### 7. 新增 `packages/rate-limit`
 
-状态：已完成，commit：本次提交
+状态：已完成，commit：`b575959`
 
 当前迹象：
 
@@ -558,7 +560,7 @@
 
 ### 8. 新增 `packages/metrics` 或 `packages/observability`
 
-状态：已完成，commit：本次提交
+状态：已完成，commit：`a80936f`
 
 当前迹象：
 
@@ -579,7 +581,7 @@
 
 ### 9. 新增 `packages/events` 或 `packages/realtime`
 
-状态：部分完成，事件常量、NOTIFY payload 解析和 SSE 事件映射已进入 `packages/events`，PostgreSQL LISTEN adapter / SSE 连接管理仍在 server，commit：本次提交
+状态：部分完成，事件常量、NOTIFY payload 解析和 SSE 事件映射已进入 `packages/events`，PostgreSQL LISTEN adapter / SSE 连接管理仍在 server，commit：`3d3c292`
 
 当前迹象：
 
@@ -600,7 +602,7 @@
 
 ### 10. 新增 `packages/workflow-engine` 和 `packages/task-engine`
 
-状态：部分完成，`packages/task-engine` 已完成，`packages/workflow-engine` 未完成，commit：本次提交
+状态：部分完成，`packages/task-engine` 已完成，`packages/workflow-engine` 未完成，commit：`2c0d727`
 
 当前迹象：
 
@@ -642,7 +644,7 @@
 
 ### 12. 新增 `packages/subtitle-engine`
 
-状态：已完成，commit：本次提交
+状态：已完成，commit：`a269aa6`
 
 当前迹象：
 
