@@ -1,4 +1,4 @@
-import type { GenerationInputParams } from '@excuse/db'
+import type { GenerationInputParams, NotifyNotificationOpts } from '@excuse/db'
 import type { DashScopeTaskOutput } from '@excuse/provider'
 import type { CostDetail, GenerationCategory, GenerationNotifyPayload, GenerationStatus, OutputResult, VideoOutputResult } from '@excuse/shared'
 import type { WorkerConfig } from './config'
@@ -12,6 +12,7 @@ import {
   markGenerationProcessing,
   markGenerationSucceeded,
   notifyGenerationStatus,
+  notifyNotification,
   refundCredit,
   setCanvasAssetActive,
   updateCanvasProject,
@@ -44,6 +45,7 @@ export interface TaskProcessorDeps {
   markGenerationSucceeded: (id: string, output: OutputResult, cost?: CostDetail) => Promise<void>
   markGenerationProcessing: (id: string) => Promise<void>
   notifyGenerationStatus: (payload: GenerationNotifyPayload) => Promise<void>
+  notifyNotification: (opts: NotifyNotificationOpts) => Promise<unknown>
   debitCredit: (opts: { accountId: string, generationRecordId: string, actualCents: number, description?: string }) => Promise<unknown>
   refundCredit: (opts: { accountId: string, generationRecordId: string, description?: string }) => Promise<unknown>
 }
@@ -71,6 +73,7 @@ export function createTaskProcessor(config: WorkerConfig, deps?: Partial<TaskPro
   const succeed = deps?.markGenerationSucceeded ?? markGenerationSucceeded
   const processing = deps?.markGenerationProcessing ?? markGenerationProcessing
   const notify = deps?.notifyGenerationStatus ?? notifyGenerationStatus
+  const notifyUser = deps?.notifyNotification ?? notifyNotification
   const debit = deps?.debitCredit ?? debitCredit
   const refund = deps?.refundCredit ?? refundCredit
 
@@ -126,6 +129,15 @@ export function createTaskProcessor(config: WorkerConfig, deps?: Partial<TaskPro
         errorMessage: 'Task timed out (>4h)',
         ...(canvasMeta && { canvasMeta: { ...canvasMeta, ...(projectStatus && { projectStatus }) } }),
       })
+
+      // ── 通知：视频任务超时失败（P2-2） ──
+      await notifyUser({
+        accountId: record.accountId,
+        type: 'task_failed',
+        title: '视频生成超时',
+        body: '任务超过 4 小时未完成，已自动失败并退款',
+        meta: { recordId: record.id, category: record.category },
+      }).catch(err => logger.warn({ err, recordId: record.id }, 'Failed to push timeout task_failed notification'))
       return { action: 'completed', taskId }
     }
 
@@ -207,6 +219,26 @@ export function createTaskProcessor(config: WorkerConfig, deps?: Partial<TaskPro
           ...(canvasMeta && { canvasMeta: { ...canvasMeta, ...(projectStatus && { projectStatus }) } }),
         })
 
+        // ── 通知：视频生成成功（P2-2） ──
+        await notifyUser({
+          accountId: record.accountId,
+          type: 'task_completed',
+          title: '视频生成完成',
+          body: `${record.model} · 点击查看结果`,
+          meta: { recordId: record.id, category: record.category },
+        }).catch(err => logger.warn({ err, recordId: record.id }, 'Failed to push task_completed notification'))
+
+        // ── 通知：Canvas 项目视频阶段全部完成（P2-2） ──
+        if (canvasMeta && projectStatus === 'completed') {
+          await notifyUser({
+            accountId: record.accountId,
+            type: 'canvas_completed',
+            title: '画布项目已全部完成',
+            body: '所有镜头视频生成完毕，可在画布中查看',
+            meta: { projectId: canvasMeta.projectId, category: 'video' },
+          }).catch(err => logger.warn({ err, projectId: canvasMeta.projectId }, 'Failed to push canvas_completed notification'))
+        }
+
         return { action: 'completed', taskId }
       }
 
@@ -238,6 +270,15 @@ export function createTaskProcessor(config: WorkerConfig, deps?: Partial<TaskPro
           errorMessage: errMsg,
           ...(canvasMeta && { canvasMeta: { ...canvasMeta, ...(projectStatus && { projectStatus }) } }),
         })
+
+        // ── 通知：视频生成失败（P2-2） ──
+        await notifyUser({
+          accountId: record.accountId,
+          type: 'task_failed',
+          title: '视频生成失败',
+          body: errMsg,
+          meta: { recordId: record.id, category: record.category },
+        }).catch(err => logger.warn({ err, recordId: record.id }, 'Failed to push task_failed notification'))
 
         return { action: 'completed', taskId }
       }

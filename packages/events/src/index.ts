@@ -1,13 +1,15 @@
-import type { GenerationNotifyPayload, SSEGenerationStatusEvent, SSEPipelineNodeEvent } from '@excuse/shared'
+import type { GenerationNotifyPayload, NotificationNotifyPayload, SSEGenerationStatusEvent, SSENotificationEvent, SSEPipelineNodeEvent } from '@excuse/shared'
 
 export const GENERATION_STATUS_CHANNEL = 'generation_status'
+export const NOTIFICATION_CHANNEL = 'notification'
 export const SSE_GENERATION_STATUS_EVENT = 'generation_status'
 export const SSE_PIPELINE_NODE_EVENT = 'pipeline_node_update'
+export const SSE_NOTIFICATION_EVENT = 'notification'
 
 export interface UserSSEEvent {
   userId: string
-  event: typeof SSE_GENERATION_STATUS_EVENT | typeof SSE_PIPELINE_NODE_EVENT
-  data: SSEGenerationStatusEvent | SSEPipelineNodeEvent
+  event: typeof SSE_GENERATION_STATUS_EVENT | typeof SSE_PIPELINE_NODE_EVENT | typeof SSE_NOTIFICATION_EVENT
+  data: SSEGenerationStatusEvent | SSEPipelineNodeEvent | SSENotificationEvent
 }
 
 export type EventSender = (event: string, data: unknown) => void
@@ -137,6 +139,56 @@ export function createGenerationNotifyDispatcher(options: GenerationNotifyDispat
         options.dispatchToUser(event.userId, event.event, event.data)
       }
       return { payload, events }
+    }
+    catch (error) {
+      options.onError?.(error, rawPayload)
+      return null
+    }
+  }
+}
+
+// ===== Notification channel（P2-2） =====
+
+export interface NotificationDispatchResult {
+  payload: NotificationNotifyPayload
+}
+
+export interface NotificationDispatcherOptions {
+  dispatchToUser: (userId: string, event: string, data: unknown) => void
+  onError?: (error: unknown, rawPayload: string) => void
+}
+
+/** 解析 NOTIFY 'notification' 频道的 JSON 载荷 */
+export function parseNotificationNotifyPayload(rawPayload: string): NotificationNotifyPayload {
+  return JSON.parse(rawPayload) as NotificationNotifyPayload
+}
+
+/** 将通知载荷映射为下发到前端的 SSENotificationEvent（去掉路由用 accountId） */
+export function mapNotificationNotifyToSSEEvent(payload: NotificationNotifyPayload): SSENotificationEvent {
+  return {
+    id: payload.id,
+    type: payload.type,
+    title: payload.title,
+    ...(payload.body ? { body: payload.body } : {}),
+    ...(payload.meta ? { meta: payload.meta } : {}),
+    read: payload.read,
+    createdAt: payload.createdAt,
+  }
+}
+
+/**
+ * 创建 notification 频道分发器
+ *
+ * Server 的 startSSEListener 通过 `pgClient.listen(NOTIFICATION_CHANNEL, ...)`
+ * 接收 Worker / Server 自身通过 `notifyNotification()` 发来的通知，解析后推送到
+ * 对应用户的 SSE 连接。
+ */
+export function createNotificationDispatcher(options: NotificationDispatcherOptions) {
+  return (rawPayload: string): NotificationDispatchResult | null => {
+    try {
+      const payload = parseNotificationNotifyPayload(rawPayload)
+      options.dispatchToUser(payload.accountId, SSE_NOTIFICATION_EVENT, mapNotificationNotifyToSSEEvent(payload))
+      return { payload }
     }
     catch (error) {
       options.onError?.(error, rawPayload)

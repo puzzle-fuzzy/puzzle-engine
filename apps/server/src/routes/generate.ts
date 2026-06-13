@@ -4,6 +4,7 @@ import type { ServerConfig } from '../config'
 import { calculateCost } from '@excuse/billing'
 import {
   createGenerationRecord,
+  CreditError,
   deleteGenerationRecord,
   getGenerationRecordById,
   listGenerationRecords,
@@ -20,6 +21,7 @@ import { audit } from '../services/audit'
 import { checkCategoryRateLimit } from '../utils/category-rate-limit'
 import { createDedupeKey } from '../utils/dedupe-key'
 import { forbidden, notFound, paymentRequired, validationError } from '../utils/errors'
+import { notifyInsufficientBalance } from './notifications'
 
 /**
  * 生成任务路由 — CRUD + retry/cancel
@@ -149,6 +151,9 @@ export function createGenerateRoutes(config: ServerConfig) {
         }
         catch (error) {
           const message = error instanceof Error ? error.message : '余额不足，无法发起生成'
+          if (error instanceof CreditError && error.code === 'INSUFFICIENT_BALANCE') {
+            await notifyInsufficientBalance(userId).catch(() => {})
+          }
           await markGenerationFailed(record.id, message)
           return paymentRequired(set, message)
         }
@@ -352,6 +357,9 @@ export function createGenerateRoutes(config: ServerConfig) {
         }
         catch (error) {
           const message = error instanceof Error ? error.message : '余额不足，无法重试生成'
+          if (error instanceof CreditError && error.code === 'INSUFFICIENT_BALANCE') {
+            await notifyInsufficientBalance(userId).catch(() => {})
+          }
           await markGenerationFailed(record.id, message)
           return paymentRequired(set, message)
         }

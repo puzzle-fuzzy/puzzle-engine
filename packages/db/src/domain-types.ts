@@ -343,6 +343,27 @@ export interface GenerationNotifyPayload {
   }
 }
 
+// ===== Notification Domain Types =====
+
+/**
+ * 通知定位元数据 — 携带结构化引用，供前端「点击定位」跳转到对应资源。
+ *
+ * 存储在 notifications.meta JSONB 列。不同通知类型携带不同字段：
+ *   - task_completed / task_failed：recordId + category（定位到工作台记录）
+ *   - canvas_completed：projectId（定位到画布项目）
+ *   - balance_warning：category 可选（定位到计费页）
+ */
+export interface NotificationMeta {
+  /** Canvas 项目 id — 点击定位到 /canvas/:projectId */
+  projectId?: string
+  /** 生成记录 id — 点击定位到工作台对应记录 */
+  recordId?: string
+  /** Canvas 资产 id（镜头视频等）— 可选二级定位 */
+  assetId?: string
+  /** 生成类别，辅助前端选择定位目标与图标 */
+  category?: 'text' | 'image' | 'video' | 'subtitle'
+}
+
 // ===== Subtitle Domain Types =====
 
 /**

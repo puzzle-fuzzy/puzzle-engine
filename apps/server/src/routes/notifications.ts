@@ -1,9 +1,9 @@
+import type { NotificationMeta } from '@excuse/db'
 import type { MutationOkResponse, NotificationDTO, NotificationListResponse, NotificationReadAllResponse, NotificationUnreadCountResponse } from '@excuse/shared'
 import type { ServerConfig } from '../config'
-import { createNotification, getUnreadCount, listNotifications, markAllNotificationsRead, markNotificationRead } from '@excuse/db'
+import { getUnreadCount, listNotifications, markAllNotificationsRead, markNotificationRead, notifyNotification } from '@excuse/db'
 import { Elysia, t } from 'elysia'
 import { createRequireAuthPlugin } from '../plugins/auth'
-import { dispatchToUser } from '../services/sse-manager'
 import { notFound } from '../utils/errors'
 
 function serializeNotification(row: {
@@ -12,6 +12,7 @@ function serializeNotification(row: {
   type: NotificationDTO['type']
   title: string
   body: string | null
+  meta: NotificationDTO['meta']
   read: boolean
   createdAt: Date
 }): NotificationDTO {
@@ -99,32 +100,31 @@ export function createNotificationRoutes(config: ServerConfig) {
 }
 
 /**
- * 创建通知并通过 SSE 实时推送
+ * 创建通知并通过 SSE 实时推送（P2-2）
+ *
+ * 委托给 db 的 `notifyNotification()`：写入 notifications 表 + pgClient.notify，
+ * 由 server 自身的 startSSEListener 监听 notification 频道后 dispatchToUser。
+ * 这样 server 触发的通知与 worker 触发的通知共用完全相同的下发路径。
  */
 export async function pushNotification(opts: {
   accountId: string
-  type: 'balance_warning' | 'task_completed' | 'task_failed' | 'api_key_expired' | 'system'
+  type: 'balance_warning' | 'task_completed' | 'task_failed' | 'canvas_completed' | 'api_key_expired' | 'system'
   title: string
   body?: string
+  meta?: NotificationMeta
 }) {
-  const { accountId, type, title, body } = opts
+  return notifyNotification(opts)
+}
 
-  const notification = await createNotification({
+/**
+ * 余额不足通知（P2-2） — reserveCredit 失败（INSUFFICIENT_BALANCE）时调用，
+ * 前端按 type=balance_warning 点击跳转到计费页。
+ */
+export async function notifyInsufficientBalance(accountId: string) {
+  return pushNotification({
     accountId,
-    type,
-    title,
-    body: body ?? null,
+    type: 'balance_warning',
+    title: '余额不足',
+    body: '信用额度不足，部分操作无法完成，请前往计费页查看',
   })
-
-  // 通过 SSE 实时推送
-  dispatchToUser(accountId, 'notification', {
-    id: notification.id,
-    type,
-    title,
-    body,
-    read: false,
-    createdAt: notification.createdAt.toISOString(),
-  })
-
-  return notification
 }

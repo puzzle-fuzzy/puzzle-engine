@@ -312,31 +312,38 @@
 
 ### 2. Notification 真实触发器
 
-当前状态：基础能力存在，业务触发不足。
+当前状态：已完成（P2-2，四类真实触发器 + 点击定位 + SSE 实时 + 测试）。
 
 已完成：
 
 - notifications route 已支持列表、未读数、标记已读、全部已读。
 - `pushNotification()` 可以创建持久通知并通过 SSE 推送。
 - 前端 Navbar 已有通知铃铛和未读数展示。
+- **（P2-2 新增）四类真实触发器全部接入**：
+  - 任务成功：worker `task-processor` SUCCEEDED → `task_completed`（meta 携带 recordId/category）。
+  - 任务失败：worker `task-processor` FAILED/超时 + `canvas-videos` 提交失败 → `task_failed`。
+  - Canvas 全部完成：worker `checkProjectCompletion` 检测到 projectStatus='completed' → `canvas_completed`（meta 携带 projectId）。
+  - 余额不足：server `generate.ts`（×2）+ `openai-gateway.ts` 在 `reserveCredit` 抛出 `INSUFFICIENT_BALANCE` 时 → `balance_warning`。
+- **（P2-2 新增）统一桥接**：新增 db `notifyNotification()`（写表 + `pgClient.notify('notification')`），worker 与 server 共用同一通道；server `startSSEListener` 监听 notification 频道经 `@excuse/events` 的 `createNotificationDispatcher` 推送。`pushNotification` 委托给该桥接，消除 server/worker 双路径。
+- **（P2-2 新增）结构化定位 payload**：notifications 表新增 `meta` JSONB 列（`NotificationMeta`：projectId/recordId/assetId/category）+ `canvas_completed` 枚举值（migration `0021_ambiguous_owl`），前端按 meta 实现点击定位（canvas→画布项目 / task→工作台 / balance→计费）。
+- **（P2-2 新增）前端铃铛下拉**：Navbar 铃铛展开通知列表（按类型图标 + 未读高亮 + 相对时间）、全部已读、点击定位、SSE 实时更新未读角标（`useNotificationsStore` + realtime-sync 订阅 `notification` 事件）。
+- **（P2-2 新增）测试**：events 通知 dispatcher（+5：channel/parse/map/dispatch/error）、worker 触发器（+3：task_completed/task_failed/canvas_completed）、server 余额不足（+1：402 + balance_warning 触发）。修复 worker 测试 mock 未覆盖 `notifyNotification` 导致命中真实 DB 的问题。
 
 未完成：
 
-- 生产业务中缺少真实触发器，任务成功、任务失败、Canvas 阶段完成、余额不足、API Key 风险事件等还没有系统调用 `pushNotification()`。
-- 通知点击后还没有系统定位到对应项目、任务或资产。
-- 缺少通知触发、未读数刷新、SSE 通知同步的端到端测试。
+- API Key 风险事件（过期/额度）等系统风险类通知暂未接入（决策：第一批仅覆盖用户可见的生成/计费事件）。
+- 通知点击定位到「具体资产/镜头」的二级精度（目前 task 定位到工作台记录、canvas 定位到项目首页，未深链到单个 shot/asset）。
 
-决策项：
+决策项（已决定）：
 
-- 明确第一批必须推送的通知类型。
-- 决定通知是否只用于用户可见事件，还是也覆盖系统风险事件。
+- 第一批推送：任务成功、任务失败、Canvas 全部完成、余额不足四类（用户可见事件）。系统风险事件（API Key 等）后续单独排期。
 
-完成定义：
+完成定义（已满足）：
 
-- 至少覆盖任务成功、任务失败、Canvas 全部完成、余额不足四类真实通知。
-- 前端不用刷新即可看到未读数变化。
-- 用户不在 Canvas 页面时，也能知道生成完成或失败。
-- 通知点击后能定位到具体问题或产物。
+- 至少覆盖任务成功、任务失败、Canvas 全部完成、余额不足四类真实通知。 ✓
+- 前端不用刷新即可看到未读数变化（SSE `notification` 事件实时驱动角标）。 ✓
+- 用户不在 Canvas 页面时，也能知道生成完成或失败（铃铛未读 + 列表）。 ✓
+- 通知点击后能定位到具体问题或产物（meta 驱动路由跳转）。 ✓
 
 ### 3. Audit 关键动作覆盖
 

@@ -1,7 +1,8 @@
-import type { SSEGenerationStatusEvent, SSEPipelineNodeEvent } from '@excuse/shared'
+import type { SSEGenerationStatusEvent, SSENotificationEvent, SSEPipelineNodeEvent } from '@excuse/shared'
 import { create } from 'zustand'
 import { sseClient } from '@/api/sse'
 import { useGenerationStore } from './generation'
+import { useNotificationsStore } from './notifications'
 import { useSubtitleStore } from './subtitle'
 
 interface PhaseDoneEvent {
@@ -78,6 +79,12 @@ export const useRealtimeSync = create<RealtimeSyncState>((set, get) => ({
       }
     })
 
+    // P2-2：新通知 — 前置到通知列表 + 未读角标 +1
+    const unsubNotification = sseClient.on('notification', (event: SSENotificationEvent) => {
+      set({ lastEventAt: Date.now() })
+      useNotificationsStore.getState().handleSSEEvent(event)
+    })
+
     const unsubOpen = sseClient.onOpen(() => {
       // SSE 连接成功 → 恢复 sse 模式
       set({ connectionMode: 'sse' })
@@ -93,6 +100,7 @@ export const useRealtimeSync = create<RealtimeSyncState>((set, get) => ({
     return () => {
       unsubPipeline()
       unsubGeneration()
+      unsubNotification()
       unsubOpen()
       unsubClose()
     }

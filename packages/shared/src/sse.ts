@@ -1,4 +1,4 @@
-import type { CostDetail, GenerationCategory, GenerationStatus, OutputResult } from '@excuse/db'
+import type { CostDetail, GenerationCategory, GenerationStatus, NotificationMeta, OutputResult } from '@excuse/db'
 import type { SSEPipelineNodeEvent } from './canvas'
 import { parseCostDetail, parseOutputResult } from './generation'
 
@@ -29,6 +29,27 @@ export interface SSENotificationEvent {
   type: string
   title: string
   body?: string
+  /** 结构化定位元数据（P2-2） — 供前端「点击定位」跳转 */
+  meta?: NotificationMeta
+  read: boolean
+  createdAt: string
+}
+
+/**
+ * NOTIFY 'notification' 频道传输载荷（P2-2）
+ *
+ * db 端 `notifyNotification()` 序列化通知行后通过 `pgClient.notify()` 发送；
+ * `@excuse/events` 的 `createNotificationDispatcher` 解析后映射为
+ * `SSENotificationEvent` 并经 `dispatchToUser` 推送。
+ * `accountId` 仅用于 SSE 路由，不下发到前端。
+ */
+export interface NotificationNotifyPayload {
+  id: string
+  accountId: string
+  type: string
+  title: string
+  body?: string | null
+  meta?: NotificationMeta | null
   read: boolean
   createdAt: string
 }
@@ -130,7 +151,8 @@ export function parseSSEPipelineNodeEvent(raw: unknown): SSEPipelineNodeEvent | 
 /**
  * 解析 notification 事件
  *
- * 预留通知接口，字段包括 id, type, title, body, createdAt
+ * 必填：id, type, title, createdAt；可选：body, meta, read。
+ * body 在事件中是可选的（部分通知无正文），read 缺省为 false。
  */
 export function parseSSENotificationEvent(raw: unknown): SSENotificationEvent | null {
   if (!isObject(raw))
@@ -138,10 +160,41 @@ export function parseSSENotificationEvent(raw: unknown): SSENotificationEvent | 
   const id = str(raw, 'id')
   const type = str(raw, 'type')
   const title = str(raw, 'title')
-  const body = str(raw, 'body')
   const createdAt = str(raw, 'createdAt')
-  if (!id || !type || !title || !body || !createdAt)
+  if (!id || !type || !title || !createdAt)
     return null
 
-  return { id, type, title, body, read: false, createdAt }
+  const body = str(raw, 'body')
+  const meta = parseNotificationMeta(raw.meta)
+  return {
+    id,
+    type,
+    title,
+    ...(body && { body }),
+    ...(meta && { meta }),
+    read: raw.read === true,
+    createdAt,
+  }
+}
+
+/**
+ * 解析通知定位元数据（P2-2） — 所有字段可选，仅校验为字符串则保留
+ */
+function parseNotificationMeta(raw: unknown): NotificationMeta | undefined {
+  if (!isObject(raw))
+    return undefined
+  const meta: NotificationMeta = {}
+  const projectId = str(raw, 'projectId')
+  if (projectId)
+    meta.projectId = projectId
+  const recordId = str(raw, 'recordId')
+  if (recordId)
+    meta.recordId = recordId
+  const assetId = str(raw, 'assetId')
+  if (assetId)
+    meta.assetId = assetId
+  const category = str(raw, 'category')
+  if (category && VALID_CATEGORIES.includes(category))
+    meta.category = category as NotificationMeta['category']
+  return Object.keys(meta).length > 0 ? meta : undefined
 }

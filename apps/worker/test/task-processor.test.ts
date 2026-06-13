@@ -1,7 +1,10 @@
 import type { GenerationNotifyPayload, OutputResult, VideoOutputResult } from '@excuse/shared'
 import type { TaskProcessorDeps } from '../src/task-processor'
-import { describe, expect, it, mock } from 'bun:test'
+import { beforeEach, describe, expect, it, mock } from 'bun:test'
 import { createTaskProcessor, extractVideoUrl } from '../src/task-processor'
+
+// 可按测试重置的 listCanvasShotsByProject — 用于触发 Canvas 全部完成场景
+const listCanvasShotsByProjectMock = mock(() => [])
 
 // Mock heavy dependencies to avoid drizzle-orm isFalse import error
 mock.module('@excuse/db', () => ({
@@ -9,11 +12,12 @@ mock.module('@excuse/db', () => ({
   markGenerationProcessing: async () => {},
   markGenerationSucceeded: async () => {},
   notifyGenerationStatus: async () => {},
+  notifyNotification: async () => {},
   debitCredit: async () => {},
   refundCredit: async () => {},
   updateCanvasProject: async () => {},
   updateCanvasShot: async () => {},
-  listCanvasShotsByProject: async () => [],
+  listCanvasShotsByProject: listCanvasShotsByProjectMock,
   markCanvasAssetSucceededByTaskId: async () => null,
   markCanvasAssetFailedByTaskId: async () => null,
   setCanvasAssetActive: async () => null,
@@ -35,6 +39,7 @@ function createMockDeps(overrides: Partial<TaskProcessorDeps> = {}): TaskProcess
     markGenerationSucceeded: async () => {},
     markGenerationProcessing: async () => {},
     notifyGenerationStatus: async () => {},
+    notifyNotification: async () => {},
     debitCredit: async () => {},
     refundCredit: async () => {},
     ...overrides,
@@ -100,6 +105,11 @@ describe('extractVideoUrl', () => {
 // ─── processTask ──────────────────────────────────────
 
 describe('processTask', () => {
+  // 每个测试前重置 listCanvasShotsByProject 默认返回空（保证 Canvas 完成检测隔离）
+  beforeEach(() => {
+    listCanvasShotsByProjectMock.mockImplementation(() => [])
+  })
+
   // ── 跳过：没有 taskId ──────────────────────────────
 
   it('should skip records without taskId', async () => {
@@ -467,5 +477,82 @@ describe('processTask', () => {
     await processTask(createRecord({ inputParams: { prompt: 'test', duration: 5 } }))
 
     expect(succeeded).toHaveLength(1)
+  })
+
+  // ── P2-2 通知触发器 ──────────────────────────────────
+
+  it('should push task_completed notification on SUCCEEDED (P2-2)', async () => {
+    const notifications: Array<{ type: string, meta?: { recordId?: string, category?: string } }> = []
+    const deps = createMockDeps({
+      queryTask: async () => ({
+        status: 'SUCCEEDED',
+        output: { video_url: 'https://cdn/video.mp4' },
+      }),
+      downloadAndMap: async urls => urls,
+      markGenerationSucceeded: async () => {},
+      notifyNotification: async (opts) => {
+        notifications.push({ type: opts.type, meta: opts.meta })
+      },
+    })
+
+    const { processTask } = createTestProcessor(deps)
+    await processTask(createRecord())
+
+    const completed = notifications.find(n => n.type === 'task_completed')
+    expect(completed).toBeDefined()
+    expect(completed!.meta?.recordId).toBe('rec-001')
+    expect(completed!.meta?.category).toBe('video')
+  })
+
+  it('should push task_failed notification on FAILED (P2-2)', async () => {
+    const notifications: Array<{ type: string, body?: string }> = []
+    const deps = createMockDeps({
+      queryTask: async () => ({ status: 'FAILED', errorMessage: 'Model error' }),
+      markGenerationFailed: async () => {},
+      notifyNotification: async opts => notifications.push({ type: opts.type, body: opts.body }),
+    })
+
+    const { processTask } = createTestProcessor(deps)
+    await processTask(createRecord())
+
+    expect(notifications).toContainEqual({ type: 'task_failed', body: 'Model error' })
+  })
+
+  it('should push canvas_completed when all project shots are completed (P2-2)', async () => {
+    // 模拟该 shot 完成后，项目所有镜头均已完成 → projectStatus='completed'
+    listCanvasShotsByProjectMock.mockImplementation(() => [
+      { status: 'completed' },
+      { status: 'completed' },
+    ])
+
+    const notifications: Array<{ type: string, meta?: { projectId?: string } }> = []
+    const deps = createMockDeps({
+      queryTask: async () => ({
+        status: 'SUCCEEDED',
+        output: { video_url: 'https://cdn/video.mp4' },
+      }),
+      downloadAndMap: async urls => urls,
+      markGenerationSucceeded: async () => {},
+      markCanvasAssetSucceededByTaskId: async () => ({ id: 'asset-1' }),
+      setCanvasAssetActive: async () => null,
+      notifyNotification: async (opts) => {
+        notifications.push({ type: opts.type, meta: opts.meta })
+      },
+    })
+
+    const { processTask } = createTestProcessor(deps)
+    await processTask(createRecord({
+      inputParams: {
+        source: 'canvas',
+        projectId: 'proj-999',
+        shotId: 'shot-1',
+        prompt: 'test',
+        duration: 5,
+      },
+    }))
+
+    const canvasDone = notifications.find(n => n.type === 'canvas_completed')
+    expect(canvasDone).toBeDefined()
+    expect(canvasDone!.meta?.projectId).toBe('proj-999')
   })
 })

@@ -17,7 +17,9 @@ import { pgClient } from '@excuse/db'
  */
 import {
   createGenerationNotifyDispatcher,
+  createNotificationDispatcher,
   GENERATION_STATUS_CHANNEL,
+  NOTIFICATION_CHANNEL,
   UserEventHub,
 } from '@excuse/events'
 import { createLogger } from '@excuse/shared'
@@ -91,5 +93,23 @@ export async function startSSEListener() {
     }
   })
 
-  logger.info(`SSE listener started on PostgreSQL channel "${GENERATION_STATUS_CHANNEL}"`)
+  // P2-2：通知频道 — Worker/Server 通过 notifyNotification() 写入并 notify，
+  // 此处 LISTEN 接收后经 dispatcher 推送到对应用户的 SSE 连接（前端铃铛实时更新）。
+  const handleNotification = createNotificationDispatcher({
+    dispatchToUser,
+    onError: (err, rawPayload) => {
+      logger.error({ err, rawPayload }, 'Failed to parse notification channel payload')
+    },
+  })
+  await pgClient.listen(NOTIFICATION_CHANNEL, (rawPayload) => {
+    const result = handleNotification(rawPayload)
+    if (result) {
+      logger.info(
+        { userId: result.payload.accountId, notificationId: result.payload.id, type: result.payload.type },
+        'Notification SSE event dispatched',
+      )
+    }
+  })
+
+  logger.info(`SSE listener started on PostgreSQL channels "${GENERATION_STATUS_CHANNEL}", "${NOTIFICATION_CHANNEL}"`)
 }

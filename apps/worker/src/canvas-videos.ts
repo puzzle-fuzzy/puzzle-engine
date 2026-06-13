@@ -4,6 +4,7 @@ import {
   createCanvasAsset,
   markCanvasAssetFailed,
   markCanvasAssetRunning,
+  notifyNotification,
   updateCanvasProject,
   updateCanvasShot,
 } from '@excuse/db'
@@ -85,6 +86,14 @@ export async function executeCanvasVideos(
       const errorMessage = error instanceof Error ? error.message : String(error)
       await updateCanvasShot(shot.id, { status: 'failed', errorMessage })
       await markCanvasAssetFailed(shotVideoAsset.id, errorMessage).catch(() => {})
+      // 通知：镜头视频提交失败（P2-2） — 提交阶段失败不会进入 task-processor 轮询，需在此显式通知
+      await notifyNotification({
+        accountId,
+        type: 'task_failed',
+        title: '镜头视频提交失败',
+        body: errorMessage,
+        meta: { projectId, assetId: shotVideoAsset.id, category: 'video' },
+      }).catch(() => {})
       shotsFailed += 1
     }
   }

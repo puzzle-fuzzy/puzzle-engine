@@ -4,6 +4,7 @@ import type { ServerConfig } from '../config'
 import { calculateCost } from '@excuse/billing'
 import {
   createGenerationRecord,
+  CreditError,
   debitCredit,
   markGenerationFailed,
   markGenerationSucceeded,
@@ -22,6 +23,7 @@ import { extractBillingParams } from '@excuse/shared'
 import { Elysia, t } from 'elysia'
 import { createRequireAuthPlugin } from '../plugins/auth'
 import { createDedupeKey } from '../utils/dedupe-key'
+import { notifyInsufficientBalance } from './notifications'
 
 /**
  * OpenAI 兼容网关 — /v1/chat/completions
@@ -108,6 +110,9 @@ export function createOpenAIGatewayRoutes(config: ServerConfig) {
         }
         catch (error) {
           const message = error instanceof Error ? error.message : 'Insufficient balance'
+          if (error instanceof CreditError && error.code === 'INSUFFICIENT_BALANCE') {
+            await notifyInsufficientBalance(userId).catch(() => {})
+          }
           await markGenerationFailed(record.id, message)
           const err = createOpenAIError(message, 'insufficient_quota', 'insufficient_balance', 402)
           set.status = err.status

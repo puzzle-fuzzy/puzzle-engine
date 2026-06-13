@@ -54,6 +54,17 @@ const mockCancelRecord = mock<(id: string) => Promise<void>>(() => Promise.resol
 const mockResetToPending = mock<(id: string) => Promise<void>>(() => Promise.resolve(undefined))
 const mockFindGenerationByDedupeKeyForAccount = mock<(key: string, accountId: string) => Promise<RecordOrNull>>(() => Promise.resolve(null))
 const mockValidateModelParameters = mock<(modelConfig: unknown, params: Record<string, unknown>) => { valid: boolean, errors: Array<{ field: string, message: string }> }>(() => ({ valid: true, errors: [] }))
+const mockNotifyNotification = mock<(opts: Record<string, unknown>) => Promise<unknown>>(() => Promise.resolve(undefined))
+
+// P2-2：CreditError mock 类 — 供 route 中 `error instanceof CreditError` 解析到同一引用
+class MockCreditError extends Error {
+  readonly code: string
+  constructor(code: string, message: string) {
+    super(message)
+    this.name = 'CreditError'
+    this.code = code
+  }
+}
 
 mock.module('@excuse/db', () => ({
   createGenerationRecord: mockCreateRecord,
@@ -71,6 +82,8 @@ mock.module('@excuse/db', () => ({
   cancelGenerationRecord: mockCancelRecord,
   resetGenerationToPending: mockResetToPending,
   findGenerationByDedupeKeyForAccount: mockFindGenerationByDedupeKeyForAccount,
+  CreditError: MockCreditError,
+  notifyNotification: mockNotifyNotification,
 }))
 
 mock.module('@excuse/provider', () => ({
@@ -174,6 +187,7 @@ describe('generate routes', () => {
     mockFindGenerationByDedupeKeyForAccount.mockClear()
     mockValidateModelParameters.mockClear()
     mockGetUploadedFilesByIdsForAccount.mockClear()
+    mockNotifyNotification.mockClear()
 
     const app = createGenerateRoutes(testConfig)
     client = treaty(app)
@@ -246,6 +260,30 @@ describe('generate routes', () => {
       expect(err!.status).toBe(422)
       expect(err!.error).toContain('illegal_param')
       expect(mockCreateRecord).not.toHaveBeenCalled()
+    })
+
+    it('余额不足时返回 402 并推送 balance_warning 通知（P2-2）', async () => {
+      mockCreateRecord.mockResolvedValue(makeRecord())
+      mockCalculateCost.mockReturnValue({ unit: 'token', totalPriceCents: 100, totalPrice: 1 })
+      mockReserveCredit.mockImplementationOnce(async () => {
+        throw new MockCreditError('INSUFFICIENT_BALANCE', '余额不足')
+      })
+
+      const res = await client.api.generate.post(
+        { model: 'qwen-max', parameters: { prompt: '你好' } },
+        { headers: { Authorization: `Bearer ${token}` } },
+      )
+
+      // 返回 paymentRequired (402)
+      const err = extractEdenError(res)
+      expect(err).toBeTruthy()
+      expect(err!.status).toBe(402)
+      // 标记记录失败
+      expect(mockMarkFailed).toHaveBeenCalled()
+      // 余额不足通知触发（notifyInsufficientBalance → pushNotification → notifyNotification）
+      expect(mockNotifyNotification).toHaveBeenCalledWith(
+        expect.objectContaining({ type: 'balance_warning' }),
+      )
     })
 
     it('同步模型（文本）成功时标记为 succeeded', async () => {
