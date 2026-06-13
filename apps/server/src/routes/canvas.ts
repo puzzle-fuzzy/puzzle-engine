@@ -39,12 +39,14 @@ import type { AcceptedResponse, CanvasAssetsPollResponse, CanvasCharacterRespons
 import type { ServerConfig } from '../config'
 import {
   createPipelineRun,
+  createTask,
   findActiveRunForPhase,
   getCanvasCharacterForAccount,
   getCanvasLocationForAccount,
   getCanvasProjectByIdForAccount,
   getCanvasShotForAccount,
   getPipelineRunById,
+  linkPipelineRunToTask,
   listPipelineRunsByProject,
   updateCanvasProject,
 } from '@excuse/db'
@@ -123,6 +125,44 @@ function fireAndForgetWithRun(
         runId,
       })
     })
+}
+
+/**
+ * task-driven 模式 — 创建 pipeline_run + task，由 Worker 执行
+ *
+ * 当 autoProgress=true 时，前端只触发第一个阶段（analyze），
+ * Worker 完成后通过 pipeline-stepper.ts 自动推进后续阶段。
+ *
+ * 此模式不再在 server 端调用 service 函数，而是创建 task 让 Worker claim。
+ * Worker 的 canvas-handlers.ts 会通过动态 import 执行对应的 service 函数。
+ */
+async function createTaskDrivenPhase(
+  userId: string,
+  projectId: string,
+  phase: CanvasPipelinePhase,
+): Promise<AcceptedResponse> {
+  const run = await createPipelineRun({ projectId, phase, createdBy: userId })
+  const task = await createTask({
+    accountId: userId,
+    type: `canvas.${phase}`,
+    domain: 'canvas',
+    priority: 5,
+    projectId,
+    targetType: 'pipeline_run',
+    targetId: run.id,
+  })
+  await linkPipelineRunToTask(run.id, task.id)
+
+  // SSE 通知：阶段已创建 task，等待 Worker claim
+  dispatchToUser(userId, 'pipeline_node_update', {
+    projectId,
+    nodeType: 'phase',
+    nodeId: phase,
+    status: 'queued',
+    runId: run.id,
+  })
+
+  return acceptedResponse(run.id)
 }
 
 export function createCanvasRoutes(config: ServerConfig) {
@@ -224,6 +264,14 @@ export function createCanvasRoutes(config: ServerConfig) {
       const activeRun = await findActiveRunForPhase(projectId, phase)
       if (activeRun)
         return conflict(set, `该阶段已有进行中的任务`)
+
+      // autoProgress=true → task-driven 模式（Worker 自动推进后续阶段）
+      const autoProgress = owned.modelPreferencesJson?.autoProgress ?? false
+      if (autoProgress) {
+        return createTaskDrivenPhase(userId, projectId, phase)
+      }
+
+      // autoProgress=false → fire-and-forget 模式（前端逐步触发）
       const run = await createPipelineRun({ projectId, phase, createdBy: userId })
       fireAndForgetWithRun(userId, projectId, phase, run.id, svc.analyzeProject(projectId, config, run.id))
       return acceptedResponse(run.id)
@@ -378,6 +426,7 @@ export function createCanvasRoutes(config: ServerConfig) {
         textModel: t.Optional(t.String()),
         imageModel: t.Optional(t.String()),
         videoModel: t.Optional(t.String()),
+        autoProgress: t.Optional(t.Boolean()),
       }),
     })
 

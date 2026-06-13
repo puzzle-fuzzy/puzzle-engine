@@ -6,6 +6,7 @@ import { createLogger } from '@excuse/shared'
 import { loadConfig } from './config'
 import { createHealthServer } from './health'
 import { startTaskHeartbeat } from './heartbeat'
+import { advancePipelineAfterTaskSuccess } from './pipeline-stepper'
 import { processASRTask, processExportTask } from './subtitle-processor'
 import { handleTask, handleTaskError } from './task-handler'
 import { createTaskProcessor } from './task-processor'
@@ -142,6 +143,13 @@ async function main() {
             await notifyTaskStatusChange(succeeded)
             healthState.totalTasksProcessed++
             logger.info({ taskId: claimedTask.id, type: claimedTask.type }, '✅ Task completed')
+
+            // ── Pipeline auto-advance ──
+            // Worker 完成当前 phase task 后，如果 autoProgress=true，自动创建下一个 phase task
+            const nextTaskId = await advancePipelineAfterTaskSuccess(succeeded, config)
+            if (nextTaskId) {
+              logger.info({ nextTaskId, projectId: claimedTask.projectId }, '🔗 Pipeline auto-advanced')
+            }
           }
         }
         catch (error) {
