@@ -10,7 +10,7 @@
  * PAUSE_BEFORE 定义了需要用户确认才能继续的阶段。
  */
 
-import type { CanvasPipelinePhase } from '@excuse/db'
+import type { CanvasPipelinePhase } from '@excuse/workflow-engine'
 import type { WorkerConfig } from './config'
 import {
   createPipelineRun,
@@ -20,40 +20,20 @@ import {
   linkPipelineRunToTask,
 } from '@excuse/db'
 import { createLogger } from '@excuse/shared'
+import {
+  CANVAS_PAUSE_BEFORE,
+  CANVAS_PHASE_ORDER,
+  decideCanvasAutoAdvance,
+  phaseToTaskType,
+} from '@excuse/workflow-engine'
 
 const logger = createLogger('pipeline-stepper')
 
 /** 9 个阶段的严格顺序 */
-export const PHASE_ORDER: CanvasPipelinePhase[] = [
-  'analyze',
-  'characters',
-  'locations',
-  'characterRefs',
-  'locationRefs',
-  'storyboard',
-  'continuity',
-  'rebuild',
-  'videos',
-]
+export const PHASE_ORDER: readonly CanvasPipelinePhase[] = CANVAS_PHASE_ORDER
 
 /** 需要用户确认才能继续的阶段 — 自动执行到此暂停 */
-export const PAUSE_BEFORE: Set<CanvasPipelinePhase> = new Set([
-  'storyboard', // 分镜脚本：用户可能想手动调整角色/场景后再生成分镜
-  'videos', // 视频生成：用户可能想确认提示词后再开始耗时视频生成
-])
-
-/** Canvas phase → task type 映射 */
-function phaseToTaskType(phase: CanvasPipelinePhase): string {
-  return `canvas.${phase}`
-}
-
-/** 获取当前 phase 在 PHASE_ORDER 中的下一个 phase */
-function getNextPhase(currentPhase: CanvasPipelinePhase): CanvasPipelinePhase | null {
-  const index = PHASE_ORDER.indexOf(currentPhase)
-  if (index === -1 || index === PHASE_ORDER.length - 1)
-    return null
-  return PHASE_ORDER[index + 1]!
-}
+export const PAUSE_BEFORE: ReadonlySet<CanvasPipelinePhase> = CANVAS_PAUSE_BEFORE
 
 /**
  * Worker task 完成后，检查是否应自动推进到下一个 pipeline phase
@@ -71,70 +51,67 @@ export async function advancePipelineAfterTaskSuccess(
   task: { id: string, type: string, domain: string, projectId: string | null, accountId: string | null },
   workerConfig: WorkerConfig,
 ): Promise<string | null> {
-  // 1. 只处理 canvas domain 的 task
-  if (task.domain !== 'canvas' || !task.projectId || !task.accountId)
+  const preflight = decideCanvasAutoAdvance(task, true)
+  if (!preflight.currentPhase || !preflight.nextPhase)
     return null
 
-  // 2. 提取当前 phase
-  const currentPhase = task.type.replace('canvas.', '') as CanvasPipelinePhase
-  if (!PHASE_ORDER.includes(currentPhase))
+  const { projectId, accountId } = task
+  if (!projectId || !accountId)
     return null
 
-  // 3. 获取下一个 phase
-  const nextPhase = getNextPhase(currentPhase)
-  if (!nextPhase)
-    return null // 已经是最后一个阶段
-
-  // 4. 检查 autoProgress
-  const project = await getCanvasProjectById(task.projectId)
+  const project = await getCanvasProjectById(projectId)
   if (!project)
     return null
 
-  const modelPrefs = project.modelPreferencesJson
-  if (!modelPrefs || !modelPrefs.autoProgress) {
-    logger.info({ projectId: task.projectId, nextPhase }, 'autoProgress=false, skipping auto-advance')
+  const decision = decideCanvasAutoAdvance(task, Boolean(project.modelPreferencesJson?.autoProgress))
+  if (!decision.shouldAdvance) {
+    if (decision.reason === 'auto_progress_disabled') {
+      logger.info({ projectId, nextPhase: decision.nextPhase }, 'autoProgress=false, skipping auto-advance')
+    }
+    else if (decision.reason === 'pause_before') {
+      logger.info({ projectId, nextPhase: decision.nextPhase }, 'pause-before phase, waiting for user confirmation')
+    }
     return null
   }
 
-  // 5. 检查暂停阶段
-  if (PAUSE_BEFORE.has(nextPhase)) {
-    logger.info({ projectId: task.projectId, nextPhase }, 'pause-before phase, waiting for user confirmation')
+  const currentPhase = decision.currentPhase
+  const nextPhase = decision.nextPhase
+  if (!currentPhase || !nextPhase)
     return null
-  }
 
   // 6. 并发守卫 — 下一个 phase 没有 active run
-  const activeRun = await findActiveRunForPhase(task.projectId, nextPhase)
+  const activeRun = await findActiveRunForPhase(projectId, nextPhase)
   if (activeRun) {
-    logger.info({ projectId: task.projectId, nextPhase, activeRunId: activeRun.id }, 'next phase already has active run, skipping')
+    logger.info({ projectId, nextPhase, activeRunId: activeRun.id }, 'next phase already has active run, skipping')
     return null
   }
 
   // 7. 创建 pipeline_run + task + 链接
   try {
     const run = await createPipelineRun({
-      projectId: task.projectId,
+      projectId,
       phase: nextPhase,
-      createdBy: task.accountId,
+      createdBy: accountId,
     })
 
     const taskType = phaseToTaskType(nextPhase)
     const newTask = await createTask({
-      accountId: task.accountId,
+      accountId,
       type: taskType,
       domain: 'canvas',
       priority: 5,
-      projectId: task.projectId,
+      projectId,
       targetType: 'pipeline_run',
       targetId: run.id,
     })
 
     await linkPipelineRunToTask(run.id, newTask.id)
 
-    logger.info({ projectId: task.projectId, currentPhase, nextPhase, runId: run.id, taskId: newTask.id }, 'pipeline auto-advanced to next phase')
+    logger.info({ projectId, currentPhase, nextPhase, runId: run.id, taskId: newTask.id }, 'pipeline auto-advanced to next phase')
     return newTask.id
   }
   catch (err) {
-    logger.error({ err, projectId: task.projectId, nextPhase }, 'failed to auto-advance pipeline')
+    logger.error({ err, projectId, nextPhase }, 'failed to auto-advance pipeline')
     return null
   }
 }

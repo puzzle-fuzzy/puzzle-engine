@@ -106,6 +106,7 @@
         "@excuse/shared": "workspace:*",
         "@excuse/subtitle-engine": "workspace:*",
         "@excuse/task-engine": "workspace:*",
+        "@excuse/workflow-engine": "workspace:*",
         "drizzle-orm": "^0.44.2",
       },
       "devDependencies": {
@@ -192,6 +193,10 @@
     },
     "packages/task-engine": {
       "name": "@excuse/task-engine",
+      "version": "0.0.1",
+    },
+    "packages/workflow-engine": {
+      "name": "@excuse/workflow-engine",
       "version": "0.0.1",
     },
   },
@@ -441,6 +446,8 @@
     "@excuse/subtitle-engine": ["@excuse/subtitle-engine@workspace:packages/subtitle-engine"],
 
     "@excuse/task-engine": ["@excuse/task-engine@workspace:packages/task-engine"],
+
+    "@excuse/workflow-engine": ["@excuse/workflow-engine@workspace:packages/workflow-engine"],
 
     "@exodus/bytes": ["@exodus/bytes@1.15.1", "https://registry.npmmirror.com/@exodus/bytes/-/bytes-1.15.1.tgz", { "peerDependencies": { "@noble/hashes": "^1.8.0 || ^2.0.0" }, "optionalPeers": ["@noble/hashes"] }, "sha512-S6mL0yNB/Abt9Ei4tq8gDhcczc4S3+vQ4ra7vxnAf+YHC02srtqxKKZghx2Dq6p0e66THKwR6r8N6P95wEty7Q=="],
 

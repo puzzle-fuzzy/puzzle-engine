@@ -614,7 +614,7 @@
 
 ### 10. 新增 `packages/workflow-engine` 和 `packages/task-engine`
 
-状态：部分完成，`packages/task-engine` 已完成，`packages/workflow-engine` 未完成，commit：`2c0d727`
+状态：部分完成，`packages/task-engine` 已完成（commit：`2c0d727`），`packages/workflow-engine` 已完成 Canvas phase 顺序、task type 映射、自动推进决策的基础拆分（commit：`refactor(workflow-engine): extract canvas phase rules`）。剩余：worker 仍负责 DB 适配、run/task 创建，且 Canvas handler 仍动态加载 server service，后续需要继续抽 handler registry 和 Canvas domain service。
 
 当前迹象：
 
@@ -625,7 +625,7 @@
 待办：
 
 - 将 task definition、retry policy、task dispatch contract、claim/retry/cancel 状态机抽为 `packages/task-engine`。
-- 将 workflow step definition、advance logic、batch partial success、pause/cancel/resume 抽为 `packages/workflow-engine`。
+- 将 workflow step definition、advance logic、batch partial success、pause/cancel/resume 抽为 `packages/workflow-engine`。基础 Canvas phase/advance decision 已完成，剩余 batch partial success、pause/cancel/resume 与 handler registry 继续推进。
 - worker 只注册 handler 并运行 engine。
 - Canvas phase 的纯业务逻辑从 server modules 拆到 package 或 domain service，worker 不再动态 import server 文件。
 
