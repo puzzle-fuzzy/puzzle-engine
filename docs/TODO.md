@@ -593,7 +593,7 @@
 
 ### 9. 新增 `packages/events` 或 `packages/realtime`
 
-状态：部分完成，事件常量、NOTIFY payload 解析和 SSE 事件映射已进入 `packages/events`，PostgreSQL LISTEN adapter / SSE 连接管理仍在 server，commit：`3d3c292`
+状态：部分完成，事件常量、NOTIFY payload 解析、SSE 事件映射、用户连接 hub、NOTIFY dispatcher 已进入 `packages/events`（commit：`3d3c292`、`refactor(events): extract sse hub and notify dispatcher`）。剩余：PostgreSQL LISTEN 的具体连接仍由 server 注入，domain event 和 user notification 分层还需要继续推进。
 
 当前迹象：
 
@@ -602,7 +602,7 @@
 
 待办：
 
-- 将 domain event type、SSE event type、event bus、PostgreSQL NOTIFY/LISTEN adapter 抽成 package。
+- 将 domain event type、SSE event type、event bus、PostgreSQL NOTIFY/LISTEN adapter 抽成 package。基础 SSE event type、连接 hub、NOTIFY payload dispatcher 已完成，剩余 DB listen adapter 和 domain event 分层继续推进。
 - server SSE route 只负责 HTTP SSE 连接。
 - notification、generation、canvas 只发布 domain event，不直接关心 SSE 连接。
 

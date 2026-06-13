@@ -10,6 +10,71 @@ export interface UserSSEEvent {
   data: SSEGenerationStatusEvent | SSEPipelineNodeEvent
 }
 
+export type EventSender = (event: string, data: unknown) => void
+export type EventDispatchErrorHandler = (error: unknown, send: EventSender) => void
+
+export interface GenerationNotifyDispatchResult {
+  payload: GenerationNotifyPayload
+  events: UserSSEEvent[]
+}
+
+export interface GenerationNotifyDispatcherOptions {
+  dispatchToUser: (userId: string, event: string, data: unknown) => void
+  onError?: (error: unknown, rawPayload: string) => void
+}
+
+export class UserEventHub {
+  private readonly connections = new Map<string, Set<EventSender>>()
+
+  addConnection(userId: string, send: EventSender): number {
+    if (!this.connections.has(userId))
+      this.connections.set(userId, new Set())
+
+    const userConnections = this.connections.get(userId)!
+    userConnections.add(send)
+    return userConnections.size
+  }
+
+  removeConnection(userId: string, send: EventSender): number {
+    const userConnections = this.connections.get(userId)
+    if (!userConnections)
+      return 0
+
+    userConnections.delete(send)
+    const remaining = userConnections.size
+    if (remaining === 0)
+      this.connections.delete(userId)
+
+    return remaining
+  }
+
+  dispatchToUser(userId: string, event: string, data: unknown, onError?: EventDispatchErrorHandler): number {
+    const userConnections = this.connections.get(userId)
+    if (!userConnections || userConnections.size === 0)
+      return 0
+
+    let dispatched = 0
+    for (const send of userConnections) {
+      try {
+        send(event, data)
+        dispatched += 1
+      }
+      catch (error) {
+        onError?.(error, send)
+      }
+    }
+    return dispatched
+  }
+
+  getOnlineUserCount(): number {
+    return this.connections.size
+  }
+
+  getConnectionCount(userId: string): number {
+    return this.connections.get(userId)?.size ?? 0
+  }
+}
+
 export function parseGenerationNotifyPayload(rawPayload: string): GenerationNotifyPayload {
   return JSON.parse(rawPayload) as GenerationNotifyPayload
 }
@@ -61,4 +126,21 @@ export function mapGenerationNotifyToSSEEvents(payload: GenerationNotifyPayload)
   }
 
   return events
+}
+
+export function createGenerationNotifyDispatcher(options: GenerationNotifyDispatcherOptions) {
+  return (rawPayload: string): GenerationNotifyDispatchResult | null => {
+    try {
+      const payload = parseGenerationNotifyPayload(rawPayload)
+      const events = mapGenerationNotifyToSSEEvents(payload)
+      for (const event of events) {
+        options.dispatchToUser(event.userId, event.event, event.data)
+      }
+      return { payload, events }
+    }
+    catch (error) {
+      options.onError?.(error, rawPayload)
+      return null
+    }
+  }
 }

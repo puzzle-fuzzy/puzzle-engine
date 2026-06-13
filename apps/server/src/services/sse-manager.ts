@@ -15,9 +15,9 @@
  *   - pipeline_node_update: Canvas pipeline 进度（含 canvasMeta 时自动发送）
  */
 import {
+  createGenerationNotifyDispatcher,
   GENERATION_STATUS_CHANNEL,
-  mapGenerationNotifyToSSEEvents,
-  parseGenerationNotifyPayload,
+  UserEventHub,
 } from '@excuse/events'
 import { pgClient } from '@excuse/db'
 import { createLogger } from '@excuse/shared'
@@ -27,61 +27,43 @@ const logger = createLogger('sse-manager')
 // ===== SSE 连接管理 =====
 
 type Sender = (event: string, data: unknown) => void
+const eventHub = new UserEventHub()
 
 /**
  * 按用户 ID 维护的 SSE 连接表
  * 每个用户可以有多个连接（多标签页）
  */
-const connections = new Map<string, Set<Sender>>()
 
 /**
  * 添加一个 SSE 连接
  */
 export function addConnection(userId: string, send: Sender) {
-  if (!connections.has(userId)) {
-    connections.set(userId, new Set())
-  }
-  connections.get(userId)!.add(send)
-  logger.debug({ userId, total: connections.get(userId)!.size }, 'SSE client connected')
+  const total = eventHub.addConnection(userId, send)
+  logger.debug({ userId, total }, 'SSE client connected')
 }
 
 /**
  * 移除一个 SSE 连接
  */
 export function removeConnection(userId: string, send: Sender) {
-  const userConns = connections.get(userId)
-  if (!userConns)
-    return
-  userConns.delete(send)
-  if (userConns.size === 0) {
-    connections.delete(userId)
-  }
-  logger.debug({ userId, remaining: userConns.size }, 'SSE client disconnected')
+  const remaining = eventHub.removeConnection(userId, send)
+  logger.debug({ userId, remaining }, 'SSE client disconnected')
 }
 
 /**
  * 向指定用户的所有连接推送事件
  */
 export function dispatchToUser(userId: string, event: string, data: unknown) {
-  const userConns = connections.get(userId)
-  if (!userConns || userConns.size === 0)
-    return
-
-  for (const send of userConns) {
-    try {
-      send(event, data)
-    }
-    catch (err) {
-      logger.error({ err, userId, event }, 'Failed to dispatch SSE event')
-    }
-  }
+  eventHub.dispatchToUser(userId, event, data, (err) => {
+    logger.error({ err, userId, event }, 'Failed to dispatch SSE event')
+  })
 }
 
 /**
  * 获取当前在线用户数（调试用）
  */
 export function getOnlineUserCount() {
-  return connections.size
+  return eventHub.getOnlineUserCount()
 }
 
 // ===== PostgreSQL LISTEN =====
@@ -91,20 +73,21 @@ export function getOnlineUserCount() {
  * 接收 Worker 通过 NOTIFY 发送的生成状态变更，推送到对应用户的 SSE 连接
  */
 export async function startSSEListener() {
+  const handleNotify = createGenerationNotifyDispatcher({
+    dispatchToUser,
+    onError: (err, rawPayload) => {
+      logger.error({ err, rawPayload }, 'Failed to parse generation_status notification')
+    },
+  })
+
   await pgClient.listen(GENERATION_STATUS_CHANNEL, (rawPayload) => {
-    try {
-      const payload = parseGenerationNotifyPayload(rawPayload)
-      const events = mapGenerationNotifyToSSEEvents(payload)
-      for (const event of events) {
-        dispatchToUser(event.userId, event.event, event.data)
-      }
+    const result = handleNotify(rawPayload)
+    if (result) {
+      const { payload } = result
       logger.info(
         { userId: payload.accountId, recordId: payload.recordId, traceId: payload.traceId, status: payload.status },
         'SSE event dispatched',
       )
-    }
-    catch (err) {
-      logger.error({ err, rawPayload }, 'Failed to parse generation_status notification')
     }
   })
 
