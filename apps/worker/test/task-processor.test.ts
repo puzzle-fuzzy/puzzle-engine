@@ -14,6 +14,9 @@ mock.module('@excuse/db', () => ({
   updateCanvasProject: async () => {},
   updateCanvasShot: async () => {},
   listCanvasShotsByProject: async () => [],
+  markCanvasAssetSucceededByTaskId: async () => null,
+  markCanvasAssetFailedByTaskId: async () => null,
+  setCanvasAssetActive: async () => null,
 }))
 
 mock.module('@excuse/provider', () => ({

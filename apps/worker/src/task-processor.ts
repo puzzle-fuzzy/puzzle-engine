@@ -6,11 +6,14 @@ import { calculateCost } from '@excuse/billing'
 import {
   debitCredit,
   listCanvasShotsByProject,
+  markCanvasAssetFailedByTaskId,
+  markCanvasAssetSucceededByTaskId,
   markGenerationFailed,
   markGenerationProcessing,
   markGenerationSucceeded,
   notifyGenerationStatus,
   refundCredit,
+  setCanvasAssetActive,
   updateCanvasProject,
   updateCanvasShot,
 } from '@excuse/db'
@@ -102,6 +105,10 @@ export function createTaskProcessor(config: WorkerConfig, deps?: Partial<TaskPro
     if (elapsed > config.staleTimeoutMs) {
       await fail(record.id, 'Task timed out (>4h)')
       await refundReservedCredit(record, refund, '视频任务超时退款')
+      // ── 标记 shotVideo canvas_asset 为失败 ──
+      await markCanvasAssetFailedByTaskId(taskId, 'Task timed out (>4h)').catch(err =>
+        logger.warn({ err, taskId }, 'Failed to mark canvas_asset as failed on timeout'),
+      )
       const projectStatus = canvasMeta
         ? await updateCanvasShotAndProject(canvasMeta.projectId, canvasMeta.shotId, {
             status: 'failed',
@@ -164,6 +171,22 @@ export function createTaskProcessor(config: WorkerConfig, deps?: Partial<TaskPro
           })
         }
 
+        // ── 标记 shotVideo canvas_asset 为 succeeded + 设为活跃 ──
+        if (canvasMeta) {
+          const assetOutputJson = { type: 'video' as const, urls: savedUrls.length > 0 ? savedUrls : (videoUrl ? [videoUrl] : []) }
+          const succeededAsset = await markCanvasAssetSucceededByTaskId(
+            taskId,
+            assetOutputJson,
+            savedUrls[0] || videoUrl || undefined,
+            undefined,
+            videoUrl || undefined,
+            actualCost ?? undefined,
+          )
+          if (succeededAsset) {
+            await setCanvasAssetActive(succeededAsset.id)
+          }
+        }
+
         const projectStatus = canvasMeta
           ? await updateCanvasShotAndProject(canvasMeta.projectId, canvasMeta.shotId, {
               status: 'completed',
@@ -198,6 +221,11 @@ export function createTaskProcessor(config: WorkerConfig, deps?: Partial<TaskPro
               errorMessage: errMsg,
             })
           : undefined
+
+        // ── 标记 shotVideo canvas_asset 为失败 ──
+        await markCanvasAssetFailedByTaskId(taskId, errMsg).catch(err =>
+          logger.warn({ err, taskId }, 'Failed to mark canvas_asset as failed'),
+        )
 
         await notify({
           accountId: record.accountId,

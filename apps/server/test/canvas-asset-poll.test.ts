@@ -26,6 +26,8 @@ const mockGetCanvasProjectDetail = mock<() => Promise<{
   latestContinuity: any | null
 } | null>>(() => Promise.resolve(null))
 const mockListCanvasGenerationRecordsByProject = mock<() => Promise<any[]>>(() => Promise.resolve([]))
+const mockListActiveCanvasAssetsByProject = mock<() => Promise<any[]>>(() => Promise.resolve([]))
+const mockListTerminalCanvasAssetsByProject = mock<() => Promise<any[]>>(() => Promise.resolve([]))
 
 // 其他 canvas route 依赖的 DB 函数（inline stub，无需精细控制）
 const stubDBFunctions = {
@@ -38,6 +40,9 @@ const stubDBFunctions = {
   getCanvasLocationForAccount: async () => null,
   getCanvasShotForAccount: async () => null,
   pgClient: { listen: async () => {} },
+  // canvas_asset repo functions needed by asset-poll
+  listActiveCanvasAssetsByProject: mockListActiveCanvasAssetsByProject,
+  listTerminalCanvasAssetsByProject: mockListTerminalCanvasAssetsByProject,
 }
 
 mock.module('@excuse/db', () => ({
@@ -46,6 +51,8 @@ mock.module('@excuse/db', () => ({
   getCanvasProjectById: mockGetCanvasProjectById,
   getCanvasProjectDetail: mockGetCanvasProjectDetail,
   listCanvasGenerationRecordsByProject: mockListCanvasGenerationRecordsByProject,
+  listActiveCanvasAssetsByProject: mockListActiveCanvasAssetsByProject,
+  listTerminalCanvasAssetsByProject: mockListTerminalCanvasAssetsByProject,
 }))
 
 mock.module('@excuse/provider', () => ({
@@ -141,7 +148,7 @@ beforeAll(async () => {
 })
 
 beforeEach(() => {
-  for (const m of [mockGetCanvasProjectByIdForAccount, mockGetCanvasProjectById, mockGetCanvasProjectDetail, mockListCanvasGenerationRecordsByProject]) {
+  for (const m of [mockGetCanvasProjectByIdForAccount, mockGetCanvasProjectById, mockGetCanvasProjectDetail, mockListCanvasGenerationRecordsByProject, mockListActiveCanvasAssetsByProject, mockListTerminalCanvasAssetsByProject]) {
     m.mockClear()
   }
 
@@ -350,5 +357,59 @@ describe('Canvas 资产轮询端点', () => {
     const data = (res as any).data ?? res
     expect(data.data.generatedAt).toBeGreaterThanOrEqual(before)
     expect(data.data.generatedAt).toBeLessThanOrEqual(after)
+  })
+
+  it('character/location activeImageTaskIds 从 canvas_assets 填充', async () => {
+    const projectRow = makeProjectRow({ status: 'refs_ready' })
+    mockGetCanvasProjectByIdForAccount.mockResolvedValue(projectRow)
+    mockGetCanvasProjectById.mockResolvedValue(projectRow)
+    mockGetCanvasProjectDetail.mockResolvedValue({
+      project: projectRow,
+      characters: [
+        { id: 'char-001', name: '角色A', referenceImageUrl: null, turnaroundSheetUrl: null },
+        { id: 'char-002', name: '角色B', referenceImageUrl: 'https://img.url', turnaroundSheetUrl: null },
+      ],
+      locations: [
+        { id: 'loc-001', name: '场景A', referenceImageUrl: null },
+      ],
+      shots: [],
+      latestContinuity: null,
+    })
+    mockListCanvasGenerationRecordsByProject.mockResolvedValue([])
+    mockListActiveCanvasAssetsByProject.mockResolvedValue([
+      // 角色 char-001 有一个活跃的肖像 + 一个活跃的三视图
+      { id: 'asset-portrait-1', category: 'characterPortrait', targetEntityType: 'character', targetEntityId: 'char-001', status: 'running', totalPriceCents: null },
+      { id: 'asset-turnaround-1', category: 'characterTurnaround', targetEntityType: 'character', targetEntityId: 'char-001', status: 'queued', totalPriceCents: null },
+      // 场景 loc-001 有一个活跃的参考图
+      { id: 'asset-locref-1', category: 'locationRef', targetEntityType: 'location', targetEntityId: 'loc-001', status: 'running', totalPriceCents: null },
+    ])
+    mockListTerminalCanvasAssetsByProject.mockResolvedValue([])
+
+    const res = await client.api.canvas.projects({ projectId: 'proj-001' }).assets.poll.get(headers)
+    const data = (res as any).data ?? res
+
+    expect(data.success).toBe(true)
+    const poll = data.data
+
+    // char-001 应有 2 个活跃图片任务
+    expect(poll.characters).toHaveLength(2)
+    expect(poll.characters[0].characterId).toBe('char-001')
+    expect(poll.characters[0].activeImageTaskIds).toEqual(['asset-portrait-1', 'asset-turnaround-1'])
+
+    // char-002 没有活跃图片任务
+    expect(poll.characters[1].characterId).toBe('char-002')
+    expect(poll.characters[1].activeImageTaskIds).toEqual([])
+
+    // loc-001 应有 1 个活跃图片任务
+    expect(poll.locations).toHaveLength(1)
+    expect(poll.locations[0].locationId).toBe('loc-001')
+    expect(poll.locations[0].activeImageTaskIds).toEqual(['asset-locref-1'])
+
+    // activeTasks 应包含 3 个来自 canvas_assets 的条目
+    expect(poll.activeTasks).toHaveLength(3)
+    expect(poll.activeTasks[0].category).toBe('image')
+    expect(poll.activeTasks[0].targetType).toBe('character')
+    expect(poll.activeTasks[2].category).toBe('image')
+    expect(poll.activeTasks[2].targetType).toBe('location')
   })
 })

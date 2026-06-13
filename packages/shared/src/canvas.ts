@@ -174,7 +174,7 @@ export interface CanvasAssetsPoll {
     name: string
     referenceImageUrl: string | null
     turnaroundSheetUrl: string | null
-    /** 当前活跃的图片生成任务 ID（暂为空数组，P3 资产表后补齐） */
+    /** 当前活跃的图片生成 canvas_asset ID（从 canvas_assets 表中 queued/running 状态匹配） */
     activeImageTaskIds: string[]
   }>
 
@@ -183,7 +183,7 @@ export interface CanvasAssetsPoll {
     locationId: string
     name: string
     referenceImageUrl: string | null
-    /** 当前活跃的图片生成任务 ID（暂为空数组，P3 资产表后补齐） */
+    /** 当前活跃的图片生成 canvas_asset ID（从 canvas_assets 表中 queued/running 状态匹配） */
     activeImageTaskIds: string[]
   }>
 
@@ -197,21 +197,21 @@ export interface CanvasAssetsPoll {
     activeVideoTaskIds: string[]
   }>
 
-  /** 项目下所有活跃（非终态）的生成任务 */
+  /** 项目下所有活跃（非终态）的生成任务（来自 generation_records + canvas_assets） */
   activeTasks: Array<{
     id: string
-    category: 'image' | 'video'
+    category: 'text' | 'image' | 'video'
     status: string
-    /** 任务目标实体 ID（目前只有 shotId） */
+    /** 任务目标实体 ID */
     targetId: string
-    /** 任务目标实体类型（目前只有 shot） */
-    targetType: 'character' | 'location' | 'shot'
+    /** 任务目标实体类型 */
+    targetType: 'character' | 'location' | 'shot' | 'project'
   }>
 
-  /** 项目下所有生成记录的成本快照 */
+  /** 项目下所有生成记录的成本快照（来自 generation_records + canvas_assets） */
   costs: Array<{
     recordId: string
-    category: 'image' | 'video'
+    category: 'text' | 'image' | 'video'
     /** cost state: active(进行中) | completed(已成功) | failed(已失败/取消) */
     state: 'active' | 'completed' | 'failed'
     estimatedCostCents: number | null
