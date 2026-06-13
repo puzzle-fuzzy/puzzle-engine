@@ -1,12 +1,14 @@
 import { describe, expect, it } from 'bun:test'
 import {
   applyTaskFailureWithAdapter,
+  claimNextTaskWithAdapter,
   classifyTaskError,
   completeTaskWithAdapter,
   computeRetryDelay,
   createTaskHandlerRegistry,
   decideTaskFailureAction,
   shouldRetryTask,
+  sweepOrphanTasksWithAdapter,
   TaskNotImplementedError,
 } from '../src'
 
@@ -163,6 +165,67 @@ describe('@excuse/task-engine', () => {
 
     expect(updated).toBeNull()
     expect(calls).toEqual(['succeed:task-1'])
+  })
+
+  it('claims the next task through an adapter', async () => {
+    const calls: Array<[string, number]> = []
+    const claimed = { id: 'task-1', type: 'canvas.analyze' }
+    const result = await claimNextTaskWithAdapter({
+      workerId: 'worker-1',
+      claimTtlMs: 30_000,
+      adapter: {
+        claimNextTask: async (workerId, claimTtlMs) => {
+          calls.push([workerId, claimTtlMs])
+          return claimed
+        },
+      },
+    })
+
+    expect(result).toBe(claimed)
+    expect(calls).toEqual([['worker-1', 30_000]])
+  })
+
+  it('returns null when claim adapter has no eligible task', async () => {
+    const result = await claimNextTaskWithAdapter({
+      workerId: 'worker-1',
+      claimTtlMs: 30_000,
+      adapter: {
+        claimNextTask: async () => null,
+      },
+    })
+
+    expect(result).toBeNull()
+  })
+
+  it('sweeps orphan tasks through an adapter and returns recovered count', async () => {
+    const calls: Array<[number | undefined]> = []
+    const result = await sweepOrphanTasksWithAdapter({
+      timeoutMinutes: 5,
+      adapter: {
+        sweepOrphanTasks: async (timeoutMinutes) => {
+          calls.push([timeoutMinutes])
+          return 3
+        },
+      },
+    })
+
+    expect(result).toBe(3)
+    expect(calls).toEqual([[5]])
+  })
+
+  it('forwards undefined timeoutMinutes to the sweep adapter default', async () => {
+    const calls: Array<[number | undefined]> = []
+    const result = await sweepOrphanTasksWithAdapter({
+      adapter: {
+        sweepOrphanTasks: async (timeoutMinutes) => {
+          calls.push([timeoutMinutes])
+          return 0
+        },
+      },
+    })
+
+    expect(result).toBe(0)
+    expect(calls).toEqual([[undefined]])
   })
 
   it('applies retry failure action through an adapter', async () => {

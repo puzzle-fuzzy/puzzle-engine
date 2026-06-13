@@ -3,7 +3,7 @@ import type { TaskResult } from './task-processor'
 import { claimNextTask, markTaskSucceeded, notifyTaskStatusChange, pollExportingProjects, pollPendingASRProjects, pollPendingVideoTasks, sweepOrphanTasks } from '@excuse/db'
 import { ASRClient, checkFFmpegAsync } from '@excuse/provider'
 import { createLogger } from '@excuse/shared'
-import { completeTaskWithAdapter } from '@excuse/task-engine'
+import { claimNextTaskWithAdapter, completeTaskWithAdapter, sweepOrphanTasksWithAdapter } from '@excuse/task-engine'
 import { loadConfig } from './config'
 import { createHealthServer } from './health'
 import { startTaskHeartbeat } from './heartbeat'
@@ -84,7 +84,7 @@ for (const signal of ['SIGINT', 'SIGTERM'] as const) {
 // 启动时立即 sweep 一次，然后每隔 sweepIntervalMs 毫秒运行一次
 async function runOrphanSweep() {
   try {
-    const recovered = await sweepOrphanTasks(5) // 5 分钟 grace period
+    const recovered = await sweepOrphanTasksWithAdapter({ timeoutMinutes: 5, adapter: { sweepOrphanTasks } }) // 5 分钟 grace period
     healthState.orphanSweeps++
     healthState.lastSweepAt = new Date()
     if (recovered > 0) {
@@ -129,7 +129,7 @@ async function main() {
     healthState.isPolling = true
     try {
       // ── Claim tasks from unified task queue ────────────
-      const claimedTask = await claimNextTask(workerId, config.claimTtlMs)
+      const claimedTask = await claimNextTaskWithAdapter({ workerId, claimTtlMs: config.claimTtlMs, adapter: { claimNextTask } })
       if (claimedTask) {
         healthState.tasksClaimed++
         healthState.currentTaskId = claimedTask.id

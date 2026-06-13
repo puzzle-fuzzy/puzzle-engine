@@ -45,6 +45,25 @@ export interface CompleteTaskWithAdapterInput<TTask extends { id: string }, TOut
   adapter: TaskCompletionAdapter<TTask, TOutput>
 }
 
+export interface TaskClaimAdapter<TTask> {
+  claimNextTask: (workerId: string, claimTtlMs: number) => Promise<TTask | null> | TTask | null
+}
+
+export interface ClaimNextTaskWithAdapterInput<TTask> {
+  workerId: string
+  claimTtlMs: number
+  adapter: TaskClaimAdapter<TTask>
+}
+
+export interface TaskSweepAdapter {
+  sweepOrphanTasks: (timeoutMinutes?: number) => Promise<number> | number
+}
+
+export interface SweepOrphanTasksWithAdapterInput {
+  timeoutMinutes?: number
+  adapter: TaskSweepAdapter
+}
+
 export interface TaskFailureAdapter {
   markTaskRetrying: (id: string, nextRunAt: Date) => Promise<unknown> | unknown
   markTaskFailed: (id: string, errorInfo?: TaskErrorInfo, errorMessage?: string) => Promise<unknown> | unknown
@@ -116,6 +135,30 @@ export async function completeTaskWithAdapter<TTask extends { id: string }, TOut
   if (updatedTask)
     await input.adapter.notifyTaskStatusChange(updatedTask)
   return updatedTask
+}
+
+/**
+ * 通过 adapter 领取下一个可执行任务 — Worker 运行时编排保持，DB claim 实现注入
+ *
+ * @returns 被 claim 的 task，或 null（无 eligible task）
+ */
+export async function claimNextTaskWithAdapter<TTask>(
+  input: ClaimNextTaskWithAdapterInput<TTask>,
+): Promise<TTask | null> {
+  return input.adapter.claimNextTask(input.workerId, input.claimTtlMs)
+}
+
+/**
+ * 通过 adapter 恢复孤儿任务 — Worker 定时 sweep 编排保持，DB sweep 实现注入
+ *
+ * `input.timeoutMinutes` 为 undefined 时由 adapter 使用其默认值
+ *
+ * @returns 恢复的任务数量
+ */
+export async function sweepOrphanTasksWithAdapter(
+  input: SweepOrphanTasksWithAdapterInput,
+): Promise<number> {
+  return input.adapter.sweepOrphanTasks(input.timeoutMinutes)
 }
 
 export async function applyTaskFailureWithAdapter<TTask extends TaskRetryCandidate & { id: string }>(
