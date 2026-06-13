@@ -15,6 +15,7 @@
     "@excuse/db": "workspace:*",
     "@excuse/provider": "workspace:*",
     "@excuse/shared": "workspace:*",
+    "@excuse/task-engine": "workspace:*",
     "drizzle-orm": "^0.44.2"
   },
   "devDependencies": {

@@ -100,6 +100,7 @@
         "@excuse/db": "workspace:*",
         "@excuse/provider": "workspace:*",
         "@excuse/shared": "workspace:*",
+        "@excuse/task-engine": "workspace:*",
         "drizzle-orm": "^0.44.2",
       },
       "devDependencies": {
@@ -155,6 +156,10 @@
         "@excuse/shared": "workspace:*",
         "ali-oss": "^6.23.0",
       },
+    },
+    "packages/task-engine": {
+      "name": "@excuse/task-engine",
+      "version": "0.0.1",
     },
   },
   "packages": {
@@ -391,6 +396,8 @@
     "@excuse/shared": ["@excuse/shared@workspace:packages/shared"],
 
     "@excuse/storage": ["@excuse/storage@workspace:packages/storage"],
+
+    "@excuse/task-engine": ["@excuse/task-engine@workspace:packages/task-engine"],
 
     "@exodus/bytes": ["@exodus/bytes@1.15.1", "https://registry.npmmirror.com/@exodus/bytes/-/bytes-1.15.1.tgz", { "peerDependencies": { "@noble/hashes": "^1.8.0 || ^2.0.0" }, "optionalPeers": ["@noble/hashes"] }, "sha512-S6mL0yNB/Abt9Ei4tq8gDhcczc4S3+vQ4ra7vxnAf+YHC02srtqxKKZghx2Dq6p0e66THKwR6r8N6P95wEty7Q=="],
 

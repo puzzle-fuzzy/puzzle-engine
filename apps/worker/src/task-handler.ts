@@ -9,6 +9,7 @@ import type { TaskErrorInfo, TaskRow } from '@excuse/db'
 import type { WorkerConfig } from './config'
 import { markTaskFailed } from '@excuse/db'
 import { createLogger } from '@excuse/shared'
+import { classifyTaskError, computeRetryDelay, shouldRetryTask, TaskNotImplementedError } from '@excuse/task-engine'
 import { markRunFailedAndNotify } from './canvas-handlers'
 
 const logger = createLogger('task-handler')
@@ -91,13 +92,13 @@ export async function handleTask(task: TaskRow, workerConfig: WorkerConfig): Pro
  */
 export async function handleTaskError(task: TaskRow, error: unknown): Promise<void> {
   const isNotImplemented = error instanceof TaskNotImplementedError
-  const retriable = !isNotImplemented && isRetriableError(error)
+  const decision = classifyTaskError(error)
   const errorMessage = error instanceof Error ? error.message : String(error)
 
   if (isNotImplemented) {
     const errorInfo: TaskErrorInfo = {
-      category: 'validation',
-      retriable: false,
+      category: decision.category,
+      retriable: decision.retriable,
       message: errorMessage,
     }
     await markTaskFailed(task.id, errorInfo, errorMessage)
@@ -105,7 +106,7 @@ export async function handleTaskError(task: TaskRow, error: unknown): Promise<vo
     return
   }
 
-  if (retriable && task.attempts < task.maxAttempts) {
+  if (shouldRetryTask(error, task.attempts, task.maxAttempts)) {
     const delayMs = computeRetryDelay(task.type, task.attempts)
     const nextRunAt = new Date(Date.now() + delayMs)
     const { markTaskRetrying } = await import('@excuse/db')
@@ -114,9 +115,9 @@ export async function handleTaskError(task: TaskRow, error: unknown): Promise<vo
   }
   else {
     const errorInfo: TaskErrorInfo = {
-      category: categorizeError(error),
-      retriable,
-      code: extractErrorCode(error),
+      category: decision.category,
+      retriable: decision.retriable,
+      code: decision.code,
       message: errorMessage,
     }
     await markTaskFailed(task.id, errorInfo, errorMessage)
@@ -127,54 +128,4 @@ export async function handleTaskError(task: TaskRow, error: unknown): Promise<vo
       await markRunFailedAndNotify(task, errorMessage)
     }
   }
-}
-
-// ── 错误分类 ────────────────────────────────────────────
-
-class TaskNotImplementedError extends Error {
-  constructor(taskType: string) {
-    super(`Task handler not implemented: ${taskType}`)
-    this.name = 'TaskNotImplementedError'
-  }
-}
-
-function isRetriableError(error: unknown): boolean {
-  if (!(error instanceof Error))
-    return false
-  const cause = error.cause as { code?: string } | undefined
-  const causeCode = cause?.code
-  if (causeCode === 'ECONNREFUSED' || causeCode === 'ETIMEDOUT' || causeCode === 'ECONNRESET')
-    return true
-  if (causeCode === 'Throttling' || causeCode === 'InternalError' || causeCode === 'TIMEOUT')
-    return true
-  if (causeCode === 'InvalidParameter' || causeCode === 'AuthFailed' || causeCode === 'Forbidden')
-    return false
-  return false
-}
-
-function categorizeError(error: unknown): string {
-  if (error instanceof TaskNotImplementedError)
-    return 'validation'
-  if (!(error instanceof Error))
-    return 'system'
-  const cause = error.cause as { code?: string } | undefined
-  if (cause?.code === 'ECONNREFUSED' || cause?.code === 'ETIMEDOUT')
-    return 'timeout'
-  if (cause?.code === 'Throttling' || cause?.code === 'InternalError')
-    return 'provider_error'
-  return 'system'
-}
-
-function extractErrorCode(error: unknown): string | undefined {
-  if (!(error instanceof Error))
-    return undefined
-  const cause = error.cause as { code?: string } | undefined
-  return cause?.code
-}
-
-export function computeRetryDelay(taskType: string, attempts: number): number {
-  if (taskType.includes('video') || taskType === 'canvas.videos' || taskType === 'generate.video') {
-    return 60_000 * 2 ** Math.min(attempts - 1, 3)
-  }
-  return 30_000
 }

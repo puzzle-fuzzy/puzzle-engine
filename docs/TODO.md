@@ -592,6 +592,8 @@
 
 ### 10. 新增 `packages/workflow-engine` 和 `packages/task-engine`
 
+状态：部分完成，`packages/task-engine` 已完成，`packages/workflow-engine` 未完成，commit：本次提交
+
 当前迹象：
 
 - 项目已经有 tasks、workflows、workflow_steps 表。
