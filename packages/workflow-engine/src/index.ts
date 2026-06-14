@@ -265,12 +265,12 @@ export interface BatchItemLike {
   status: BatchItemStatus
 }
 
-export type BatchOutcome =
-  | { type: 'empty' }
-  | { type: 'in_progress', succeeded: number, failed: number, total: number }
-  | { type: 'all_succeeded', succeeded: number, failed: number, total: number }
-  | { type: 'all_failed', succeeded: number, failed: number, total: number }
-  | { type: 'partial_failed', succeeded: number, failed: number, total: number }
+export type BatchOutcome
+  = | { type: 'empty' }
+    | { type: 'in_progress', succeeded: number, failed: number, total: number }
+    | { type: 'all_succeeded', succeeded: number, failed: number, total: number }
+    | { type: 'all_failed', succeeded: number, failed: number, total: number }
+    | { type: 'partial_failed', succeeded: number, failed: number, total: number }
 
 /**
  * 对一批同质任务（如 Canvas 一个项目的全部 shots）做结果分类。

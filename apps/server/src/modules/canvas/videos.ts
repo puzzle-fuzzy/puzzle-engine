@@ -1,3 +1,4 @@
+import type { BatchItemLike } from '@excuse/workflow-engine'
 import { submitCanvasShotVideo, submitShotVideoEntity } from '@excuse/canvas-runtime'
 import {
   createCanvasAsset,
@@ -12,7 +13,7 @@ import {
   updateCanvasProject,
   updateCanvasShot,
 } from '@excuse/db'
-import { decideBatchOutcome, type BatchItemLike } from '@excuse/workflow-engine'
+import { decideBatchOutcome } from '@excuse/workflow-engine'
 import { getProjectDetail } from './service-crud'
 import { createClient, getVideoModel, notifyNode } from './service-helpers'
 
