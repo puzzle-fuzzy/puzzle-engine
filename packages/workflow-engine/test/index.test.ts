@@ -4,8 +4,11 @@ import {
   CANVAS_PHASE_ORDER,
   createNextCanvasPipelineTask,
   decideCanvasAutoAdvance,
+  filterActivePipelineRuns,
   getCanvasPhaseFromTaskType,
   getNextCanvasPhase,
+  isActivePipelineRun,
+  isTerminalPipelineRun,
   phaseToTaskType,
 } from '../src'
 
@@ -133,5 +136,51 @@ describe('@excuse/workflow-engine', () => {
       taskType: 'canvas.characters',
     })
     expect(calls).toEqual(['run:characters', 'task:canvas.characters', 'link:run-1:task-1'])
+  })
+})
+
+describe('canvas pipeline run state rules', () => {
+  it('treats pending and running as active', () => {
+    expect(isActivePipelineRun({ status: 'pending' })).toBe(true)
+    expect(isActivePipelineRun({ status: 'running' })).toBe(true)
+  })
+
+  it('treats succeeded, failed and cancelled as not active', () => {
+    expect(isActivePipelineRun({ status: 'succeeded' })).toBe(false)
+    expect(isActivePipelineRun({ status: 'failed' })).toBe(false)
+    expect(isActivePipelineRun({ status: 'cancelled' })).toBe(false)
+  })
+
+  it('treats succeeded, failed and cancelled as terminal', () => {
+    expect(isTerminalPipelineRun({ status: 'succeeded' })).toBe(true)
+    expect(isTerminalPipelineRun({ status: 'failed' })).toBe(true)
+    expect(isTerminalPipelineRun({ status: 'cancelled' })).toBe(true)
+  })
+
+  it('treats pending and running as not terminal', () => {
+    expect(isTerminalPipelineRun({ status: 'pending' })).toBe(false)
+    expect(isTerminalPipelineRun({ status: 'running' })).toBe(false)
+  })
+
+  it('filters a run list down to active runs, preserving order and extra fields', () => {
+    const runs = [
+      { id: 'r1', status: 'succeeded' as const },
+      { id: 'r2', status: 'running' as const },
+      { id: 'r3', status: 'cancelled' as const },
+      { id: 'r4', status: 'pending' as const },
+    ]
+    const active = filterActivePipelineRuns(runs)
+    expect(active).toEqual([
+      { id: 'r2', status: 'running' },
+      { id: 'r4', status: 'pending' },
+    ])
+  })
+
+  it('returns an empty array when no runs are active', () => {
+    const runs = [
+      { id: 'r1', status: 'succeeded' as const },
+      { id: 'r2', status: 'failed' as const },
+    ]
+    expect(filterActivePipelineRuns(runs)).toEqual([])
   })
 })

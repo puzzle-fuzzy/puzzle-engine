@@ -187,3 +187,35 @@ export function decideCanvasAutoAdvance(
 function isCanvasPipelinePhase(value: string): value is CanvasPipelinePhase {
   return CANVAS_PHASE_ORDER.includes(value as CanvasPipelinePhase)
 }
+
+// ===== Canvas pipeline run 状态规则 =====
+// 纯状态判断，不依赖 DB/provider/server/worker runtime。
+// PipelineRunStatus 镜像 @excuse/db 的 canvasPipelineRunStatusEnum（不 import，避免反向依赖）。
+
+export type PipelineRunStatus = 'pending' | 'running' | 'succeeded' | 'failed' | 'cancelled'
+
+/** 活跃状态 — 排队或执行中，可被取消、可阻止同阶段重复提交 */
+export const CANVAS_ACTIVE_RUN_STATUSES: readonly PipelineRunStatus[] = ['pending', 'running']
+
+/** 终态 — 成功/失败/取消，状态不再变化 */
+export const CANVAS_TERMINAL_RUN_STATUSES: readonly PipelineRunStatus[] = ['succeeded', 'failed', 'cancelled']
+
+/** 最小 run 形状 — 只要求 status，便于对 DB 行或任意结构体复用规则 */
+export interface PipelineRunLike {
+  status: PipelineRunStatus
+}
+
+/** run 是否处于活跃状态（pending 或 running） */
+export function isActivePipelineRun<T extends PipelineRunLike>(run: T): boolean {
+  return CANVAS_ACTIVE_RUN_STATUSES.includes(run.status)
+}
+
+/** run 是否处于终态（succeeded/failed/cancelled） */
+export function isTerminalPipelineRun<T extends PipelineRunLike>(run: T): boolean {
+  return CANVAS_TERMINAL_RUN_STATUSES.includes(run.status)
+}
+
+/** 从 run 列表中筛出活跃 run，保留原始元素类型与顺序 */
+export function filterActivePipelineRuns<T extends PipelineRunLike>(runs: readonly T[]): T[] {
+  return runs.filter(isActivePipelineRun)
+}
