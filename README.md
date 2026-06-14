@@ -120,7 +120,7 @@ cd apps/client && bun vitest src/__tests__/some.test.tsx
 
 ## 文档
 
-- [CLAUDE.md](./CLAUDE.md) — 面向 AI 编程助手的架构与约定详解
+- [AGENTS.md](./AGENTS.md)（`CLAUDE.md` 为其符号链接）— 面向 AI 编程助手的架构与约定详解
 - [docs/](./docs) — 计划文档（`claude-next-plan.md`、`TODO.md`）与外部 API 资料
 
 ## License

@@ -1,6 +1,6 @@
-# AGENTS.md
+# Agent Guide (AGENTS.md / CLAUDE.md)
 
-This file provides guidance to Codex (Codex.ai/code) when working with code in this repository.
+Shared guidance for AI coding assistants (Claude Code, Codex) working in this repository. `CLAUDE.md` is a symlink to this file so both tools read the same single source of truth.
 
 ## Project Overview
 

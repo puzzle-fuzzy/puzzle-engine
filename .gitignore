@@ -39,6 +39,3 @@ uploads
 
 # 系统文件
 .DS_Store
-
-# Claude Code
-CLAUDE.md
