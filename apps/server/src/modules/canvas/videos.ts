@@ -12,6 +12,7 @@ import {
   updateCanvasProject,
   updateCanvasShot,
 } from '@excuse/db'
+import { decideBatchOutcome, type BatchItemLike } from '@excuse/workflow-engine'
 import { getProjectDetail } from './service-crud'
 import { createClient, getVideoModel, notifyNode } from './service-helpers'
 
@@ -32,7 +33,11 @@ export async function generateVideos(projectId: string, config: { dashscopeApiKe
 
   await updateCanvasProject(projectId, { status: 'generating' })
 
-  let hasAnyVideo = false
+  // 收集本次提交的 per-shot 结果，交给 workflow-engine 做结果分类。
+  // 注意：这里只判断“本次提交结果”，视频最终 completed/partial_failed 由 worker
+  // 轮询完成后再判定（见 task-processor.checkProjectCompletion），不要把提交中的
+  // shot 误判成失败终态。
+  const submissionResults: BatchItemLike[] = []
 
   for (const shot of detail.shots) {
     if (!shot.videoPrompt)
@@ -64,7 +69,7 @@ export async function generateVideos(projectId: string, config: { dashscopeApiKe
         modelPreferences: detail.project.modelPreferencesJson,
         client,
       })
-      hasAnyVideo = true
+      submissionResults.push({ status: 'succeeded' })
     }
     catch (error) {
       const message = getErrorMessage(error)
@@ -72,13 +77,19 @@ export async function generateVideos(projectId: string, config: { dashscopeApiKe
       // ── 标记视频资产失败 ──────────────────────────
       await markCanvasAssetFailed(shotVideoAsset.id, message).catch(() => {})
       notifyNode(accountId, projectId, 'shot', shot.id, 'failed', undefined, message, runId)
+      submissionResults.push({ status: 'failed' })
     }
   }
 
-  if (hasAnyVideo) {
+  const outcome = decideBatchOutcome(submissionResults)
+  // 至少一个 shot 提交成功（all_succeeded / partial_failed）→ 继续 generating，run succeeded；
+  // 全部失败（all_failed）或没有任何 shot 带 prompt（empty）→ 退回 prompts_ready，run failed。
+  const anySubmitted = outcome.type === 'all_succeeded' || outcome.type === 'partial_failed'
+
+  if (anySubmitted) {
     await updateCanvasProject(projectId, { status: 'generating' })
     if (runId)
-      await markPipelineRunSucceeded(runId, { phase: 'videos', shotsSubmitted: detail.shots.filter(s => s.videoPrompt).length })
+      await markPipelineRunSucceeded(runId, { phase: 'videos', shotsSubmitted: outcome.total })
   }
   else {
     await updateCanvasProject(projectId, { status: 'prompts_ready' })
