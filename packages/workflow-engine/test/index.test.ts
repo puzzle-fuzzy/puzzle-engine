@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'bun:test'
 import {
+  canAdvanceToPhase,
   CANVAS_PAUSE_BEFORE,
   CANVAS_PHASE_ORDER,
   createNextCanvasPipelineTask,
@@ -8,6 +9,8 @@ import {
   getCanvasPhaseFromTaskType,
   getNextCanvasPhase,
   isActivePipelineRun,
+  isPauseBeforePhase,
+  isRetryablePipelineRun,
   isTerminalPipelineRun,
   phaseToTaskType,
 } from '../src'
@@ -182,5 +185,56 @@ describe('canvas pipeline run state rules', () => {
       { id: 'r2', status: 'failed' as const },
     ]
     expect(filterActivePipelineRuns(runs)).toEqual([])
+  })
+
+  it('treats failed and cancelled runs as retryable', () => {
+    expect(isRetryablePipelineRun({ status: 'failed' })).toBe(true)
+    expect(isRetryablePipelineRun({ status: 'cancelled' })).toBe(true)
+  })
+
+  it('treats succeeded, pending and running runs as not retryable', () => {
+    expect(isRetryablePipelineRun({ status: 'succeeded' })).toBe(false)
+    expect(isRetryablePipelineRun({ status: 'pending' })).toBe(false)
+    expect(isRetryablePipelineRun({ status: 'running' })).toBe(false)
+  })
+})
+
+describe('canvas phase decision rules', () => {
+  it('flags storyboard and videos as pause-before phases', () => {
+    expect(isPauseBeforePhase('storyboard')).toBe(true)
+    expect(isPauseBeforePhase('videos')).toBe(true)
+  })
+
+  it('does not flag ordinary phases as pause-before', () => {
+    expect(isPauseBeforePhase('analyze')).toBe(false)
+    expect(isPauseBeforePhase('characters')).toBe(false)
+    expect(isPauseBeforePhase('rebuild')).toBe(false)
+  })
+
+  it('allows advancing to an ordinary phase when there is no active run', () => {
+    expect(canAdvanceToPhase('characters')).toBe(true)
+    expect(canAdvanceToPhase('characters', { hasActiveRun: false })).toBe(true)
+  })
+
+  it('blocks advancing to a pause-before phase even without an active run', () => {
+    expect(canAdvanceToPhase('storyboard')).toBe(false)
+    expect(canAdvanceToPhase('videos', { hasActiveRun: false })).toBe(false)
+  })
+
+  it('blocks advancing when the target phase already has an active run', () => {
+    expect(canAdvanceToPhase('characters', { hasActiveRun: true })).toBe(false)
+  })
+
+  it('decideCanvasAutoAdvance still pauses before storyboard (regression)', () => {
+    expect(decideCanvasAutoAdvance({
+      type: 'canvas.locationRefs',
+      domain: 'canvas',
+      projectId: 'project-1',
+      accountId: 'account-1',
+    }, true)).toMatchObject({
+      shouldAdvance: false,
+      nextPhase: 'storyboard',
+      reason: 'pause_before',
+    })
   })
 })

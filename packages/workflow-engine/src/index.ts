@@ -78,6 +78,11 @@ export const CANVAS_PAUSE_BEFORE: ReadonlySet<CanvasPipelinePhase> = new Set([
   'videos',
 ])
 
+/** 阶段是否需要用户确认才能继续（storyboard / videos） */
+export function isPauseBeforePhase(phase: CanvasPipelinePhase): boolean {
+  return CANVAS_PAUSE_BEFORE.has(phase)
+}
+
 export function phaseToTaskType(phase: CanvasPipelinePhase): `canvas.${CanvasPipelinePhase}` {
   return `canvas.${phase}`
 }
@@ -168,7 +173,7 @@ export function decideCanvasAutoAdvance(
     }
   }
 
-  if (CANVAS_PAUSE_BEFORE.has(nextPhase)) {
+  if (isPauseBeforePhase(nextPhase)) {
     return {
       shouldAdvance: false,
       currentPhase,
@@ -200,6 +205,9 @@ export const CANVAS_ACTIVE_RUN_STATUSES: readonly PipelineRunStatus[] = ['pendin
 /** 终态 — 成功/失败/取消，状态不再变化 */
 export const CANVAS_TERMINAL_RUN_STATUSES: readonly PipelineRunStatus[] = ['succeeded', 'failed', 'cancelled']
 
+/** 可重试终态 — failed 或 cancelled（succeeded 不可重试，active 需先取消） */
+export const CANVAS_RETRYABLE_RUN_STATUSES: readonly PipelineRunStatus[] = ['failed', 'cancelled']
+
 /** 最小 run 形状 — 只要求 status，便于对 DB 行或任意结构体复用规则 */
 export interface PipelineRunLike {
   status: PipelineRunStatus
@@ -215,7 +223,32 @@ export function isTerminalPipelineRun<T extends PipelineRunLike>(run: T): boolea
   return CANVAS_TERMINAL_RUN_STATUSES.includes(run.status)
 }
 
+/** run 是否可重新提交（failed 或 cancelled） */
+export function isRetryablePipelineRun<T extends PipelineRunLike>(run: T): boolean {
+  return CANVAS_RETRYABLE_RUN_STATUSES.includes(run.status)
+}
+
 /** 从 run 列表中筛出活跃 run，保留原始元素类型与顺序 */
 export function filterActivePipelineRuns<T extends PipelineRunLike>(runs: readonly T[]): T[] {
   return runs.filter(isActivePipelineRun)
+}
+
+/** canAdvanceToPhase 选项 */
+export interface CanAdvanceToPhaseOptions {
+  /** 目标阶段是否已存在活跃 run（并发守卫） */
+  hasActiveRun?: boolean
+}
+
+/**
+ * 在已确定要自动推进的前提下，判断能否真正创建/执行目标阶段。
+ *
+ * 阻止条件：目标阶段是 pause-before（需用户确认），或已有活跃 run（并发守卫）。
+ * 不关心 autoProgress —— 那是更上层的 decideCanvasAutoAdvance 职责。
+ */
+export function canAdvanceToPhase(phase: CanvasPipelinePhase, opts: CanAdvanceToPhaseOptions = {}): boolean {
+  if (isPauseBeforePhase(phase))
+    return false
+  if (opts.hasActiveRun)
+    return false
+  return true
 }
