@@ -1,6 +1,6 @@
 # 项目统一 TODO
 
-更新时间：2026-06-13
+更新时间：2026-06-14
 
 本文是 `excuse` 后续产品迭代、技术治理和验收标准的唯一入口。后续 Claude / Codex 只处理本文，不再拆分处理多份清单。
 
@@ -347,7 +347,7 @@
 
 ### 3. Audit 关键动作覆盖
 
-当前状态：部分覆盖。
+当前状态：大部分覆盖，commit：`06ee5f6`。
 
 已完成：
 
@@ -355,25 +355,30 @@
 - 上传文件删除已有 audit。
 - 普通生成任务已有 audit。
 - API Key 创建和撤销已有 audit。
+- **（`06ee5f6` 新增）Canvas 关键动作审计**：`canvas_project_create` / `canvas_project_delete` / `canvas_phase_run`（task-driven 与 fire-and-forget 两种模式）/ `canvas_cancel`（终止活跃阶段 + 资产）/ `canvas_asset_regenerate`（角色 / 场景 / 镜头重新生成）。
+- **（`06ee5f6` 新增）OpenAI Gateway 调用审计**：`gateway_call`（succeeded / failed，detail 含 model / recordId / token / 费用 / error）。
+- **（`06ee5f6` 新增）credit 资金流审计**：`credit_reserve` / `credit_debit` / `credit_refund`，gateway + generate + retry 三来源由 `CreditFlowDetail.source` 区分。
+- **（`06ee5f6` 新增）生成状态变更审计**：`generation_retry` / `generation_cancel`，detail 含 `previousStatus`。
+- **（`06ee5f6` 新增）audit payload DTO 化**：`domain-types.ts` 定义 9 个 `AuditDetail` DTO + union；`audit-logs` schema detail 列 `$type<AuditDetail>()`；`audit.ts` helper 与 `AuditEntry` 收口；migration `0022_chunky_raider` 扩充 `auditActionEnum` 11 个值并已应用到 dev DB。
+- **（`06ee5f6` 新增）附带修复**：`createFireAndForgetPhase` 改为 `factory(runId)` 延迟求值，service 函数能拿到新建 run 的 id（原重构将 run 创建移入 helper 后 service 调用引用了越界的 `run.id`）。
+- **（`06ee5f6` 新增）测试**：`apps/server/test/audit-routes.test.ts` 覆盖 `gateway_call` / credit 三件套 / `generation_retry` / `generation_cancel` 六类钩子，通过 `setAuditWriter` 注入捕获断言；canvas 钩子经 typecheck + 既有 `canvas-routes` 测试覆盖。
 
 未完成：
 
-- Canvas 项目创建、删除、阶段执行、批量自动执行、终止等关键动作没有系统覆盖。
-- OpenAI Gateway 调用没有明确 audit 记录。
-- credit reserve/debit/refund 等资金相关动作没有形成完整 audit 视图。
 - notification 读取、全部已读等用户行为没有审计决策。
-- 取消、重试等生成任务状态变更覆盖不足。
+- worker 内部的 debit / refund（视频任务结算）尚未在路由层之外补审计；当前覆盖路由层 hook，worker 侧 credit 结算审计待后续。
 
 决策项：
 
-- 明确哪些行为必须审计，哪些只需要日志。
+- 明确哪些行为必须审计，哪些只需要日志（已落地：路由层资金 / 外部 provider / 资源删除 / 状态变更 / Canvas 批量执行已审计）。
 - 明确 audit 是否用于后台安全追踪，还是也要进入管理后台。
+- notification 读取等用户行为是否需要审计。
 
-完成定义：
+完成定义（进度）：
 
-- 权限、资金、外部 provider 调用、资源删除、批量自动化动作均有审计策略。
-- 每类必须审计动作都有测试。
-- audit payload 使用明确 DTO，不落入随意 JSON 堆叠。
+- 权限、资金、外部 provider 调用、资源删除、批量自动化动作均有审计策略。 ✓
+- 每类必须审计动作都有测试。 ✓（`audit-routes.test.ts`）
+- audit payload 使用明确 DTO，不落入随意 JSON 堆叠。 ✓（`AuditDetail` DTO + `$type`）
 
 ### 4. OpenAI Gateway 产品状态
 
