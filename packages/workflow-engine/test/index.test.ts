@@ -4,6 +4,7 @@ import {
   CANVAS_PAUSE_BEFORE,
   CANVAS_PHASE_ORDER,
   createNextCanvasPipelineTask,
+  decideBatchOutcome,
   decideCanvasAutoAdvance,
   filterActivePipelineRuns,
   getCanvasPhaseFromTaskType,
@@ -236,5 +237,89 @@ describe('canvas phase decision rules', () => {
       nextPhase: 'storyboard',
       reason: 'pause_before',
     })
+  })
+})
+
+describe('batch outcome rules', () => {
+  it('classifies an empty batch as empty', () => {
+    expect(decideBatchOutcome([])).toEqual({ type: 'empty' })
+  })
+
+  it('classifies a fully succeeded batch', () => {
+    const items = [{ status: 'succeeded' as const }, { status: 'succeeded' as const }]
+    expect(decideBatchOutcome(items)).toEqual({
+      type: 'all_succeeded',
+      succeeded: 2,
+      failed: 0,
+      total: 2,
+    })
+  })
+
+  it('classifies a fully failed batch', () => {
+    const items = [{ status: 'failed' as const }, { status: 'failed' as const }]
+    expect(decideBatchOutcome(items)).toEqual({
+      type: 'all_failed',
+      succeeded: 0,
+      failed: 2,
+      total: 2,
+    })
+  })
+
+  it('classifies a mixed succeeded/failed batch as partial_failed', () => {
+    const items = [
+      { status: 'succeeded' as const },
+      { status: 'failed' as const },
+      { status: 'succeeded' as const },
+    ]
+    expect(decideBatchOutcome(items)).toEqual({
+      type: 'partial_failed',
+      succeeded: 2,
+      failed: 1,
+      total: 3,
+    })
+  })
+
+  it('treats a batch with pending/processing items as in_progress', () => {
+    expect(decideBatchOutcome([
+      { status: 'succeeded' as const },
+      { status: 'pending' as const },
+      { status: 'failed' as const },
+    ])).toMatchObject({ type: 'in_progress' })
+
+    expect(decideBatchOutcome([
+      { status: 'processing' as const },
+    ])).toMatchObject({ type: 'in_progress' })
+  })
+
+  it('counts cancelled items toward the failed count', () => {
+    const items = [
+      { status: 'cancelled' as const },
+      { status: 'failed' as const },
+    ]
+    // 全部 failed/cancelled → all_failed，failed count 含 cancelled
+    expect(decideBatchOutcome(items)).toEqual({
+      type: 'all_failed',
+      succeeded: 0,
+      failed: 2,
+      total: 2,
+    })
+
+    // cancelled 混 succeeded → partial_failed，cancelled 计入 failed
+    expect(decideBatchOutcome([
+      { status: 'succeeded' as const },
+      { status: 'cancelled' as const },
+    ])).toEqual({
+      type: 'partial_failed',
+      succeeded: 1,
+      failed: 1,
+      total: 2,
+    })
+  })
+
+  it('keeps an all-cancelled batch as all_failed', () => {
+    expect(decideBatchOutcome([
+      { status: 'cancelled' as const },
+      { status: 'cancelled' as const },
+    ])).toMatchObject({ type: 'all_failed', failed: 2 })
   })
 })

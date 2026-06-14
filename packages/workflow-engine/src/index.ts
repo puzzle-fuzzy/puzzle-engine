@@ -252,3 +252,73 @@ export function canAdvanceToPhase(phase: CanvasPipelinePhase, opts: CanAdvanceTo
     return false
   return true
 }
+
+// ===== Batch outcome 规则 =====
+// 批量结果分类：全部成功 / 部分失败 / 全部失败 / 仍在进行 / 空。
+// 纯计算，不依赖 DB/provider/server/worker runtime。
+// 解决"部分成功/全部失败/全部成功"判断散落在 server/worker 的问题。
+
+export type BatchItemStatus = 'pending' | 'processing' | 'succeeded' | 'failed' | 'cancelled'
+
+/** 最小批量项形状 — 只要求 status，便于对 DB 行或任意结构体复用规则 */
+export interface BatchItemLike {
+  status: BatchItemStatus
+}
+
+export type BatchOutcome =
+  | { type: 'empty' }
+  | { type: 'in_progress', succeeded: number, failed: number, total: number }
+  | { type: 'all_succeeded', succeeded: number, failed: number, total: number }
+  | { type: 'all_failed', succeeded: number, failed: number, total: number }
+  | { type: 'partial_failed', succeeded: number, failed: number, total: number }
+
+/**
+ * 对一批同质任务（如 Canvas 一个项目的全部 shots）做结果分类。
+ *
+ * 规则：
+ *   - 空数组 → `empty`
+ *   - 仍有 `pending` / `processing` → `in_progress`（尚未收口，不要误判为失败）
+ *   - 全部 `succeeded` → `all_succeeded`
+ *   - 全部 `failed` / `cancelled` → `all_failed`
+ *   - 成功与失败/取消混合 → `partial_failed`
+ *
+ * `cancelled` 计入 failed count，便于 UI 和成本统计识别未完成项。
+ * 不在此函数做项目状态字符串映射（如 'completed'/'partial_failed'），保持 outcome 层纯净。
+ */
+export function decideBatchOutcome(items: readonly BatchItemLike[]): BatchOutcome {
+  const total = items.length
+  if (total === 0)
+    return { type: 'empty' }
+
+  let succeeded = 0
+  let failed = 0
+  let inProgress = 0
+
+  for (const item of items) {
+    switch (item.status) {
+      case 'succeeded':
+        succeeded++
+        break
+      case 'failed':
+      case 'cancelled':
+        failed++
+        break
+      case 'pending':
+      case 'processing':
+      default:
+        inProgress++
+        break
+    }
+  }
+
+  if (inProgress > 0)
+    return { type: 'in_progress', succeeded, failed, total }
+
+  if (succeeded === total)
+    return { type: 'all_succeeded', succeeded, failed, total }
+
+  if (failed === total)
+    return { type: 'all_failed', succeeded, failed, total }
+
+  return { type: 'partial_failed', succeeded, failed, total }
+}
