@@ -62,6 +62,7 @@ import { cancelTaskWithAdapter } from '@excuse/task-engine'
 import { Elysia, t } from 'elysia'
 import * as svc from '../modules/canvas/service'
 import { createRequireAuthPlugin } from '../plugins/auth'
+import { audit } from '../services/audit'
 import { dispatchToUser } from '../services/sse-manager'
 import { conflict, notFound, validationError } from '../utils/errors'
 
@@ -161,6 +162,8 @@ async function createTaskDrivenPhase(
   })
   await linkPipelineRunToTask(run.id, task.id)
 
+  audit('canvas_phase_run', { accountId: userId, targetId: projectId, detail: { phase, projectId, runId: run.id, autoProgress: true, taskId: task.id } })
+
   // SSE 通知：阶段已创建 task，等待 Worker claim
   dispatchToUser(userId, 'pipeline_node_update', {
     projectId,
@@ -170,6 +173,27 @@ async function createTaskDrivenPhase(
     runId: run.id,
   })
 
+  return acceptedResponse(run.id)
+}
+
+/**
+ * fire-and-forget 模式 — 创建 pipeline_run + audit + 后台执行
+ *
+ * autoProgress=false 时，前端逐步调用每个阶段。
+ * 此 helper 封装 run 创建 + audit + fireAndForget，减少 9 个 phase handler 的重复代码。
+ *
+ * factory 接收 runId（run 创建后才可用），返回后台执行 promise ——
+ * service 函数需要 runId 写入 pipeline_run 进度，故必须延迟到 run 创建后求值。
+ */
+async function createFireAndForgetPhase(
+  userId: string,
+  projectId: string,
+  phase: CanvasPipelinePhase,
+  factory: (runId: string) => Promise<unknown>,
+): Promise<AcceptedResponse> {
+  const run = await createPipelineRun({ projectId, phase, createdBy: userId })
+  audit('canvas_phase_run', { accountId: userId, targetId: projectId, detail: { phase, projectId, runId: run.id, autoProgress: false } })
+  fireAndForgetWithRun(userId, projectId, phase, run.id, factory(run.id))
   return acceptedResponse(run.id)
 }
 
@@ -186,6 +210,7 @@ export function createCanvasRoutes(config: ServerConfig) {
     .post('/projects', async ({ body, userId }) => {
       const { title, storyText } = body
       const project = await svc.createProject(userId, { title, storyText })
+      audit('canvas_project_create', { accountId: userId, targetId: project.id, detail: { projectId: project.id, title } })
       return { success: true, data: project } satisfies CanvasProjectResponse
     }, {
       body: t.Object({
@@ -220,6 +245,7 @@ export function createCanvasRoutes(config: ServerConfig) {
       if (!owned)
         return notFound(set, '项目不存在或无权访问')
       await svc.softDeleteProject(projectId)
+      audit('canvas_project_delete', { accountId: userId, targetId: projectId, detail: { projectId } })
       return { success: true } satisfies CanvasMutationOkResponse
     })
 
@@ -279,10 +305,7 @@ export function createCanvasRoutes(config: ServerConfig) {
         return createTaskDrivenPhase(userId, projectId, phase)
       }
 
-      // autoProgress=false → fire-and-forget 模式（前端逐步触发）
-      const run = await createPipelineRun({ projectId, phase, createdBy: userId })
-      fireAndForgetWithRun(userId, projectId, phase, run.id, svc.analyzeProject(projectId, config, run.id))
-      return acceptedResponse(run.id)
+      return createFireAndForgetPhase(userId, projectId, phase, runId => svc.analyzeProject(projectId, config, runId))
     })
 
     .post('/projects/:projectId/characters', async ({ params: { projectId }, userId, set }) => {
@@ -299,9 +322,7 @@ export function createCanvasRoutes(config: ServerConfig) {
         return createTaskDrivenPhase(userId, projectId, phase)
       }
 
-      const run = await createPipelineRun({ projectId, phase, createdBy: userId })
-      fireAndForgetWithRun(userId, projectId, phase, run.id, svc.generateCharacters(projectId, config, run.id))
-      return acceptedResponse(run.id)
+      return createFireAndForgetPhase(userId, projectId, phase, runId => svc.generateCharacters(projectId, config, runId))
     })
 
     .post('/projects/:projectId/locations', async ({ params: { projectId }, userId, set }) => {
@@ -318,9 +339,7 @@ export function createCanvasRoutes(config: ServerConfig) {
         return createTaskDrivenPhase(userId, projectId, phase)
       }
 
-      const run = await createPipelineRun({ projectId, phase, createdBy: userId })
-      fireAndForgetWithRun(userId, projectId, phase, run.id, svc.generateLocations(projectId, config, run.id))
-      return acceptedResponse(run.id)
+      return createFireAndForgetPhase(userId, projectId, phase, runId => svc.generateLocations(projectId, config, runId))
     })
 
     .post('/projects/:projectId/character-refs', async ({ params: { projectId }, userId, set }) => {
@@ -337,9 +356,7 @@ export function createCanvasRoutes(config: ServerConfig) {
         return createTaskDrivenPhase(userId, projectId, phase)
       }
 
-      const run = await createPipelineRun({ projectId, phase, createdBy: userId })
-      fireAndForgetWithRun(userId, projectId, phase, run.id, svc.generateCharacterRefs(projectId, config, run.id))
-      return acceptedResponse(run.id)
+      return createFireAndForgetPhase(userId, projectId, phase, runId => svc.generateCharacterRefs(projectId, config, runId))
     })
 
     .post('/projects/:projectId/location-refs', async ({ params: { projectId }, userId, set }) => {
@@ -356,9 +373,7 @@ export function createCanvasRoutes(config: ServerConfig) {
         return createTaskDrivenPhase(userId, projectId, phase)
       }
 
-      const run = await createPipelineRun({ projectId, phase, createdBy: userId })
-      fireAndForgetWithRun(userId, projectId, phase, run.id, svc.generateLocationRefs(projectId, config, run.id))
-      return acceptedResponse(run.id)
+      return createFireAndForgetPhase(userId, projectId, phase, runId => svc.generateLocationRefs(projectId, config, runId))
     })
 
     .post('/projects/:projectId/storyboard', async ({ params: { projectId }, userId, set }) => {
@@ -376,10 +391,7 @@ export function createCanvasRoutes(config: ServerConfig) {
         return createTaskDrivenPhase(userId, projectId, phase)
       }
 
-      // autoProgress=false -> fire-and-forget mode (frontend triggers each step)
-      const run = await createPipelineRun({ projectId, phase, createdBy: userId })
-      fireAndForgetWithRun(userId, projectId, phase, run.id, svc.generateStoryboard(projectId, config, run.id))
-      return acceptedResponse(run.id)
+      return createFireAndForgetPhase(userId, projectId, phase, runId => svc.generateStoryboard(projectId, config, runId))
     })
 
     .post('/projects/:projectId/continuity', async ({ params: { projectId }, userId, set }) => {
@@ -396,9 +408,7 @@ export function createCanvasRoutes(config: ServerConfig) {
         return createTaskDrivenPhase(userId, projectId, phase)
       }
 
-      const run = await createPipelineRun({ projectId, phase, createdBy: userId })
-      fireAndForgetWithRun(userId, projectId, phase, run.id, svc.checkContinuity(projectId, run.id))
-      return acceptedResponse(run.id)
+      return createFireAndForgetPhase(userId, projectId, phase, runId => svc.checkContinuity(projectId, runId))
     })
 
     .post('/projects/:projectId/rebuild-prompts', async ({ params: { projectId }, userId, set }) => {
@@ -415,9 +425,7 @@ export function createCanvasRoutes(config: ServerConfig) {
         return createTaskDrivenPhase(userId, projectId, phase)
       }
 
-      const run = await createPipelineRun({ projectId, phase, createdBy: userId })
-      fireAndForgetWithRun(userId, projectId, phase, run.id, svc.rebuildShotPrompts(projectId, run.id))
-      return acceptedResponse(run.id)
+      return createFireAndForgetPhase(userId, projectId, phase, runId => svc.rebuildShotPrompts(projectId, runId))
     })
 
     .post('/projects/:projectId/generate-videos', async ({ params: { projectId }, userId, set }) => {
@@ -429,16 +437,12 @@ export function createCanvasRoutes(config: ServerConfig) {
       if (activeRun)
         return conflict(set, `该阶段已有进行中的任务`)
 
-      // autoProgress=true -> task-driven mode (Worker stepper handles subsequent phases)
       const autoProgress = owned.modelPreferencesJson?.autoProgress ?? false
       if (autoProgress) {
         return createTaskDrivenPhase(userId, projectId, phase)
       }
 
-      // autoProgress=false -> fire-and-forget mode (frontend triggers each step)
-      const run = await createPipelineRun({ projectId, phase, createdBy: userId })
-      fireAndForgetWithRun(userId, projectId, phase, run.id, svc.generateVideos(projectId, config, run.id))
-      return acceptedResponse(run.id)
+      return createFireAndForgetPhase(userId, projectId, phase, runId => svc.generateVideos(projectId, config, runId))
     })
 
     // ── 终止当前活跃阶段 ──────────────────────────────────
@@ -456,10 +460,12 @@ export function createCanvasRoutes(config: ServerConfig) {
 
       // 取消所有活跃 pipeline runs + 关联 tasks
       let cancelledCount = 0
+      const cancelledPhases: string[] = []
       for (const run of activeRuns) {
         const cancelled = await markPipelineRunCancelled(run.id)
         if (cancelled) {
           cancelledCount++
+          cancelledPhases.push(cancelled.phase)
           // 取消关联的 task（如果有）
           if (cancelled.taskId) {
             await cancelTaskWithAdapter({ taskId: cancelled.taskId, adapter: { cancelTask } }).catch(() => { /* task 可能已终态 */ })
@@ -477,6 +483,8 @@ export function createCanvasRoutes(config: ServerConfig) {
 
       // 批量取消项目所有活跃 canvas_assets（queued/running 的图片生成等）
       await cancelActiveCanvasAssetsByProject(projectId).catch(() => { /* 资产取消失败不阻塞 */ })
+
+      audit('canvas_cancel', { accountId: userId, targetId: projectId, detail: { projectId, cancelledRuns: cancelledCount, phases: cancelledPhases } })
 
       return { cancelled: cancelledCount, message: `已取消 ${cancelledCount} 个活跃阶段` }
     })
@@ -665,6 +673,7 @@ export function createCanvasRoutes(config: ServerConfig) {
       const character = await getCanvasCharacterForAccount(characterId, userId)
       if (!character)
         return notFound(set, '角色不存在或无权访问')
+      audit('canvas_asset_regenerate', { accountId: userId, targetId: characterId, detail: { entityType: 'character', entityId: characterId, projectId: character.projectId } })
       svc.regenerateCharacter(characterId, config).catch((err) => {
         logger.error({ err, characterId }, 'regenerate character failed')
       })
@@ -676,6 +685,7 @@ export function createCanvasRoutes(config: ServerConfig) {
       const location = await getCanvasLocationForAccount(locationId, userId)
       if (!location)
         return notFound(set, '场景不存在或无权访问')
+      audit('canvas_asset_regenerate', { accountId: userId, targetId: locationId, detail: { entityType: 'location', entityId: locationId, projectId: location.projectId } })
       svc.regenerateLocation(locationId, config).catch((err) => {
         logger.error({ err, locationId }, 'regenerate location failed')
       })
@@ -687,6 +697,7 @@ export function createCanvasRoutes(config: ServerConfig) {
       const shot = await getCanvasShotForAccount(shotId, userId)
       if (!shot)
         return notFound(set, '镜头不存在或无权访问')
+      audit('canvas_asset_regenerate', { accountId: userId, targetId: shotId, detail: { entityType: 'shot', entityId: shotId, projectId: shot.projectId } })
       svc.regenerateShotVideo(shotId, config).catch((err) => {
         logger.error({ err, shotId }, 'regenerate shot video failed')
       })

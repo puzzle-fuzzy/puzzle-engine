@@ -1,4 +1,4 @@
-import type { auditActionEnum } from '@excuse/db'
+import type { auditActionEnum, AuditDetail } from '@excuse/db'
 import { createAuditLog } from '@excuse/db'
 import { createLogger } from '@excuse/shared'
 
@@ -10,8 +10,8 @@ export interface AuditEntry {
   accountId?: string
   action: AuditAction
   targetId?: string
-  /** 审计详情 — 非结构化存储边界：不同 action 类型有不同 detail 形状，无法统一 DTO */
-  detail?: Record<string, unknown>
+  /** 审计详情 — 结构化 AuditDetail DTO，每种 action 有对应形状 */
+  detail?: AuditDetail
   ip?: string
 }
 
@@ -38,7 +38,7 @@ export async function audit(
   opts?: {
     accountId?: string
     targetId?: string
-    detail?: Record<string, unknown>
+    detail?: AuditDetail
     ip?: string
   },
 ) {

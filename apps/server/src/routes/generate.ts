@@ -148,6 +148,11 @@ export function createGenerateRoutes(config: ServerConfig) {
             amountCents: estimatedCost.totalPriceCents,
             description: `生成任务预留：${modelConfig.id}`,
           })
+          audit('credit_reserve', {
+            accountId: userId,
+            targetId: record.id,
+            detail: { accountId: userId, generationRecordId: record.id, amountCents: estimatedCost.totalPriceCents, description: `生成任务预留：${modelConfig.id}`, source: 'generate' },
+          })
         }
         catch (error) {
           const message = error instanceof Error ? error.message : '余额不足，无法发起生成'
@@ -342,6 +347,11 @@ export function createGenerateRoutes(config: ServerConfig) {
 
       // 所有校验通过后才重置状态 — 防止校验失败产生脏状态
       await resetGenerationToPending(record.id)
+      audit('generation_retry', {
+        accountId: userId,
+        targetId: record.id,
+        detail: { recordId: record.id, model: record.model, previousStatus: record.status },
+      })
 
       // 预估费用 — 使用 extractBillingParams 从 ValidatedModelParameters 提取计费字段
       const estimatedCost = calculateCost(modelConfig, extractBillingParams(validatedParams))
@@ -353,6 +363,11 @@ export function createGenerateRoutes(config: ServerConfig) {
             generationRecordId: record.id,
             amountCents: estimatedCost.totalPriceCents,
             description: `重试生成任务预留：${modelConfig.id}`,
+          })
+          audit('credit_reserve', {
+            accountId: userId,
+            targetId: record.id,
+            detail: { accountId: userId, generationRecordId: record.id, amountCents: estimatedCost.totalPriceCents, description: `重试生成任务预留：${modelConfig.id}`, source: 'retry' },
           })
         }
         catch (error) {
@@ -409,6 +424,11 @@ export function createGenerateRoutes(config: ServerConfig) {
       }
 
       const updatedRecord = await svc.cancelGeneration(record.id, userId, record, deps)
+      audit('generation_cancel', {
+        accountId: userId,
+        targetId: record.id,
+        detail: { recordId: record.id, previousStatus: record.status },
+      })
       return { success: true, record: serializeRecord(updatedRecord) } satisfies GenerationRecordResponse
     }, {
       params: t.Object({

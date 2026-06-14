@@ -22,6 +22,7 @@ import { DashScopeClient, getModelById, getModelsByCategory, validateAndMerge } 
 import { extractBillingParams } from '@excuse/shared'
 import { Elysia, t } from 'elysia'
 import { createRequireAuthPlugin } from '../plugins/auth'
+import { audit } from '../services/audit'
 import { createDedupeKey } from '../utils/dedupe-key'
 import { notifyInsufficientBalance } from './notifications'
 
@@ -107,6 +108,11 @@ export function createOpenAIGatewayRoutes(config: ServerConfig) {
             amountCents: estimatedCost.totalPriceCents,
             description: `OpenAI 网关预留：${modelConfig.id}`,
           })
+          audit('credit_reserve', {
+            accountId: userId,
+            targetId: record.id,
+            detail: { accountId: userId, generationRecordId: record.id, amountCents: estimatedCost.totalPriceCents, description: `OpenAI 网关预留：${modelConfig.id}`, source: 'gateway' },
+          })
         }
         catch (error) {
           const message = error instanceof Error ? error.message : 'Insufficient balance'
@@ -131,7 +137,17 @@ export function createOpenAIGatewayRoutes(config: ServerConfig) {
             generationRecordId: record.id,
             description: `OpenAI 网关失败退款：${modelConfig.id}`,
           })
+          audit('credit_refund', {
+            accountId: userId,
+            targetId: record.id,
+            detail: { accountId: userId, generationRecordId: record.id, amountCents: estimatedCost.totalPriceCents, description: `OpenAI 网关失败退款：${modelConfig.id}`, source: 'gateway' },
+          })
         }
+        audit('gateway_call', {
+          accountId: userId,
+          targetId: record.id,
+          detail: { model: modelConfig.id, recordId: record.id, totalPriceCents: estimatedCost.totalPriceCents, status: 'failed', error: result.error },
+        })
         const err = createOpenAIError(result.error, 'server_error', 'generation_failed', 500)
         set.status = err.status
         return err.response
@@ -151,7 +167,25 @@ export function createOpenAIGatewayRoutes(config: ServerConfig) {
           actualCents: actualCost.totalPriceCents,
           description: `OpenAI 网关扣款：${modelConfig.id}`,
         })
+        audit('credit_debit', {
+          accountId: userId,
+          targetId: record.id,
+          detail: { accountId: userId, generationRecordId: record.id, amountCents: actualCost.totalPriceCents, description: `OpenAI 网关扣款：${modelConfig.id}`, source: 'gateway' },
+        })
       }
+
+      audit('gateway_call', {
+        accountId: userId,
+        targetId: record.id,
+        detail: {
+          model: modelConfig.id,
+          recordId: record.id,
+          inputTokens: result.usage?.inputTokens,
+          outputTokens: result.usage?.outputTokens,
+          totalPriceCents: actualCost.totalPriceCents,
+          status: 'succeeded',
+        },
+      })
 
       return createOpenAIChatResponse({
         id: record.id,

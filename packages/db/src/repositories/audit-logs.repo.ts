@@ -1,13 +1,14 @@
+import type { AuditDetail } from '../domain-types'
 import { and, desc, eq, gte, lte } from 'drizzle-orm'
 import { getDb } from '../db'
 import { auditLogs } from '../schema/audit-logs'
 
-/** 写入审计日志（登录/注册/生成/文件删除/计费/API Key 操作等） */
+/** 写入审计日志 — action 与 auditActionEnum 对应，detail 使用结构化 AuditDetail DTO */
 export async function createAuditLog(values: {
   accountId?: string
-  action: 'login' | 'register' | 'generate' | 'file_delete' | 'billing_transaction' | 'api_key_create' | 'api_key_revoke' | 'admin_action'
+  action: typeof auditLogs.action.enumValues[number]
   targetId?: string
-  detail?: Record<string, unknown>
+  detail?: AuditDetail
   ip?: string
 }) {
   await getDb().insert(auditLogs).values(values)
