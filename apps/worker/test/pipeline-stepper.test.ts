@@ -139,6 +139,10 @@ describe('Pipeline Stepper', () => {
       mockConfig,
     )
     expect(result).toBeNull()
+
+    // 并发守卫必须短路：不得创建 run/task
+    expect(mockCreatePipelineRun).not.toHaveBeenCalled()
+    expect(mockCreateTask).not.toHaveBeenCalled()
   })
 
   it('正常推进：analyze → characters', async () => {

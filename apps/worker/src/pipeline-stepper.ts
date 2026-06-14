@@ -21,6 +21,7 @@ import {
 } from '@excuse/db'
 import { createLogger } from '@excuse/shared'
 import {
+  canAdvanceToPhase,
   CANVAS_PAUSE_BEFORE,
   CANVAS_PHASE_ORDER,
   createNextCanvasPipelineTask,
@@ -80,9 +81,11 @@ export async function advancePipelineAfterTaskSuccess(
     return null
 
   // 6. 并发守卫 — 下一个 phase 没有 active run
+  // 复用 workflow-engine 的推进守卫（pause-before 理论上已被 decideCanvasAutoAdvance 拦截，
+  // 这里 hasActiveRun 是真正的并发防护）
   const activeRun = await findActiveRunForPhase(projectId, nextPhase)
-  if (activeRun) {
-    logger.info({ projectId, nextPhase, activeRunId: activeRun.id }, 'next phase already has active run, skipping')
+  if (!canAdvanceToPhase(nextPhase, { hasActiveRun: Boolean(activeRun) })) {
+    logger.info({ projectId, nextPhase, activeRunId: activeRun?.id }, 'next phase blocked by advance guard, skipping')
     return null
   }
 
